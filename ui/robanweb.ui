@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>robanweb</class>
+ <widget class="QMainWindow" name="robanweb">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1116</width>
+    <height>863</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>robanweb</string>
+  </property>
+  <widget class="QWidget" name="centralwidget"/>
+  <widget class="QStatusBar" name="statusbar"/>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>1116</width>
+     <height>22</height>
+    </rect>
+   </property>
+   <property name="layoutDirection">
+    <enum>Qt::LeftToRight</enum>
+   </property>
+   <widget class="QMenu" name="mainMenu">
+    <property name="title">
+     <string>主界面</string>
+    </property>
+   </widget>
+   <widget class="QMenu" name="startSh">
+    <property name="title">
+     <string>功能脚本启动</string>
+    </property>
+   </widget>
+   <widget class="QMenu" name="connectSetting">
+    <property name="title">
+     <string>连接设置</string>
+    </property>
+   </widget>
+   <addaction name="mainMenu"/>
+   <addaction name="startSh"/>
+   <addaction name="connectSetting"/>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
