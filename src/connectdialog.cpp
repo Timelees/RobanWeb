@@ -219,6 +219,8 @@ void ConnectDialog::onDeleteButtonClicked()
         ui->tableWidget->removeRow(row);
         deleteConnectionFromDatabase(row);
     }
+
+    
     qDebug() << "已删除选中的行";
 }
 
