@@ -65,8 +65,16 @@ void robanweb::onConnectSettingTriggered(){
         // 用户点击了连接按钮
         qDebug() << "连接设置已确认";
     } else {
-        // 用户点击了取消按钮
-        qDebug() << "连接设置已取消";
+        // 用户点击了断开连接按钮
+        if(webSocket){
+            if(webSocket->state() == QAbstractSocket::ConnectedState){
+                qDebug() << "关闭 WebSocket 连接...";
+                webSocket->close();
+                updateStatusLabel("未连接");
+            }
+            // webSocket->disconnect(this);
+        }
+        
     }
 }
 // 建立webSocket连接

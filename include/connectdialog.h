@@ -39,7 +39,7 @@ private:
     void setupDatabase();
     void loadConnectionsFromDatabase();
     void saveConnectionToDatabase(const QString &protocol, const QString &host, const QString &port);
-    void deleteConnectionFromDatabase(int row);
+    void deleteConnectionFromDatabase(const QString &host, const QString &port);
     QString getDatabasePath();
 
 

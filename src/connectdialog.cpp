@@ -36,6 +36,8 @@ void ConnectDialog::setTableWidget(){
     headers << "选择" << "主机IP" << "端口";
     ui->tableWidget->setHorizontalHeaderLabels(headers);
 
+    ui->tableWidget->setEditTriggers(QAbstractItemView::NoEditTriggers); // 禁止编辑
+
     // 设置列宽比例 (1:3:2)
     ui->tableWidget->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed); // 复选框列固定宽度
     ui->tableWidget->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch); // 主机IP列自适应
@@ -131,29 +133,30 @@ void ConnectDialog::saveConnectionToDatabase(const QString &protocol, const QStr
     query.bindValue(":port", port);
     if (!query.exec()) {
         qDebug() << "保存连接失败:" << query.lastError().text();
-    } else {
-        loadConnectionsFromDatabase(); // 刷新表格
-    }
+    } 
+    // else {
+    //     loadConnectionsFromDatabase(); // 刷新表格
+    // }
 }
 // 从数据库删除配置
-void ConnectDialog::deleteConnectionFromDatabase(int row)
+void ConnectDialog::deleteConnectionFromDatabase(const QString &host, const QString &port)
 {
     if (!db.isOpen()) {
         qDebug() << "数据库未打开，无法删除连接";
         return;
     }
 
-    QString host = ui->tableWidget->item(row, 1)->text();
-    QString port = ui->tableWidget->item(row, 2)->text();
+    if (host.isEmpty() || port.isEmpty()) {
+        qDebug() << "主机或端口为空，跳过数据库删除";
+        return;
+    }
+
     QSqlQuery query;
     query.prepare("DELETE FROM connections WHERE host = :host AND port = :port");
     query.bindValue(":host", host);
     query.bindValue(":port", port);
     if (!query.exec()) {
         qDebug() << "删除连接失败:" << query.lastError().text();
-    } else {
-        // loadConnectionsFromDatabase(); // 刷新表格
-        ui->tableWidget->removeRow(row); // 直接从 tableWidget 删除行
     }
 }
 
@@ -171,22 +174,24 @@ void ConnectDialog::onAddButtonClicked()
     }
 
     // 添加到 tableWidget
-    int row = ui->tableWidget->rowCount();
+    int rowCount = ui->tableWidget->rowCount();
+    int curRow = ui->tableWidget->currentRow();
+    int row = (curRow >= 0) ? curRow + 1 : rowCount;    // 未选中表格时，添加到末尾
     ui->tableWidget->insertRow(row);
 
-    // // 第一列: 复选框
-    // QTableWidgetItem *checkItem = new QTableWidgetItem();
-    // checkItem->setCheckState(Qt::Unchecked);
-    // checkItem->setFlags(checkItem->flags() | Qt::ItemIsUserCheckable); // 允许勾选
-    // ui->tableWidget->setItem(row, 0, checkItem);
+    // 第一列: 复选框
+    QTableWidgetItem *checkItem = new QTableWidgetItem();
+    checkItem->setCheckState(Qt::Unchecked);
+    checkItem->setFlags(checkItem->flags() | Qt::ItemIsUserCheckable); // 允许勾选
+    ui->tableWidget->setItem(row, 0, checkItem);
 
-    // // 第二列: 主机IP
-    // QTableWidgetItem *hostItem = new QTableWidgetItem(host);
-    // ui->tableWidget->setItem(row, 1, hostItem);
+    // 第二列: 主机IP
+    QTableWidgetItem *hostItem = new QTableWidgetItem(host);
+    ui->tableWidget->setItem(row, 1, hostItem);
 
-    // // 第三列: 端口
-    // QTableWidgetItem *portItem = new QTableWidgetItem(port);
-    // ui->tableWidget->setItem(row, 2, portItem);
+    // 第三列: 端口
+    QTableWidgetItem *portItem = new QTableWidgetItem(port);
+    ui->tableWidget->setItem(row, 2, portItem);
 
     saveConnectionToDatabase(protocol, host, port);
     // ui->hostEdit->clear();
@@ -199,6 +204,7 @@ void ConnectDialog::onDeleteButtonClicked()
 {
     // 删除选中的行
     QList<QTableWidgetItem*> selectedItems = ui->tableWidget->selectedItems();
+   
     if (selectedItems.isEmpty()) {
         qDebug() << "未选择要删除的行";
         return;
@@ -216,12 +222,20 @@ void ConnectDialog::onDeleteButtonClicked()
     std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
 
     for (int row : rowsToDelete) {
+        // 读取要删除行的 host 和 port，确保在 removeRow 之前访问
+        QTableWidgetItem *hostItem = ui->tableWidget->item(row, 1);
+        QTableWidgetItem *portItem = ui->tableWidget->item(row, 2);
+        QString host = hostItem ? hostItem->text() : QString();
+        QString port = portItem ? portItem->text() : QString();
+
+        // 先删除数据库记录
+        deleteConnectionFromDatabase(host, port);
+
+        // 然后从表格中移除行
         ui->tableWidget->removeRow(row);
-        deleteConnectionFromDatabase(row);
+        qDebug() << "已删除选中的行: " << row << " (" << host << ":" << port << ")";
     }
 
-    
-    qDebug() << "已删除选中的行";
 }
 
 
@@ -245,7 +259,7 @@ void ConnectDialog::onConnectButtonClicked()
     }
     qDebug() << "未选择任何连接";
 }
-// 取消按钮cancelButton  槽函数
+// 断开连接按钮cancelButton  槽函数
 void ConnectDialog::onCancelButtonClicked()
 {
     reject();
