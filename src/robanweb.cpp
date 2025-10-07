@@ -37,6 +37,13 @@ robanweb::robanweb(QWidget* parent)
     connect(webSocketWorker, &WebSocketWorker::messageReceived, this, &robanweb::onWebSocketMessageReceived);
     connect(webSocketWorker, &WebSocketWorker::errorOccurred, this, &robanweb::onWebSocketError);
 
+    // 从ros话题获取电量信息
+    batteryMonitor = new BatteryMonitor(webSocketWorker, this);
+    connect(webSocketWorker, &WebSocketWorker::messageReceived, batteryMonitor, &BatteryMonitor::onMessageReceived, Qt::QueuedConnection);
+    connect(batteryMonitor, &BatteryMonitor::batteryLevelChanged, this, [this](int pct){
+        if (batteryProgressBar) batteryProgressBar->setValue(pct);
+    }, Qt::QueuedConnection);
+
     webSocketThread->start();
 
     // 保留 UI 侧的重连策略触发器
@@ -73,8 +80,18 @@ void robanweb::settingMenuBar(){
 
 // 设置状态栏组件
 void robanweb::settingStatusBar(){
+    // 连接状态
     connect_label = new QLabel("未连接");
+    connect_label->setMinimumWidth(100);
+    connect_label->setFont(QFont("Arial", 10, QFont::Bold));
+    connect_label->setAlignment(Qt::AlignVCenter | Qt::AlignVCenter);
     ui->statusbar->addWidget(connect_label);
+    // 电量显示
+    batteryProgressBar = new QProgressBar();
+    batteryProgressBar->setRange(0, 100);
+    batteryProgressBar->setValue(0); // 初始值
+    batteryProgressBar->setFixedWidth(100);
+    ui->statusbar->addPermanentWidget(batteryProgressBar);
 }
 
 
@@ -141,6 +158,11 @@ void robanweb::onWebSocketConnected()
     QString payload = QString(doc.toJson());
     // 通过 worker 发送订阅消息
     QMetaObject::invokeMethod(webSocketWorker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload));
+
+    // 启动电量订阅
+    if (batteryMonitor) {
+        QMetaObject::invokeMethod(batteryMonitor, "start", Qt::QueuedConnection);
+    }
 }
 
 void robanweb::onWebSocketDisconnected()

@@ -10,8 +10,10 @@
 #include <QDebug>
 #include <QLabel>
 #include <QJsonArray>
+#include <QProgressBar>
 
 #include "socket_process/websocketworker.h"
+#include "ros_process/battery.h"
 
 class robanweb : public QMainWindow {
     Q_OBJECT
@@ -48,5 +50,7 @@ private:
     bool isReconnecting;
     int reconnectAttempts;
     static const int MAX_RECONNECT_ATTEMPTS = 10;
-    QLabel *connect_label;
+    QLabel *connect_label;                      // 连接状态标签
+    QProgressBar *batteryProgressBar;           // 电量进度条
+    BatteryMonitor *batteryMonitor = nullptr;   // 电量获取对象
 };
