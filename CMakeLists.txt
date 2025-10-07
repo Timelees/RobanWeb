@@ -21,19 +21,19 @@ include_directories(
 # 设置UIC的搜索路径，让它在ui目录中查找.ui文件
 set(CMAKE_AUTOUIC_SEARCH_PATHS "${CMAKE_CURRENT_SOURCE_DIR}/ui")
 
-# 收集源文件
-file(GLOB SRC_FILES 
-    "src/*.cpp"
+# 收集源文件（递归）
+file(GLOB_RECURSE SRC_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
 )
 
-# 收集UI文件
-file(GLOB UI_FILES 
-    "ui/*.ui"
+# 收集UI文件（递归以防子目录）
+file(GLOB_RECURSE UI_FILES 
+    "${CMAKE_CURRENT_SOURCE_DIR}/ui/*.ui"
 )
 
-# 收集头文件（用于MOC）
-file(GLOB HEADER_FILES 
-    "include/*.h"
+# 收集头文件（用于MOC，递归）
+file(GLOB_RECURSE HEADER_FILES 
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h"
 )
 
 # aux_source_directory(./src srcs)

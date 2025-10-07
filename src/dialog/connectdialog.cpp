@@ -1,4 +1,4 @@
-#include "connectdialog.h"
+#include "dialog/connectdialog.h"
 #include "ui_connectdialog.h"
 
 
@@ -49,7 +49,7 @@ void ConnectDialog::setTableWidget(){
 void ConnectDialog::setupDatabase(){
     db = QSqlDatabase::addDatabase("QSQLITE");
     QString dbPath = getDatabasePath();
-    qDebug() << "数据库路径:" << dbPath; // 调试输出路径
+    // qDebug() << "数据库路径:" << dbPath; // 调试输出路径
     db.setDatabaseName(dbPath);
 
     if (!db.open()) {

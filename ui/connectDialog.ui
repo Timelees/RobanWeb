@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>626</width>
-    <height>360</height>
+    <width>635</width>
+    <height>401</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -19,142 +19,136 @@
      <property name="title">
       <string>连接参数</string>
      </property>
-     <widget class="QWidget" name="layoutWidget">
-      <property name="geometry">
-       <rect>
-        <x>10</x>
-        <y>26</y>
-        <width>591</width>
-        <height>301</height>
-       </rect>
-      </property>
-      <layout class="QVBoxLayout" name="verticalLayout_3">
-       <item>
-        <layout class="QVBoxLayout" name="verticalLayout_2">
-         <item>
-          <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,0,0,0">
-           <item>
-            <widget class="QLabel" name="label">
-             <property name="text">
-              <string>主机地址:</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLineEdit" name="hostEdit">
-             <property name="text">
-              <string>192.168.31.151</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLabel" name="label_2">
-             <property name="text">
-              <string>端口号:</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLineEdit" name="portEdit">
-             <property name="text">
-              <string>9090</string>
-             </property>
-            </widget>
-           </item>
-          </layout>
-         </item>
-         <item>
-          <layout class="QHBoxLayout" name="horizontalLayout_3">
-           <item>
-            <widget class="QPushButton" name="addPB">
-             <property name="text">
-              <string>添加</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QPushButton" name="delPB">
-             <property name="text">
-              <string>删除</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <spacer name="horizontalSpacer_2">
-             <property name="orientation">
-              <enum>Qt::Horizontal</enum>
-             </property>
-             <property name="sizeHint" stdset="0">
-              <size>
-               <width>40</width>
-               <height>20</height>
-              </size>
-             </property>
-            </spacer>
-           </item>
-           <item>
-            <widget class="QPushButton" name="connectButton">
-             <property name="text">
-              <string>连接</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QPushButton" name="cancelButton">
-             <property name="text">
-              <string>断开连接</string>
-             </property>
-            </widget>
-           </item>
-          </layout>
-         </item>
-        </layout>
-       </item>
-       <item>
-        <widget class="QTableWidget" name="tableWidget">
-         <property name="selectionMode">
-          <enum>QAbstractItemView::MultiSelection</enum>
-         </property>
-         <property name="showGrid">
-          <bool>true</bool>
-         </property>
-         <property name="gridStyle">
-          <enum>Qt::DashLine</enum>
-         </property>
-         <property name="cornerButtonEnabled">
-          <bool>false</bool>
-         </property>
-         <attribute name="horizontalHeaderVisible">
-          <bool>true</bool>
-         </attribute>
-         <attribute name="horizontalHeaderCascadingSectionResizes">
-          <bool>false</bool>
-         </attribute>
-         <attribute name="horizontalHeaderHighlightSections">
-          <bool>true</bool>
-         </attribute>
-         <attribute name="horizontalHeaderShowSortIndicator" stdset="0">
-          <bool>false</bool>
-         </attribute>
-         <column>
-          <property name="text">
-           <string>选择</string>
+     <layout class="QVBoxLayout" name="verticalLayout_4">
+      <item>
+       <layout class="QVBoxLayout" name="verticalLayout_3">
+        <item>
+         <layout class="QVBoxLayout" name="verticalLayout_2">
+          <item>
+           <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,0,0,0">
+            <item>
+             <widget class="QLabel" name="label">
+              <property name="text">
+               <string>主机地址:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="hostEdit">
+              <property name="text">
+               <string>192.168.31.151</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="label_2">
+              <property name="text">
+               <string>端口号:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="portEdit">
+              <property name="text">
+               <string>9090</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="horizontalLayout_3">
+            <item>
+             <widget class="QPushButton" name="addPB">
+              <property name="text">
+               <string>添加</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="delPB">
+              <property name="text">
+               <string>删除</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="horizontalSpacer_2">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+            <item>
+             <widget class="QPushButton" name="connectButton">
+              <property name="text">
+               <string>连接</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="cancelButton">
+              <property name="text">
+               <string>断开连接</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QTableWidget" name="tableWidget">
+          <property name="selectionMode">
+           <enum>QAbstractItemView::MultiSelection</enum>
           </property>
-         </column>
-         <column>
-          <property name="text">
-           <string>主机IP</string>
+          <property name="showGrid">
+           <bool>true</bool>
           </property>
-         </column>
-         <column>
-          <property name="text">
-           <string>端口</string>
+          <property name="gridStyle">
+           <enum>Qt::DashLine</enum>
           </property>
-         </column>
-        </widget>
-       </item>
-      </layout>
-     </widget>
+          <property name="cornerButtonEnabled">
+           <bool>false</bool>
+          </property>
+          <attribute name="horizontalHeaderVisible">
+           <bool>true</bool>
+          </attribute>
+          <attribute name="horizontalHeaderCascadingSectionResizes">
+           <bool>false</bool>
+          </attribute>
+          <attribute name="horizontalHeaderHighlightSections">
+           <bool>true</bool>
+          </attribute>
+          <attribute name="horizontalHeaderShowSortIndicator" stdset="0">
+           <bool>false</bool>
+          </attribute>
+          <column>
+           <property name="text">
+            <string>选择</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>主机IP</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>端口</string>
+           </property>
+          </column>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
     </widget>
    </item>
   </layout>

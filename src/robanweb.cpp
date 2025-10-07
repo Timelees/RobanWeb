@@ -1,11 +1,13 @@
 #include "robanweb.h"
-#include "connectdialog.h"  
-#include <QAction>
+#include "dialog/connectdialog.h"
+#include "socket_process/websocketworker.h"
+
 
 robanweb::robanweb(QWidget* parent)
     : QMainWindow(parent)
     , ui(new Ui_robanweb)
-    , webSocket(new QWebSocket)
+    , webSocketWorker(nullptr)
+    , webSocketThread(nullptr)
     , reconnectTimer(new QTimer(this))
     , isReconnecting(false)
     , reconnectAttempts(0)
@@ -14,8 +16,6 @@ robanweb::robanweb(QWidget* parent)
     // 设置菜单栏和状态栏
     settingMenuBar();
     settingStatusBar();
-    // 禁用代理
-    webSocket->setProxy(QNetworkProxy::NoProxy);
 
     // 为connectSetting菜单创建动作并连接信号槽
     QAction *connectAction = new QAction("连接设置", this);
@@ -23,24 +23,45 @@ robanweb::robanweb(QWidget* parent)
     // 连接信号槽
     connect(connectAction, &QAction::triggered, this, &robanweb::onConnectSettingTriggered);
 
-    // 连接 WebSocket 信号
-    connect(webSocket, &QWebSocket::connected, this, &robanweb::onWebSocketConnected);
-    connect(webSocket, &QWebSocket::disconnected, this, &robanweb::onWebSocketDisconnected);
-    connect(webSocket, &QWebSocket::textMessageReceived, this, &robanweb::onWebSocketMessageReceived);
-    connect(webSocket, QOverload<QAbstractSocket::SocketError>::of(&QWebSocket::error), this, &robanweb::onWebSocketError);
+    // 创建 worker 和线程，把 WebSocket 操作放到子线程
+    webSocketWorker = new WebSocketWorker();
+    webSocketThread = new QThread(this);
+    webSocketWorker->moveToThread(webSocketThread);
 
-    // 设置重连定时器
+    // 当线程启动时可做初始化
+    connect(webSocketThread, &QThread::finished, webSocketWorker, &QObject::deleteLater);
+
+    // 连接 worker 的信号到主线程槽
+    connect(webSocketWorker, &WebSocketWorker::connected, this, &robanweb::onWebSocketConnected);
+    connect(webSocketWorker, &WebSocketWorker::disconnected, this, &robanweb::onWebSocketDisconnected);
+    connect(webSocketWorker, &WebSocketWorker::messageReceived, this, &robanweb::onWebSocketMessageReceived);
+    connect(webSocketWorker, &WebSocketWorker::errorOccurred, this, &robanweb::onWebSocketError);
+
+    webSocketThread->start();
+
+    // 保留 UI 侧的重连策略触发器
     connect(reconnectTimer, &QTimer::timeout, this, &robanweb::tryReconnect);
     reconnectTimer->setInterval(5000); // 每5秒尝试重连
 
     // 初始化状态标签
     updateStatusLabel("未连接");
+
+    qDebug() << "robanweb run in thread:" << QThread::currentThread();
 }
 
 
 robanweb::~robanweb()
 {
-    delete webSocket;
+    // 在析构中，确保线程已停止并清理
+    if (webSocketThread) {
+        QMetaObject::invokeMethod(webSocketWorker, "closeConnection", Qt::QueuedConnection);
+        webSocketThread->quit();
+        webSocketThread->wait();
+        // webSocketWorker 会在 thread finished 时 deleteLater 被调用
+        delete webSocketThread;
+        webSocketThread = nullptr;
+        webSocketWorker = nullptr;
+    }
     delete reconnectTimer;
     delete ui; 
 }
@@ -63,16 +84,13 @@ void robanweb::onConnectSettingTriggered(){
     connect(&dialog, &ConnectDialog::connectRequested, this, &robanweb::establishWebSocketConnection);
     if (dialog.exec() == QDialog::Accepted) {
         // 用户点击了连接按钮
-        qDebug() << "连接设置已确认";
+        qDebug() << "连接确认";
     } else {
         // 用户点击了断开连接按钮
-        if(webSocket){
-            if(webSocket->state() == QAbstractSocket::ConnectedState){
-                qDebug() << "关闭 WebSocket 连接...";
-                webSocket->close();
-                updateStatusLabel("未连接");
-            }
-            // webSocket->disconnect(this);
+        if (webSocketWorker) {
+            qDebug() << "请求 worker 关闭 WebSocket 连接...";
+            QMetaObject::invokeMethod(webSocketWorker, "closeConnection", Qt::QueuedConnection);
+            updateStatusLabel("未连接");
         }
         
     }
@@ -86,16 +104,17 @@ void robanweb::establishWebSocketConnection(const QString &url)
     isReconnecting = true;
     reconnectAttempts = 0;
     updateStatusLabel("正在连接...");
-    webSocket->open(QUrl(url));
+    // 通过 worker 启动连接（跨线程异步调用startConnect方法）
+    QMetaObject::invokeMethod(webSocketWorker, "startConnect", Qt::QueuedConnection, Q_ARG(QString, url));
 }
-
+// 重连
 void robanweb::tryReconnect()
 {
     if (!wsHost.isEmpty() && !wsPort.isEmpty() && isReconnecting) {
         QString url = QString("ws://%1:%2").arg(wsHost).arg(wsPort);
         qDebug() << "尝试重新连接到 WebSocket:" << url << " (尝试次数:" << reconnectAttempts + 1 << ")";
         reconnectAttempts++;
-        webSocket->open(QUrl(url));
+        QMetaObject::invokeMethod(webSocketWorker, "startConnect", Qt::QueuedConnection, Q_ARG(QString, url));
         updateStatusLabel(QString("正在重连... (尝试 %1/%2)").arg(reconnectAttempts).arg(MAX_RECONNECT_ATTEMPTS));
     }else if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
         isReconnecting = false;
@@ -104,7 +123,7 @@ void robanweb::tryReconnect()
         qDebug() << "达到最大重试次数，停止重连";
     }
 }
-
+// WebSocket 连接成功处理
 void robanweb::onWebSocketConnected()
 {
     qDebug() << "WebSocket 连接成功";
@@ -119,7 +138,9 @@ void robanweb::onWebSocketConnected()
     subscribeMsg["topic"] = "/MediumSize/BodyHub/ServoPositions";    
     subscribeMsg["type"] = "bodyhub/ServoPositionAngle"; 
     QJsonDocument doc(subscribeMsg);
-    webSocket->sendTextMessage(QString(doc.toJson()));
+    QString payload = QString(doc.toJson());
+    // 通过 worker 发送订阅消息
+    QMetaObject::invokeMethod(webSocketWorker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload));
 }
 
 void robanweb::onWebSocketDisconnected()
@@ -131,12 +152,12 @@ void robanweb::onWebSocketDisconnected()
     }
 }
 
-void robanweb::onWebSocketError(QAbstractSocket::SocketError error)
+void robanweb::onWebSocketError(const QString &error)
 {
-    qDebug() << "WebSocket 错误:" << webSocket->errorString();
+    qDebug() << "WebSocket 错误:" << error;
     if (isReconnecting) {
         reconnectTimer->start();
-        updateStatusLabel(QString("连接错误：%1，正在重连...").arg(webSocket->errorString()));
+        updateStatusLabel(QString("连接错误：%1，正在重连...").arg(error));
     }
 }
 
@@ -144,12 +165,32 @@ void robanweb::onWebSocketMessageReceived(const QString &message)
 {
     QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8());
     QJsonObject obj = doc.object();
-    if (obj["op"].toString() == "publish" && obj["topic"].toString() == "/MediumSize/BodyHub/ServoPositions") {
-        QString data = obj["msg"].toObject()["data"].toString();
-        qDebug() << "收到话题消息:" << data;
-        // 在 UI 上显示消息，例如更新状态标签
-        // ui->statusLabel->setText("状态: " + data);
+
+    if (obj.contains("msg") && obj["msg"].isObject()) {
+        QJsonObject msgObj = obj["msg"].toObject();
+        QJsonDocument msgDoc(msgObj);
+        QString msgJson = QString::fromUtf8(msgDoc.toJson(QJsonDocument::Compact));
+        // qDebug() << "收到 msg JSON:" << msgJson;
     }
+
+    if (obj["op"].toString() == "publish"
+        && obj["topic"].toString() == "/MediumSize/BodyHub/ServoPositions") {
+
+        QJsonObject msgObj = obj["msg"].toObject();
+        if (msgObj.contains("angle") && msgObj["angle"].isArray()) {
+            QJsonArray angles = msgObj["angle"].toArray();
+            QStringList parts;
+            for (const QJsonValue &v : angles) {
+                parts << QString::number(v.toDouble());
+            }
+            QString data = parts.join(", ");
+            qDebug() << "收到话题 angle:" << data;
+        } else {
+            qDebug() << "未找到 angle 字段或类型不匹配，msg:" << QJsonDocument(msgObj).toJson(QJsonDocument::Compact);
+        }
+    }
+
+
 }
 
 // void robanweb::publishToTopic(const QString &topic, const QString &type, const QJsonObject &msg)
@@ -175,6 +216,13 @@ void robanweb::closeEvent(QCloseEvent *event)
 {
     isReconnecting = false;
     reconnectTimer->stop();
-    webSocket->close();
+    if (webSocketWorker) {
+        QMetaObject::invokeMethod(webSocketWorker, "closeConnection", Qt::QueuedConnection);
+        webSocketThread->quit();
+        webSocketThread->wait();
+        delete webSocketThread;
+        webSocketThread = nullptr;
+        webSocketWorker = nullptr; // worker deleted when thread finishes (connected earlier)
+    }
     event->accept();
 }

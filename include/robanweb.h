@@ -1,7 +1,7 @@
 #pragma once
 #include "ui_robanweb.h"
 #include <QMainWindow>
-#include <QWebSocket>
+#include <QThread>
 #include <QCloseEvent>
 #include <QTimer>
 #include <QAction>
@@ -9,6 +9,10 @@
 #include <QJsonObject>
 #include <QDebug>
 #include <QLabel>
+#include <QJsonArray>
+
+#include "socket_process/websocketworker.h"
+
 class robanweb : public QMainWindow {
     Q_OBJECT
     
@@ -24,7 +28,7 @@ private slots:
     void onConnectSettingTriggered();       // 连接设置 槽函数
     void onWebSocketConnected();            // 连接webSocket
     void onWebSocketDisconnected();
-    void onWebSocketError(QAbstractSocket::SocketError error);
+    void onWebSocketError(const QString &error);
     void onWebSocketMessageReceived(const QString &message);
     void establishWebSocketConnection(const QString &url);
     void tryReconnect();
@@ -36,7 +40,8 @@ private:
 
 private:
     Ui_robanweb* ui;
-    QWebSocket *webSocket;
+    WebSocketWorker *webSocketWorker;
+    QThread *webSocketThread;
     QTimer *reconnectTimer;
     QString wsHost;
     QString wsPort;
