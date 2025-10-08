@@ -1,6 +1,6 @@
 #include "ros_process/battery.h"
 #include "socket_process/websocketworker.h"
-#include <QMetaObject>
+
 
 // Map voltage to percent using a simple linear mapping as placeholder
 // You can replace this with the more complex table from the python script if needed
@@ -13,7 +13,7 @@ BatteryMonitor::BatteryMonitor(WebSocketWorker *worker, QObject *parent)
 }
 
 BatteryMonitor::~BatteryMonitor() {}
-
+// 订阅电量话题
 void BatteryMonitor::start()
 {
     if (!m_worker) return;
@@ -34,14 +34,20 @@ void BatteryMonitor::onMessageReceived(const QString &message)
     QJsonObject obj = doc.object();
 
     // rosbridge publish message format: {op:"publish", topic:"...", msg:{...}}
-    if (obj["op"].toString() == "publish" && obj["topic"].toString() == "/MediumSize/SensorHub/BatteryState") {
+    if (obj["op"].toString() == "publish") {
+        QString topic = obj["topic"].toString();
+        if (topic != "/MediumSize/SensorHub/BatteryState") return;
+
         QJsonObject msgObj = obj["msg"].toObject();
+        QJsonDocument msgDoc(msgObj);
+        QString msgJson = QString::fromUtf8(msgDoc.toJson(QJsonDocument::Compact));
+        // qDebug() << "收到电池 JSON (topic:" << topic << ") :" << msgJson;
+
         // Try to extract voltage field
         double voltage = 0.0;
         if (msgObj.contains("voltage")) {
             voltage = msgObj["voltage"].toDouble();
         } else {
-            // maybe nested or different naming; bail if not found
             return;
         }
 

@@ -6,6 +6,8 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QDebug>
+#include <QMetaObject>
+
 
 class WebSocketWorker;
 

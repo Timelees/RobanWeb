@@ -17,42 +17,10 @@ robanweb::robanweb(QWidget* parent)
     settingMenuBar();
     settingStatusBar();
 
-    // 为connectSetting菜单创建动作并连接信号槽
-    QAction *connectAction = new QAction("连接设置", this);
-    ui->connectSetting->addAction(connectAction);
-    // 连接信号槽
-    connect(connectAction, &QAction::triggered, this, &robanweb::onConnectSettingTriggered);
-
-    // 创建 worker 和线程，把 WebSocket 操作放到子线程
-    webSocketWorker = new WebSocketWorker();
-    webSocketThread = new QThread(this);
-    webSocketWorker->moveToThread(webSocketThread);
-
-    // 当线程启动时可做初始化
-    connect(webSocketThread, &QThread::finished, webSocketWorker, &QObject::deleteLater);
-
-    // 连接 worker 的信号到主线程槽
-    connect(webSocketWorker, &WebSocketWorker::connected, this, &robanweb::onWebSocketConnected);
-    connect(webSocketWorker, &WebSocketWorker::disconnected, this, &robanweb::onWebSocketDisconnected);
-    connect(webSocketWorker, &WebSocketWorker::messageReceived, this, &robanweb::onWebSocketMessageReceived);
-    connect(webSocketWorker, &WebSocketWorker::errorOccurred, this, &robanweb::onWebSocketError);
-
-    // 从ros话题获取电量信息
-    batteryMonitor = new BatteryMonitor(webSocketWorker, this);
-    connect(webSocketWorker, &WebSocketWorker::messageReceived, batteryMonitor, &BatteryMonitor::onMessageReceived, Qt::QueuedConnection);
-    connect(batteryMonitor, &BatteryMonitor::batteryLevelChanged, this, [this](int pct){
-        if (batteryProgressBar) batteryProgressBar->setValue(pct);
-    }, Qt::QueuedConnection);
-
-    webSocketThread->start();
-
-    // 保留 UI 侧的重连策略触发器
-    connect(reconnectTimer, &QTimer::timeout, this, &robanweb::tryReconnect);
-    reconnectTimer->setInterval(5000); // 每5秒尝试重连
-
+    init(); 
+    bindSlots();        // 绑定相关槽函数
     // 初始化状态标签
     updateStatusLabel("未连接");
-
     qDebug() << "robanweb run in thread:" << QThread::currentThread();
 }
 
@@ -71,6 +39,24 @@ robanweb::~robanweb()
     }
     delete reconnectTimer;
     delete ui; 
+}
+// 初始化
+void robanweb::init(){
+    // 创建 worker 和线程，把 WebSocket 操作放到子线程
+    webSocketWorker = new WebSocketWorker();
+    webSocketThread = new QThread(this);
+    webSocketWorker->moveToThread(webSocketThread);
+    webSocketThread->start();
+    
+    reconnectTimer->setInterval(5000); // 每5秒尝试重连
+
+    // 为connectSetting菜单创建动作并连接信号槽
+    connectAction = new QAction("连接设置", this);
+    ui->connectSetting->addAction(connectAction);
+
+    // ros话题接收对象
+    batteryMonitor = new BatteryMonitor(webSocketWorker, this);
+    imuMonitor = new ImuMonitor(webSocketWorker, this);
 }
 
 // 设置菜单栏组件
@@ -94,6 +80,55 @@ void robanweb::settingStatusBar(){
     ui->statusbar->addPermanentWidget(batteryProgressBar);
 }
 
+void robanweb::bindSlots(){
+    // 连接信号槽
+    connect(connectAction, &QAction::triggered, this, &robanweb::onConnectSettingTriggered);
+
+    // 当线程启动时可做初始化
+    connect(webSocketThread, &QThread::finished, webSocketWorker, &QObject::deleteLater);
+
+    // 连接 worker 的信号到主线程槽
+    connect(webSocketWorker, &WebSocketWorker::connected, this, &robanweb::onWebSocketConnected);
+    connect(webSocketWorker, &WebSocketWorker::disconnected, this, &robanweb::onWebSocketDisconnected);
+    connect(webSocketWorker, &WebSocketWorker::messageReceived, this, &robanweb::onWebSocketMessageReceived);
+    connect(webSocketWorker, &WebSocketWorker::errorOccurred, this, &robanweb::onWebSocketError);
+
+    // 保留 UI 侧的重连策略触发器
+    connect(reconnectTimer, &QTimer::timeout, this, &robanweb::tryReconnect);
+
+    // 从ros话题获取电量信息
+    connect(webSocketWorker, &WebSocketWorker::messageReceived, batteryMonitor, &BatteryMonitor::onMessageReceived, Qt::QueuedConnection);
+    connect(batteryMonitor, &BatteryMonitor::batteryLevelChanged, this, [this](int pct){
+        if (batteryProgressBar) batteryProgressBar->setValue(pct);
+    }, Qt::QueuedConnection);
+    // 从ros话题获取IMU信息
+    connect(webSocketWorker, &WebSocketWorker::messageReceived, imuMonitor, &ImuMonitor::onMessageReceived, Qt::QueuedConnection);
+    // IMU data -> update UI labels
+    connect(imuMonitor, &ImuMonitor::orientationUpdated, this, [this](double w, double x, double y, double z){
+        if (ui) {
+            ui->ori_w->setText(QString::number(w, 'f', 2));
+            ui->ori_x->setText(QString::number(x, 'f', 2));
+            ui->ori_y->setText(QString::number(y, 'f', 2));
+            ui->ori_z->setText(QString::number(z, 'f', 2));
+        }
+    }, Qt::QueuedConnection);
+    connect(imuMonitor, &ImuMonitor::angularVelocityUpdated, this, [this](double x, double y, double z){
+        if (ui) {
+            ui->ang_x->setText(QString::number(x, 'f', 2));
+            ui->ang_y->setText(QString::number(y, 'f', 2));
+            ui->ang_z->setText(QString::number(z, 'f', 2));
+        }
+    }, Qt::QueuedConnection);
+    connect(imuMonitor, &ImuMonitor::linearAccelerationUpdated, this, [this](double x, double y, double z){
+        if (ui) {
+            ui->lin_x->setText(QString::number(x, 'f', 2));
+            ui->lin_y->setText(QString::number(y, 'f', 2));
+            ui->lin_z->setText(QString::number(z, 'f', 2));
+        }
+    }, Qt::QueuedConnection);
+    
+
+}
 
 // 菜单栏连接设置触发
 void robanweb::onConnectSettingTriggered(){
@@ -148,7 +183,11 @@ void robanweb::onWebSocketConnected()
     reconnectTimer->stop();
     reconnectAttempts = 0;
     updateStatusLabel("已连接");
+    // 连接成功后启动话题订阅
+    startSubscriptions();  
+}
 
+void robanweb::startSubscriptions(){
     // 订阅 ROS 话题（例如 /robot_status）
     QJsonObject subscribeMsg;
     subscribeMsg["op"] = "subscribe";
@@ -159,9 +198,14 @@ void robanweb::onWebSocketConnected()
     // 通过 worker 发送订阅消息
     QMetaObject::invokeMethod(webSocketWorker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload));
 
+
     // 启动电量订阅
     if (batteryMonitor) {
         QMetaObject::invokeMethod(batteryMonitor, "start", Qt::QueuedConnection);
+    }
+    // 启动IMU订阅
+    if(imuMonitor){
+        QMetaObject::invokeMethod(imuMonitor, "start", Qt::QueuedConnection);
     }
 }
 
