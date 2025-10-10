@@ -15,7 +15,7 @@
 #include "socket_process/websocketworker.h"
 #include "ros_process/battery.h"
 #include "ros_process/imu.h"
-
+#include "ros_process/cameraImage.h"
 
 class robanweb : public QMainWindow {
     Q_OBJECT
@@ -33,9 +33,12 @@ private slots:
     void onWebSocketConnected();            // 连接webSocket
     void onWebSocketDisconnected();
     void onWebSocketError(const QString &error);
-    void onWebSocketMessageReceived(const QString &message);
+    // void onWebSocketMessageReceived(const QString &message);
     void establishWebSocketConnection(const QString &url);
     void tryReconnect();
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
     void settingMenuBar();          
@@ -49,6 +52,7 @@ private:
     Ui_robanweb* ui;
     WebSocketWorker *webSocketWorker;
     QThread *webSocketThread;
+    QThread *imageThread;
     QTimer *reconnectTimer;
     QString wsHost;
     QString wsPort;
@@ -62,4 +66,9 @@ private:
     QProgressBar *batteryProgressBar;           // 电量进度条
     BatteryMonitor *batteryMonitor = nullptr;   // 电量获取对象
     ImuMonitor *imuMonitor = nullptr;           // IMU获取对象
+    // Camera image display label overlaying the QOpenGLWidget
+    QLabel *imageRawLabel = nullptr;
+    CameraImageMonitor *cameraImageMonitor = nullptr;
+    QTimer *imagePullTimer = nullptr; // timer to pull latest frame from camera monitor
+
 };
