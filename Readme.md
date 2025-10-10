@@ -24,6 +24,8 @@
 
 ## 当前实现：
 
+1.通信连接
+
 在roban上新开终端启动ros_bridge，qt程序上通过QWebSocket进行连接
 
 ```c++
@@ -33,3 +35,12 @@
 
 勾选需要连接的ip前的复选框，点击连接即可建立通信。连接成功，主界面左下方的状态栏显示已连接。
 ![alt text](image/connect_setting.png)
+
+2.电量显示
+状态栏显示电池电量
+
+3.IMU数据显示
+右侧信息栏显示机器人位姿信息，包括oritention, linear_acceleration,angular_velocity
+
+4.相机图像显示
+实时接收机器人相机数据进行显示
