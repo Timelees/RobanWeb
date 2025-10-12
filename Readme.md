@@ -44,7 +44,7 @@
 3.IMU数据显示
 右侧信息栏显示机器人位姿信息，包括oritention, linear_acceleration,angular_velocity
 
-![alt text](image/image.png)
+![alt text](image/imu_data.png)
 
 **TODO: oritention始终为0，需要在底层代码中进行处理**
 
@@ -57,6 +57,7 @@
 5.slam脚本启动
 
 ![alt text](image/slam_start.png)
+
 启动slam建图（rosrun SLAM RGBD true false）：适用于初次建图，点击关闭按钮，可结束建图并保存地图
 定位模式（rosrun SLAM RGBD true true）：适用于在之前的地图上进行二次建图，点击关闭按钮，可结束建图并保存地图。
 
