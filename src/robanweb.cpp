@@ -1,5 +1,6 @@
 #include "robanweb.h"
 #include "dialog/connectdialog.h"
+#include "dialog/shDialog.h"
 #include "socket_process/websocketworker.h"
 
 
@@ -61,9 +62,11 @@ void robanweb::init(){
     imagePullTimer = new QTimer(this);
     imagePullTimer->setInterval(50); // 默认 20 FPS
 
-    // 为connectSetting菜单创建动作并连接信号槽
+    // 菜单栏创建动作并连接信号槽
     connectAction = new QAction("连接设置", this);
     ui->connectSetting->addAction(connectAction);
+    bashAction = new QAction("脚本功能", this);
+    ui->startSh->addAction(bashAction);
 
     // ros话题接收对象
     batteryMonitor = new BatteryMonitor(webSocketWorker, this);         // 电池数据
@@ -110,8 +113,9 @@ void robanweb::settingStatusBar(){
 }
 
 void robanweb::bindSlots(){
-    // 连接信号槽
+    // 菜单栏连接信号槽
     connect(connectAction, &QAction::triggered, this, &robanweb::onConnectSettingTriggered);
+    connect(bashAction, &QAction::triggered, this, &robanweb::onBashActionTriggered);
 
     // 当线程启动时可做初始化
     connect(webSocketThread, &QThread::finished, webSocketWorker, &QObject::deleteLater);
@@ -142,7 +146,7 @@ void robanweb::bindSlots(){
         }
     }, Qt::QueuedConnection);
 
-    // IMU data -> update UI labels
+    // 更新IMU数据显示
     connect(imuMonitor, &ImuMonitor::orientationUpdated, this, [this](double w, double x, double y, double z){
         if (ui) {
             ui->ori_w->setText(QString::number(w, 'f', 2));
@@ -168,6 +172,17 @@ void robanweb::bindSlots(){
     
 
 }
+// 脚本功能触发
+void robanweb::onBashActionTriggered()
+{
+    ShDialog dialog(webSocketWorker, this);
+    // connect dialog signal to main slot
+    // connect(&dialog, &ShDialog::runScriptRequested, this, &robanweb::onRunScriptRequested, Qt::QueuedConnection);
+    if(dialog.exec() == QDialog::Accepted){
+        qDebug() << "脚本功能对话框开启";
+    }
+}
+
 
 // 菜单栏连接设置触发
 void robanweb::onConnectSettingTriggered(){
@@ -186,6 +201,8 @@ void robanweb::onConnectSettingTriggered(){
         
     }
 }
+
+
 // 建立webSocket连接
 void robanweb::establishWebSocketConnection(const QString &url)
 {

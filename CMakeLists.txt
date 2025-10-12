@@ -26,6 +26,8 @@ file(GLOB_RECURSE SRC_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
 )
 
+
+
 # 收集UI文件（递归以防子目录）
 file(GLOB_RECURSE UI_FILES 
     "${CMAKE_CURRENT_SOURCE_DIR}/ui/*.ui"

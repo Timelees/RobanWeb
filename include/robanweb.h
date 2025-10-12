@@ -30,10 +30,12 @@ protected:
 
 private slots:
     void onConnectSettingTriggered();       // 连接设置 槽函数
+    void onBashActionTriggered();           // 脚本功能 槽函数
+    
+    // webSocket 相关槽函数
     void onWebSocketConnected();            // 连接webSocket
     void onWebSocketDisconnected();
     void onWebSocketError(const QString &error);
-    // void onWebSocketMessageReceived(const QString &message);
     void establishWebSocketConnection(const QString &url);
     void tryReconnect();
 
@@ -51,13 +53,14 @@ private:
     private:
     Ui_robanweb* ui;
     WebSocketWorker *webSocketWorker;
-    QThread *webSocketThread;
-    QThread *imageThread;
+    QThread *webSocketThread;       // webSocket 线程
+    QThread *imageThread;           // 图像处理线程
     QTimer *reconnectTimer;
     QString wsHost;
     QString wsPort;
     // 菜单栏设置
     QAction *connectAction;
+    QAction *bashAction;
     
     bool isReconnecting;
     int reconnectAttempts;
@@ -66,9 +69,9 @@ private:
     QProgressBar *batteryProgressBar;           // 电量进度条
     BatteryMonitor *batteryMonitor = nullptr;   // 电量获取对象
     ImuMonitor *imuMonitor = nullptr;           // IMU获取对象
-    // Camera image display label overlaying the QOpenGLWidget
-    QLabel *imageRawLabel = nullptr;
+    
+    QLabel *imageRawLabel = nullptr;            // 显示原始图像标签
     CameraImageMonitor *cameraImageMonitor = nullptr;
-    QTimer *imagePullTimer = nullptr; // timer to pull latest frame from camera monitor
+    QTimer *imagePullTimer = nullptr;           // 定时器，用于从相机监视器中获取最新帧
 
 };

@@ -41,6 +41,27 @@
 
 3.IMU数据显示
 右侧信息栏显示机器人位姿信息，包括oritention, linear_acceleration,angular_velocity
+![alt text](image/image.png)
 
 4.相机图像显示
 实时接收机器人相机数据进行显示
+![alt text](image/camera_raw_display.png)
+
+5.slam脚本启动
+![alt text](image/slam_start.png)
+启动slam建图（rosrun SLAM RGBD true false）：适用于初次建图，点击关闭按钮，可结束建图并保存地图
+定位模式（rosrun SLAM RGBD true true）：适用于在之前的地图上进行二次建图，点击关闭按钮，可结束建图并保存地图。
+
+**TODO: 后续直接集成到一个按钮？？？**
+
+
+**PS:需要在机器人的代码中新增python脚本（将need_add_python文件夹中的cmd_executor.py添加到机器人系统的~/robot_ros_application/catkin_ws/src/bodyhub/scripts中），并启动使其接受传过去的cmd指令**
+
+初次添加需要进行编译
+```
+python3 -m py_compile /home/lemon/robot_ros_application/catkin_ws/src/bodyhub/scripts/cmd_executor.py
+```
+启动脚本
+```
+rosrun bodyhub cmd_executor.py 
+```
