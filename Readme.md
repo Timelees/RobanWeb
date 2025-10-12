@@ -43,6 +43,9 @@
 右侧信息栏显示机器人位姿信息，包括oritention, linear_acceleration,angular_velocity
 ![alt text](image/image.png)
 
+**TODO: oritention始终为0，需要在底层代码中进行处理**
+
+
 4.相机图像显示
 实时接收机器人相机数据进行显示
 ![alt text](image/camera_raw_display.png)
