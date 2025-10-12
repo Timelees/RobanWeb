@@ -19,6 +19,7 @@
 2. 机器人信息显示
 3. **接收"MediumSize/BodyHub/ServoPositions"话题数据，该话题不能持续输出，只有当程序退出后，才会显示中间的一些话题数据**
 	暂定解决方案：修改BodyHubNode.cpp中的话题发布逻辑，使其在running状态持续发布话题
+	
 	![alt text](<image/ServoPositons pub.png>)
 4. 3D模型显示
 
@@ -34,6 +35,7 @@
 点击主界面连接设置，进入连接设置界面，输入连接网络ipv4地址和端口号（ros_bridge默认端口9090），可通过添加将数据保存至数据库中，选中表单中的项，可对数据进行删除。
 
 勾选需要连接的ip前的复选框，点击连接即可建立通信。连接成功，主界面左下方的状态栏显示已连接。
+
 ![alt text](image/connect_setting.png)
 
 2.电量显示
@@ -41,6 +43,7 @@
 
 3.IMU数据显示
 右侧信息栏显示机器人位姿信息，包括oritention, linear_acceleration,angular_velocity
+
 ![alt text](image/image.png)
 
 **TODO: oritention始终为0，需要在底层代码中进行处理**
@@ -48,9 +51,11 @@
 
 4.相机图像显示
 实时接收机器人相机数据进行显示
+
 ![alt text](image/camera_raw_display.png)
 
 5.slam脚本启动
+
 ![alt text](image/slam_start.png)
 启动slam建图（rosrun SLAM RGBD true false）：适用于初次建图，点击关闭按钮，可结束建图并保存地图
 定位模式（rosrun SLAM RGBD true true）：适用于在之前的地图上进行二次建图，点击关闭按钮，可结束建图并保存地图。
