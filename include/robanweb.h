@@ -50,7 +50,7 @@ private:
     void init();
     void startSubscriptions();                     // 启动话题订阅
 
-    private:
+private:
     Ui_robanweb* ui;
     WebSocketWorker *webSocketWorker;
     QThread *webSocketThread;       // webSocket 线程
@@ -70,7 +70,6 @@ private:
     BatteryMonitor *batteryMonitor = nullptr;   // 电量获取对象
     ImuMonitor *imuMonitor = nullptr;           // IMU获取对象
     
-    QLabel *imageRawLabel = nullptr;            // 显示原始图像标签
     CameraImageMonitor *cameraImageMonitor = nullptr;
     QTimer *imagePullTimer = nullptr;           // 定时器，用于从相机监视器中获取最新帧
 

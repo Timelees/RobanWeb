@@ -56,12 +56,11 @@
 
 5.slam脚本启动
 
-![alt text](image/slam_start.png)
+![alt text](image/slam_bash.png)
+
 
 启动slam建图（rosrun SLAM RGBD true false）：适用于初次建图，点击关闭按钮，可结束建图并保存地图
 定位模式（rosrun SLAM RGBD true true）：适用于在之前的地图上进行二次建图，点击关闭按钮，可结束建图并保存地图。
-
-**TODO: 后续直接集成到一个按钮？？？**
 
 
 **PS:需要在机器人的代码中新增python脚本（将need_add_python文件夹中的cmd_executor.py添加到机器人系统的~/robot_ros_application/catkin_ws/src/bodyhub/scripts中），并启动使其接受传过去的cmd指令**
@@ -74,3 +73,12 @@ python3 -m py_compile /home/lemon/robot_ros_application/catkin_ws/src/bodyhub/sc
 ```
 rosrun bodyhub cmd_executor.py 
 ```
+
+6.slam建图画面显示
+特征点画面显示：
+![alt text](image/slam_data_show.png)
+
+**TODO:点云数据显示**
+
+**TODO: 键盘操控**
+

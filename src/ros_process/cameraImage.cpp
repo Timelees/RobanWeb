@@ -1,17 +1,14 @@
 #include "ros_process/cameraImage.h"
 #include "socket_process/websocketworker.h"
-#include <QImage>
-#include <QBuffer>
-#include <QByteArray>
-#include <QJsonValue>
-#include <QtGlobal>
-#include <QElapsedTimer>
-#include <QSize>
+#include "util/load_param.hpp"
 
-CameraImageMonitor::CameraImageMonitor(WebSocketWorker *worker, QObject *parent)
+CameraImageMonitor::CameraImageMonitor(WebSocketWorker *worker, QObject *parent, const QString &topic_name)
     : QObject(parent), m_worker(worker)
 {
-    m_lastDecodeTimer.start();
+    // store provided topic locally to avoid lifetime issues with caller-owned strings
+    act_topic_name = topic_name;
+    init();
+    topic_parse();
 }
 
 CameraImageMonitor::~CameraImageMonitor() {}
@@ -26,18 +23,66 @@ void CameraImageMonitor::setMaxFps(int fps) {
     m_frameIntervalMs = 1000 / fps;
 }
 
+void CameraImageMonitor::topic_parse(){
+    cameraCompressed_topic_name = loadTopicFromConfig("cameraCompressed_topic");
+    cameraCompressed_topic_type = loadTopicFromConfig("cameraCompressed_topic_type");
+
+    cameraRaw_topic_name = loadTopicFromConfig("cameraRaw_topic");
+    cameraRaw_topic_type = loadTopicFromConfig("cameraRaw_topic_type");
+
+    featureImageRaw_topic_name = loadTopicFromConfig("featureImageRaw_topic");
+    featureImageRaw_topic_type = loadTopicFromConfig("featureImageRaw_topic_type");
+
+    featureImageCompressed_topic_name = loadTopicFromConfig("featureImageCompressed_topic");
+    featureImageCompressed_topic_type = loadTopicFromConfig("featureImageCompressed_topic_type");
+
+    // act_topic_name may have been set by constructor from provided topic; if empty, choose defaults
+    if (act_topic_name.isEmpty()) {
+        act_topic_name = cameraCompressed_topic_name;
+    }
+    if(act_topic_name == cameraCompressed_topic_name || act_topic_name == featureImageCompressed_topic_name){
+        act_topic_type = cameraCompressed_topic_type;
+    }else if(act_topic_name == cameraRaw_topic_name || act_topic_name == featureImageRaw_topic_name){
+        act_topic_type = cameraRaw_topic_type;  
+    }else{
+        // 默认使用压缩图像话题
+        act_topic_name = cameraCompressed_topic_name;
+        act_topic_type = cameraCompressed_topic_type;  
+    }
+}
+
+void CameraImageMonitor::init(){
+    m_lastDecodeTimer.start();
+}
+
 // 订阅图像话题
 void CameraImageMonitor::start(){
     if(!m_worker)   return;
     // send subscribe request for Image
     QJsonObject subscribeMsg;
     subscribeMsg["op"] = "subscribe";
+    
     // 订阅压缩图像话题
-    subscribeMsg["topic"] = "/camera/color/image_raw/compressed";
-    subscribeMsg["type"] = "sensor_msgs/CompressedImage";
+    subscribeMsg["topic"] = act_topic_name;
+    subscribeMsg["type"] = act_topic_type;
     QJsonDocument doc(subscribeMsg);
     QString payload = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
     QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload));
+}
+
+void CameraImageMonitor::stop() {
+    if (!m_worker) return;
+    QJsonObject unsub;
+    unsub["op"] = "unsubscribe";
+    unsub["topic"] = act_topic_name;
+    QJsonDocument doc(unsub);
+    QString payload = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+    QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload));
+    // clear cached image
+    {
+        QMutexLocker locker(&m_latestMutex);
+        m_latestImage = QImage();
+    }
 }
 
 // 转换 JSON 为 QByteArray
@@ -71,8 +116,8 @@ void CameraImageMonitor::onMessageReceived(const QString &message) {
 
         QJsonObject msgObj = obj["msg"].toObject();
 
-        // compressed image path
-        if (topic == "/camera/color/image_raw/compressed") {
+    // compressed image path: only accept messages for this monitor's configured topic
+    if (topic == act_topic_name && act_topic_type.contains("CompressedImage")) {
             // sensor_msgs/CompressedImage: has fields 'format' and 'data'
             QString format = msgObj.value("format").toString();
             QJsonValue dataVal = msgObj.value("data");
@@ -81,7 +126,7 @@ void CameraImageMonitor::onMessageReceived(const QString &message) {
 
             QImage img = QImage::fromData(bytes);
             if (img.isNull()) {
-                qDebug() << "CameraImageMonitor: failed to decode compressed image, format=" << format << "bytes=" << bytes.size();
+                qDebug() << "CameraImageMonitor: failed to decode compressed image, format = " << format << " bytes = " << bytes.size();
                 return;
             }
 
@@ -92,10 +137,12 @@ void CameraImageMonitor::onMessageReceived(const QString &message) {
 
             QImage toStore;
             if (!m_targetSize.isEmpty() && img.size() != m_targetSize) {
-                toStore = img.scaled(m_targetSize, Qt::KeepAspectRatio, Qt::FastTransformation);
+                toStore = img.scaled(m_targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
             } else {
                 toStore = img;
             }
+            // normalize pixel format to avoid rendering artifacts and dangling buffers
+            toStore = toStore.convertToFormat(QImage::Format_RGBA8888);
             {
                 QMutexLocker locker(&m_latestMutex);
                 m_latestImage = toStore;
@@ -103,8 +150,8 @@ void CameraImageMonitor::onMessageReceived(const QString &message) {
             return;
         }
 
-        // 获取原图逻辑 raw sensor_msgs/Image path (fallback)
-        if (topic != "/camera/color/image_raw") return;
+    // 获取原图逻辑 raw sensor_msgs/Image path: only accept messages for this monitor's configured topic
+    if (!(topic == act_topic_name && act_topic_type.contains("Image"))) return;
 
         int width = msgObj.value("width").toInt();
         int height = msgObj.value("height").toInt();
@@ -125,10 +172,11 @@ void CameraImageMonitor::onMessageReceived(const QString &message) {
             // scale in worker thread if requested and store into latest cache
             QImage toStore;
             if (!m_targetSize.isEmpty() && img.size() != m_targetSize) {
-                toStore = img.scaled(m_targetSize, Qt::KeepAspectRatio, Qt::FastTransformation);
+                toStore = img.scaled(m_targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
             } else {
                 toStore = img;
             }
+            toStore = toStore.convertToFormat(QImage::Format_RGBA8888);
             {
                 QMutexLocker locker(&m_latestMutex);
                 m_latestImage = toStore;
@@ -180,10 +228,11 @@ void CameraImageMonitor::onMessageReceived(const QString &message) {
 
             QImage toStore;
             if (!m_targetSize.isEmpty() && img.size() != m_targetSize) {
-                toStore = img.scaled(m_targetSize, Qt::KeepAspectRatio, Qt::FastTransformation);
+                toStore = img.scaled(m_targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
             } else {
                 toStore = img;
             }
+            toStore = toStore.convertToFormat(QImage::Format_RGBA8888);
             {
                 QMutexLocker locker(&m_latestMutex);
                 m_latestImage = toStore;

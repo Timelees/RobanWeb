@@ -2,8 +2,7 @@
 #include "dialog/connectdialog.h"
 #include "dialog/shDialog.h"
 #include "socket_process/websocketworker.h"
-
-
+#include "util/load_param.hpp"
 
 robanweb::robanweb(QWidget* parent)
     : QMainWindow(parent)
@@ -18,6 +17,8 @@ robanweb::robanweb(QWidget* parent)
     // 设置菜单栏和状态栏
     settingMenuBar();
     settingStatusBar();
+
+  
 
     init(); 
     bindSlots();        // 绑定相关槽函数
@@ -47,6 +48,7 @@ robanweb::~robanweb()
         cameraImageMonitor = nullptr;
     }
     delete reconnectTimer;
+    // delete imagePullTimer;
     delete ui; 
 }
 // 初始化
@@ -71,23 +73,37 @@ void robanweb::init(){
     // ros话题接收对象
     batteryMonitor = new BatteryMonitor(webSocketWorker, this);         // 电池数据
     imuMonitor = new ImuMonitor(webSocketWorker, this);                 // IMU数据
-    // 创建 cameraImageMonitor 时不指定父对象，并将其移动到 imageThread进行处理
-    cameraImageMonitor = new CameraImageMonitor(webSocketWorker, nullptr); // 图像数据（无父以便移动线程）
+   
+    // 创建 cameraImageMonitor 时不指定父对象，并将其移动到 imageThread进行处理,订阅压缩图像
+    QString camera_topic = loadTopicFromConfig("cameraCompressed_topic");
+    cameraImageMonitor = new CameraImageMonitor(webSocketWorker, nullptr, camera_topic); // 图像数据（无父以便移动线程）
     imageThread = new QThread(this);
     cameraImageMonitor->moveToThread(imageThread);
     imageThread->start();
     connect(imageThread, &QThread::finished, cameraImageMonitor, &QObject::deleteLater);
-        // 设置目标显示尺寸和最大帧率（在 worker 线程中设置）
-        if (ui->imageRawDisplay) {
-            QSize target = ui->imageRawDisplay->size();
-            QMetaObject::invokeMethod(cameraImageMonitor, "setTargetSize", Qt::QueuedConnection, Q_ARG(QSize, target));
-        }
-        // 将帧率限制到 20 FPS 默认以减少延迟和 CPU 负载
-        QMetaObject::invokeMethod(cameraImageMonitor, "setMaxFps", Qt::QueuedConnection, Q_ARG(int, 20));
-        // 安装事件过滤器以在 imageRawDisplay 尺寸变更时更新目标尺寸
-        if (ui->imageRawDisplay) {
-            ui->imageRawDisplay->installEventFilter(this);
-        }
+    // Ensure image display label does not resize itself to the pixmap
+    if (ui->imageRawDisplay) {
+        // Let the worker scale to the desired target size and avoid QLabel auto-scaling to prevent blur
+        ui->imageRawDisplay->setScaledContents(false);
+        ui->imageRawDisplay->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
+    }
+    // 设置目标显示尺寸和最大帧率（在 worker 线程中设置）
+    if (ui->imageRawDisplay) {
+        QSize target = ui->imageRawDisplay->size();
+        QMetaObject::invokeMethod(cameraImageMonitor, "setTargetSize", Qt::QueuedConnection, Q_ARG(QSize, target));
+    }
+    // 将帧率限制到 20 FPS 默认以减少延迟和 CPU 负载
+    QMetaObject::invokeMethod(cameraImageMonitor, "setMaxFps", Qt::QueuedConnection, Q_ARG(int, 20));
+    // 安装事件过滤器以在 imageRawDisplay 尺寸变更时更新目标尺寸
+    if (ui->imageRawDisplay) {
+        ui->imageRawDisplay->installEventFilter(this);
+    }
+    // connect imagePullTimer once to cameraImageMonitor requestFrame (use queued connection)
+    if (imagePullTimer && cameraImageMonitor) {
+        connect(imagePullTimer, &QTimer::timeout, this, [this]() {
+            QMetaObject::invokeMethod(cameraImageMonitor, "requestFrame", Qt::QueuedConnection);
+        });
+    }
     
 }
 
@@ -142,10 +158,13 @@ void robanweb::bindSlots(){
     connect(webSocketWorker, &WebSocketWorker::messageReceived, cameraImageMonitor, &CameraImageMonitor::onMessageReceived, Qt::QueuedConnection);
     connect(cameraImageMonitor, &CameraImageMonitor::imageReceived, this, [this](const QImage &img){
         if (ui->imageRawDisplay) {
-            ui->imageRawDisplay->setPixmap(QPixmap::fromImage(img).scaled(ui->imageRawDisplay->size(), Qt::KeepAspectRatio, Qt::FastTransformation));
+            // Worker should already provide an image scaled to the target size; set directly to avoid resampling blur
+            ui->imageRawDisplay->setPixmap(QPixmap::fromImage(img));
         }
     }, Qt::QueuedConnection);
 
+
+    
     // 更新IMU数据显示
     connect(imuMonitor, &ImuMonitor::orientationUpdated, this, [this](double w, double x, double y, double z){
         if (ui) {
@@ -198,7 +217,6 @@ void robanweb::onConnectSettingTriggered(){
             QMetaObject::invokeMethod(webSocketWorker, "closeConnection", Qt::QueuedConnection);
             updateStatusLabel("未连接");
         }
-        
     }
 }
 
@@ -215,6 +233,7 @@ void robanweb::establishWebSocketConnection(const QString &url)
     // 通过 worker 启动连接（跨线程异步调用startConnect方法）
     QMetaObject::invokeMethod(webSocketWorker, "startConnect", Qt::QueuedConnection, Q_ARG(QString, url));
 }
+
 // 重连
 void robanweb::tryReconnect()
 {
@@ -231,6 +250,7 @@ void robanweb::tryReconnect()
         qDebug() << "达到最大重试次数，停止重连";
     }
 }
+
 // WebSocket 连接成功处理
 void robanweb::onWebSocketConnected()
 {
@@ -241,11 +261,8 @@ void robanweb::onWebSocketConnected()
     updateStatusLabel("已连接");
     // 连接成功后启动话题订阅
     startSubscriptions();  
-    // 启动 image pull timer
+    // 启动 image pull timer (already connected in init)
     if (imagePullTimer && cameraImageMonitor) {
-        connect(imagePullTimer, &QTimer::timeout, this, [this]() {
-            QMetaObject::invokeMethod(cameraImageMonitor, "requestFrame", Qt::QueuedConnection);
-        });
         imagePullTimer->start();
     }
 }

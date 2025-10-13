@@ -1,0 +1,2 @@
+start_slam_bash: "source ~/robot_ros_application/catkin_ws/devel/setup.bash && rosrun SLAM RGBD true false"
+start_slam_location_bash: "source ~/robot_ros_application/catkin_ws/devel/setup.bash && rosrun SLAM RGBD true true"

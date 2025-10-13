@@ -19,44 +19,30 @@
      <property name="title">
       <string>脚本设置</string>
      </property>
-     <layout class="QVBoxLayout" name="verticalLayout_2">
+     <layout class="QVBoxLayout" name="verticalLayout_4">
       <item>
-       <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,3,1,4,0,0">
+       <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,0,0,0,0">
         <property name="spacing">
          <number>6</number>
         </property>
         <item>
          <widget class="QLabel" name="label">
           <property name="text">
-           <string>功能：</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QLineEdit" name="lineEdit">
-          <property name="text">
-           <string>启动SLAM建图</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QLabel" name="label_2">
-          <property name="text">
-           <string>运行脚本</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QLineEdit" name="startSlamBash_Edit">
-          <property name="text">
-           <string>source ~/robot_ros_application/catkin_ws/devel/setup.bash &amp;&amp; rosrun SLAM RGBD true false</string>
+           <string>SLAM脚本启动</string>
           </property>
          </widget>
         </item>
         <item>
          <widget class="QPushButton" name="startSlam_Button">
           <property name="text">
-           <string>启动</string>
+           <string>启动SLAM建图</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="locationSlam_Button">
+          <property name="text">
+           <string>SLAM建图定位模式</string>
           </property>
          </widget>
         </item>
@@ -67,51 +53,98 @@
           </property>
          </widget>
         </item>
+        <item>
+         <spacer name="horizontalSpacer_3">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
        </layout>
       </item>
       <item>
-       <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,3,1,4,0,0">
+       <layout class="QHBoxLayout" name="horizontalLayout_4">
         <item>
-         <widget class="QLabel" name="label_3">
-          <property name="text">
-           <string>功能：</string>
-          </property>
-         </widget>
+         <layout class="QVBoxLayout" name="verticalLayout_2" stretch="0,2">
+          <item>
+           <layout class="QHBoxLayout" name="horizontalLayout_2">
+            <item>
+             <widget class="QLabel" name="label_2">
+              <property name="text">
+               <string>点云图</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="horizontalSpacer">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QLabel" name="pointCloud_Display">
+            <property name="frameShape">
+             <enum>QFrame::Box</enum>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </item>
         <item>
-         <widget class="QLineEdit" name="lineEdit_2">
-          <property name="text">
-           <string>SLAM建图定位模式</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QLabel" name="label_4">
-          <property name="text">
-           <string>运行脚本</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QLineEdit" name="locationSlamBash_Edit">
-          <property name="text">
-           <string>source ~/robot_ros_application/catkin_ws/devel/setup.bash &amp;&amp; rosrun SLAM RGBD true true</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="locationSlam_Button">
-          <property name="text">
-           <string>启动</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="closeLocationSlam_Button">
-          <property name="text">
-           <string>关闭</string>
-          </property>
-         </widget>
+         <layout class="QVBoxLayout" name="verticalLayout_3" stretch="0,2">
+          <item>
+           <layout class="QHBoxLayout" name="horizontalLayout_3">
+            <item>
+             <widget class="QLabel" name="label_3">
+              <property name="text">
+               <string>特征点图像</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="horizontalSpacer_2">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QLabel" name="featurePoint_Display">
+            <property name="frameShape">
+             <enum>QFrame::Box</enum>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </item>
        </layout>
       </item>

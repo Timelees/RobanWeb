@@ -1,0 +1,15 @@
+battery_topic: "/MediumSize/SensorHub/BatteryState"            
+
+cameraCompressed_topic: "/camera/color/image_raw/compressed"   
+cameraCompressed_topic_type: "sensor_msgs/CompressedImage"
+
+cameraRaw_topic: "/camera/color/image_raw"     
+cameraRaw_topic_type: "sensor_msgs/Image"
+
+imu_topic: "/MediumSize/SensorHub/Imu"           
+
+featureImageCompressed_topic: "/SLAM/FeaturePoint/Image/compressed"      
+featureImageCompressed_topic_type: "sensor_msgs/CompressedImage"
+
+featureImageRaw_topic: "/SLAM/FeaturePoint/Image"
+featureImageRaw_topic_type: "sensor_msgs/Image"

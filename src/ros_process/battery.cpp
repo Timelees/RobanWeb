@@ -1,6 +1,6 @@
 #include "ros_process/battery.h"
 #include "socket_process/websocketworker.h"
-
+#include "util/load_param.hpp"
 
 // Map voltage to percent using a simple linear mapping as placeholder
 // You can replace this with the more complex table from the python script if needed
@@ -10,9 +10,10 @@ static const double MAX_VOLTAGE = 12.46; // corresponding to 100%
 BatteryMonitor::BatteryMonitor(WebSocketWorker *worker, QObject *parent)
     : QObject(parent), m_worker(worker)
 {
+    battery_topic_name = loadTopicFromConfig("battery_topic");
 }
-
 BatteryMonitor::~BatteryMonitor() {}
+
 // 订阅电量话题
 void BatteryMonitor::start()
 {
@@ -20,12 +21,17 @@ void BatteryMonitor::start()
     // send subscribe request for BatteryState
     QJsonObject subscribeMsg;
     subscribeMsg["op"] = "subscribe";
-    subscribeMsg["topic"] = "/MediumSize/SensorHub/BatteryState";
+    QString topic_name = loadTopicFromConfig("battery_topic");
+    subscribeMsg["topic"] = topic_name;
     subscribeMsg["type"] = "sensor_msgs/BatteryState";
     QJsonDocument doc(subscribeMsg);
     QString payload = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
     QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload));
 }
+
+
+
+
 
 void BatteryMonitor::onMessageReceived(const QString &message)
 {
@@ -36,7 +42,7 @@ void BatteryMonitor::onMessageReceived(const QString &message)
     // rosbridge publish message format: {op:"publish", topic:"...", msg:{...}}
     if (obj["op"].toString() == "publish") {
         QString topic = obj["topic"].toString();
-        if (topic != "/MediumSize/SensorHub/BatteryState") return;
+        if (topic != battery_topic_name) return;
 
         QJsonObject msgObj = obj["msg"].toObject();
         QJsonDocument msgDoc(msgObj);
@@ -63,3 +69,5 @@ int BatteryMonitor::voltageToPercent(double voltage) const
     double t = (voltage - MIN_VOLTAGE) / (MAX_VOLTAGE - MIN_VOLTAGE);
     return static_cast<int>(t * 100.0 + 0.5);
 }
+
+

@@ -233,6 +233,9 @@
               </item>
               <item>
                <widget class="QLabel" name="pointCloudDisplay">
+                <property name="frameShape">
+                 <enum>QFrame::Box</enum>
+                </property>
                 <property name="text">
                  <string/>
                 </property>
@@ -251,6 +254,9 @@
               </item>
               <item>
                <widget class="QLabel" name="imageRawDisplay">
+                <property name="frameShape">
+                 <enum>QFrame::Box</enum>
+                </property>
                 <property name="text">
                  <string/>
                 </property>

@@ -1,9 +1,11 @@
 #include "ros_process/imu.h"
 #include "socket_process/websocketworker.h"
+#include "util/load_param.hpp"
 
 ImuMonitor::ImuMonitor(WebSocketWorker *worker, QObject *parent)
     : QObject(parent), m_worker(worker)
 {
+    imu_topic_name = loadTopicFromConfig("imu_topic");
 }
 
 ImuMonitor::~ImuMonitor() {}
@@ -14,7 +16,8 @@ void ImuMonitor::start(){
     // send subscribe request for IMU
     QJsonObject subscribeMsg;
     subscribeMsg["op"] = "subscribe";
-    subscribeMsg["topic"] = "/MediumSize/SensorHub/Imu";
+    
+    subscribeMsg["topic"] = imu_topic_name;
     subscribeMsg["type"] = "sensor_msgs/Imu";
     QJsonDocument doc(subscribeMsg);
     QString payload = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
@@ -29,7 +32,7 @@ void ImuMonitor::onMessageReceived(const QString &message){
     // rosbridge publish message format: {op:"publish", topic:"...", msg:{...}}
     if (obj["op"].toString() == "publish") {
         QString topic = obj["topic"].toString();
-        if (topic != "/MediumSize/SensorHub/Imu") return;
+        if (topic != imu_topic_name) return;
 
         QJsonObject msgObj = obj["msg"].toObject();
         QJsonDocument msgDoc(msgObj);

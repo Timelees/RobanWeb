@@ -27,7 +27,7 @@ signals:
 
 private:
     WebSocketWorker *m_worker;
-
+    QString imu_topic_name; // IMU话题名称
 };
 
 
