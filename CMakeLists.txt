@@ -12,6 +12,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Qt6 COMPONENTS Widgets REQUIRED) # Qt COMPONENTS
 find_package(Qt6 COMPONENTS WebSockets REQUIRED)
 find_package(Qt6 COMPONENTS Sql REQUIRED)
+find_package(Qt6 COMPONENTS OpenGLWidgets REQUIRED)
 
 # 设置包含目录
 include_directories(
@@ -25,8 +26,6 @@ set(CMAKE_AUTOUIC_SEARCH_PATHS "${CMAKE_CURRENT_SOURCE_DIR}/ui")
 file(GLOB_RECURSE SRC_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
 )
-
-
 
 # 收集UI文件（递归以防子目录）
 file(GLOB_RECURSE UI_FILES 
@@ -59,6 +58,19 @@ add_executable(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Widgets) # Qt6 Shared Library
 target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::WebSockets) 
 target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Sql)
+target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::OpenGLWidgets)
+
+
+# 链接OpenGL库
+# Link system OpenGL (on Windows use opengl32)
+if (WIN32)
+    target_link_libraries(${PROJECT_NAME} PRIVATE opengl32)
+else()
+    find_package(OpenGL REQUIRED)
+    if (TARGET OpenGL::GL)
+        target_link_libraries(${PROJECT_NAME} PRIVATE OpenGL::GL)
+    endif()
+endif()
 
 # 设置目标属性，确保MOC能找到头文件
 target_include_directories(${PROJECT_NAME} PRIVATE 

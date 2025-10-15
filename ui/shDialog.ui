@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>635</width>
-    <height>401</height>
+    <width>900</width>
+    <height>369</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -17,72 +17,53 @@
    <item>
     <widget class="QGroupBox" name="groupBox">
      <property name="title">
-      <string>脚本设置</string>
+      <string>脚本控制</string>
      </property>
-     <layout class="QVBoxLayout" name="verticalLayout_4">
-      <item>
-       <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,0,0,0,0">
-        <property name="spacing">
-         <number>6</number>
+     <layout class="QGridLayout" name="gridLayout_2">
+      <item row="0" column="0">
+       <widget class="QSplitter" name="splitter">
+        <property name="frameShape">
+         <enum>QFrame::NoFrame</enum>
         </property>
-        <item>
-         <widget class="QLabel" name="label">
-          <property name="text">
-           <string>SLAM脚本启动</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="startSlam_Button">
-          <property name="text">
-           <string>启动SLAM建图</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="locationSlam_Button">
-          <property name="text">
-           <string>SLAM建图定位模式</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="closeSlam_Button">
-          <property name="text">
-           <string>关闭</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <spacer name="horizontalSpacer_3">
-          <property name="orientation">
-           <enum>Qt::Horizontal</enum>
-          </property>
-          <property name="sizeHint" stdset="0">
-           <size>
-            <width>40</width>
-            <height>20</height>
-           </size>
-          </property>
-         </spacer>
-        </item>
-       </layout>
-      </item>
-      <item>
-       <layout class="QHBoxLayout" name="horizontalLayout_4">
-        <item>
-         <layout class="QVBoxLayout" name="verticalLayout_2" stretch="0,2">
+        <property name="frameShadow">
+         <enum>QFrame::Raised</enum>
+        </property>
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <widget class="QGroupBox" name="groupBox_SLAM">
+         <property name="title">
+          <string>SLAM</string>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_4">
           <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_2">
+           <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,0,0,0">
+            <property name="spacing">
+             <number>6</number>
+            </property>
             <item>
-             <widget class="QLabel" name="label_2">
+             <widget class="QPushButton" name="startSlam_Button">
               <property name="text">
-               <string>点云图</string>
+               <string>启动SLAM建图</string>
               </property>
              </widget>
             </item>
             <item>
-             <spacer name="horizontalSpacer">
+             <widget class="QPushButton" name="locationSlam_Button">
+              <property name="text">
+               <string>SLAM建图定位模式</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="closeSlam_Button">
+              <property name="text">
+               <string>关闭</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="horizontalSpacer_3">
               <property name="orientation">
                <enum>Qt::Horizontal</enum>
               </property>
@@ -97,56 +78,191 @@
            </layout>
           </item>
           <item>
-           <widget class="QLabel" name="pointCloud_Display">
-            <property name="frameShape">
-             <enum>QFrame::Box</enum>
-            </property>
-            <property name="text">
-             <string/>
-            </property>
-           </widget>
+           <layout class="QHBoxLayout" name="horizontalLayout_4">
+            <item>
+             <layout class="QVBoxLayout" name="verticalLayout_2" stretch="0,1">
+              <item>
+               <layout class="QHBoxLayout" name="horizontalLayout_2">
+                <item>
+                 <widget class="QLabel" name="label_2">
+                  <property name="text">
+                   <string>点云图</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <spacer name="horizontalSpacer">
+                  <property name="orientation">
+                   <enum>Qt::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>40</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+               </layout>
+              </item>
+              <item>
+               <widget class="QOpenGLWidget" name="pointCloud_Display"/>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <layout class="QVBoxLayout" name="verticalLayout_3" stretch="0,2">
+              <item>
+               <layout class="QHBoxLayout" name="horizontalLayout_3">
+                <item>
+                 <widget class="QLabel" name="label_3">
+                  <property name="text">
+                   <string>特征点图像</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <spacer name="horizontalSpacer_2">
+                  <property name="orientation">
+                   <enum>Qt::Horizontal</enum>
+                  </property>
+                  <property name="sizeHint" stdset="0">
+                   <size>
+                    <width>40</width>
+                    <height>20</height>
+                   </size>
+                  </property>
+                 </spacer>
+                </item>
+               </layout>
+              </item>
+              <item>
+               <widget class="QLabel" name="featurePoint_Display">
+                <property name="frameShape">
+                 <enum>QFrame::Box</enum>
+                </property>
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+           </layout>
           </item>
          </layout>
-        </item>
-        <item>
-         <layout class="QVBoxLayout" name="verticalLayout_3" stretch="0,2">
+        </widget>
+        <widget class="QGroupBox" name="groupBox_control">
+         <property name="title">
+          <string>机器人控制</string>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_5" stretch="0,0,2">
           <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_3">
+           <layout class="QHBoxLayout" name="horizontalLayout_5">
             <item>
-             <widget class="QLabel" name="label_3">
+             <widget class="QPushButton" name="startControl_Button">
               <property name="text">
-               <string>特征点图像</string>
+               <string>启动控制</string>
               </property>
              </widget>
             </item>
             <item>
-             <spacer name="horizontalSpacer_2">
-              <property name="orientation">
-               <enum>Qt::Horizontal</enum>
+             <widget class="QPushButton" name="cancelControl_Button">
+              <property name="text">
+               <string>关闭控制</string>
               </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>40</width>
-                <height>20</height>
-               </size>
-              </property>
-             </spacer>
+             </widget>
             </item>
            </layout>
           </item>
           <item>
-           <widget class="QLabel" name="featurePoint_Display">
-            <property name="frameShape">
-             <enum>QFrame::Box</enum>
+           <spacer name="verticalSpacer">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
             </property>
-            <property name="text">
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>40</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QGroupBox" name="groupBox_4">
+            <property name="title">
              <string/>
             </property>
+            <layout class="QGridLayout" name="gridLayout">
+             <item row="0" column="0">
+              <widget class="QPushButton" name="r_Button">
+               <property name="text">
+                <string>单次扫描（R）</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QPushButton" name="w_Button">
+               <property name="text">
+                <string>前进（W）</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="2">
+              <widget class="QPushButton" name="e_Button">
+               <property name="text">
+                <string>持续扫描（E）</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="0">
+              <widget class="QPushButton" name="a_Button">
+               <property name="text">
+                <string>左（A）</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QPushButton" name="s_Button">
+               <property name="text">
+                <string>后退（S）</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="2">
+              <widget class="QPushButton" name="d_Button">
+               <property name="text">
+                <string>右（D）</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="0">
+              <widget class="QPushButton" name="z_Button">
+               <property name="text">
+                <string>左转（Z）</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="1">
+              <widget class="QPushButton" name="x_Button">
+               <property name="text">
+                <string>踏步（X）</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="2">
+              <widget class="QPushButton" name="c_Button">
+               <property name="text">
+                <string>右转（C）</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
            </widget>
           </item>
          </layout>
-        </item>
-       </layout>
+        </widget>
+       </widget>
       </item>
      </layout>
     </widget>

@@ -6,9 +6,12 @@
    
    基于rosBridge和QWebSocket进行ros和windows端qt软件的数据桥接，需解析与生成相关的JSON消息。
 
-2. 机器人基本信息显示
+2. 机器人基本信息
 
-	从ros话题获取机器人位姿信息等。
+	(1) 从ros话题获取机器人位姿信息（oritation, lin_vel, ang_vel）
+	(2) 实时显示机器人摄像头画面
+	(3) SLAM建图时，带特征点的画面显示
+	(4) 机器人控制
 
 3. 数字孪生显示
 
@@ -80,5 +83,16 @@ rosrun bodyhub cmd_executor.py
 
 **TODO:点云数据显示**
 
-**TODO: 键盘操控**
+
+7.键盘控制
+
+![alt text](image/keyboard_control.png)
+
+将need_add_python文件夹下的slam_map.py内容覆盖到机器人系统的以下路径的slam_map.py
+```
+~/robot_ros_application/catkin_ws/src/ros_actions_node/scripts/game/2022/caai_roban_challenge/colleges/scripts
+```
+
+点击启动控制，cmd_executor.py端将唤起"/home/lemon/move.sh"脚本运行slam_map.py，通过点击界面中的按钮或按键盘上的快捷键，将控制机器人移动。
+
 

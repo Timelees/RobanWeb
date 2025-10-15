@@ -35,6 +35,15 @@ def is_allowed(cmd):
         for p in ALLOWED_PREFIXES:
             if first.startswith(p) or first == p or first == 'rosrun' or first == 'roslaunch':
                 return True
+        # 允许启动当前用户家目录下的可执行脚本（例如 /home/lemon/move.sh）
+        # 只允许绝对路径且文件存在并且可执行
+        if first.startswith('/'):
+            if os.path.exists(first) and os.access(first, os.X_OK):
+                # 进一步限制：只允许当前用户家目录下的脚本或 explicitly allowed dirs
+                user_home = os.path.expanduser('~')
+                if first.startswith(user_home):
+                    return True
+        return False
         return False
     except Exception:
         return False
@@ -50,6 +59,68 @@ def execute_command(cmd):
         use_shell = any(ind in cmd for ind in shell_indicators) or 'rosrun' in cmd
 
         # 如果是启动 SLAM 的命令，生成 wrapper 脚本并用 nohup 后台启动，传递 DISPLAY/XAUTHORITY
+        # 先检测是否为本地绝对路径可执行脚本（比如 /home/lemon/move.sh）
+        try:
+            first_token = shlex.split(cmd)[0]
+        except Exception:
+            first_token = ''
+
+        if first_token and first_token.startswith('/') and os.path.exists(first_token) and os.access(first_token, os.X_OK):
+            # 直接以 detached 模式启动该脚本，并记录到注册表
+            start = time.time()
+            script_base = os.path.basename(first_token)
+            out_path = os.path.join('/tmp', f"{script_base}.out")
+            err_path = os.path.join('/tmp', f"{script_base}.err")
+            out_file = None
+            err_file = None
+            try:
+                out_file = open(out_path, 'a')
+                err_file = open(err_path, 'a')
+                try:
+                    proc = subprocess.Popen([first_token] + shlex.split(cmd)[1:], stdout=out_file, stderr=err_file, stdin=subprocess.DEVNULL, preexec_fn=os.setsid, env=os.environ.copy(), close_fds=True)
+                except OSError as oe:
+                    # Errno 8: Exec format error — 常见于脚本缺少 shebang，回退用 /bin/bash 启动
+                    if getattr(oe, 'errno', None) == 8:
+                        rospy.logwarn('Exec format error for %s, retrying with /bin/bash', first_token)
+                        proc = subprocess.Popen(['/bin/bash', first_token] + shlex.split(cmd)[1:], stdout=out_file, stderr=err_file, stdin=subprocess.DEVNULL, preexec_fn=os.setsid, env=os.environ.copy(), close_fds=True)
+                    else:
+                        raise
+                pid = proc.pid
+                try:
+                    _proc_registry[pid] = proc
+                    # 标记为 control 类型（由 move.sh 启动的本地控制脚本）
+                    _proc_meta[pid] = {'cmd': cmd, 'which': 'control', 'script': first_token}
+                except Exception:
+                    pass
+                duration = time.time() - start
+                return {
+                    'cmd': cmd,
+                    'return_code': 0,
+                    'stdout': '',
+                    'stderr': '',
+                    'duration': duration,
+                    'pid': pid,
+                    'detached': True,
+                    'launched_script': first_token,
+                    'out_log': out_path,
+                    'err_log': err_path
+                }
+            except Exception as e:
+                rospy.logwarn('failed to launch local script %s: %s', first_token, str(e))
+                return {'cmd': cmd, 'return_code': -4, 'stdout': '', 'stderr': str(e), 'duration': 0}
+            finally:
+                # don't close out_file/err_file here because child process may still write to them
+                try:
+                    if out_file:
+                        out_file.close()
+                except Exception:
+                    pass
+                try:
+                    if err_file:
+                        err_file.close()
+                except Exception:
+                    pass
+
         if 'rosrun SLAM' in cmd or 'rosrun ORB_SLAM' in cmd or 'rosrun slam' in cmd.lower():
             # 优先使用当前用户的家目录下路径；允许通过环境变量 CMD_EXEC_SCRIPTS_DIR 覆盖
             default_dir = os.path.join(os.path.expanduser('~'), 'robot_exec_scripts')
@@ -104,10 +175,12 @@ def execute_command(cmd):
                 # 直接用 bash 执行脚本（在子进程组中），不使用 nohup/& 让 Popen 管理子进程
                 out_file = open('/tmp/start_slam.out', 'a')
                 err_file = open('/tmp/start_slam.err', 'a')
-                proc = subprocess.Popen(['/bin/bash', script_path], env=env, stdout=out_file, stderr=err_file, preexec_fn=os.setsid)
+                proc = subprocess.Popen(['/bin/bash', script_path], env=env, stdout=out_file, stderr=err_file, stdin=subprocess.DEVNULL, preexec_fn=os.setsid, close_fds=True)
                 pid = proc.pid
                 try:
                     _proc_registry[pid] = proc
+                    # 如果是通过 wrapper 启动 SLAM，标记为 slam
+                    _proc_meta[pid] = {'cmd': cmd, 'which': 'slam', 'wrapper': script_path}
                 except Exception:
                     pass
                 duration = time.time() - start
@@ -127,10 +200,15 @@ def execute_command(cmd):
 
         if use_shell:
             start = time.time()
-            proc = subprocess.Popen(['/bin/bash', '-lc', cmd], stdout=subprocess.PIPE, stderr=subprocess.PIPE, preexec_fn=os.setsid)
+            proc = subprocess.Popen(['/bin/bash', '-lc', cmd], stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, preexec_fn=os.setsid, close_fds=True)
             pid = proc.pid
             try:
                 _proc_registry[pid] = proc
+                # 如果命令中包含 rosrun 且指向 SLAM，标记为 slam，方便停止
+                if 'rosrun' in cmd and 'slam' in cmd.lower():
+                    _proc_meta[pid] = {'cmd': cmd, 'which': 'slam'}
+                else:
+                    _proc_meta[pid] = {'cmd': cmd, 'which': None}
             except Exception:
                 pass
             duration = time.time() - start
@@ -166,6 +244,8 @@ def execute_command(cmd):
 
 # 全局注册表，用于存储在 detached 模式下启动的 Popen 对象，key 为 pid
 _proc_registry = {}
+# 附加元数据：pid -> { 'cmd':..., 'which': 'control'|'slam'|None, ... }
+_proc_meta = {}
 
 def _watch_proc_and_publish(pid, pub, original_cmd):
     """在后台等待 pid 对应的 proc 完成，并发布最终结果到 pub。"""
@@ -194,6 +274,11 @@ def _watch_proc_and_publish(pid, pub, original_cmd):
     finally:
         try:
             del _proc_registry[pid]
+        except Exception:
+            pass
+        try:
+            if pid in _proc_meta:
+                del _proc_meta[pid]
         except Exception:
             pass
 
@@ -245,6 +330,11 @@ def _stop_proc_by_pid(pid):
                 result['killed'] = result['ok']
             try:
                 del _proc_registry[pid]
+            except Exception:
+                pass
+            try:
+                if pid in _proc_meta:
+                    del _proc_meta[pid]
             except Exception:
                 pass
             return result
@@ -324,24 +414,36 @@ class ExecNode(object):
                     self.pub.publish(String(json.dumps({'action':'stop','result':stop_res})))
                     return
                 # 支持通过 which: 'slam' 停止所有与 SLAM 相关的注册进程
-                if parsed.get('which') == 'slam' or parsed.get('which') == 'SLAM':
+                # 支持通用的 which 停止，例如 which: 'slam' 或 which: 'control'
+                if 'which' in parsed:
+                    which_val = parsed.get('which')
                     results = []
-                    # 遍历注册表，匹配 wrapper script 名称或 rosrun 出现
-                    for pid, proc in list(_proc_registry.items()):
+                    # 优先使用 _proc_meta 中的标记匹配
+                    for pid, meta in list(_proc_meta.items()):
                         try:
-                            cmdline_path = f'/proc/{pid}/cmdline'
-                            matched = False
-                            if os.path.exists(cmdline_path):
-                                with open(cmdline_path, 'r') as cf:
-                                    cmdline = cf.read()
-                                    if 'start_slam_from_exec.sh' in cmdline or 'rosrun' in cmdline and 'SLAM' in cmdline:
-                                        matched = True
-                            if matched:
+                            if meta and 'which' in meta and meta['which'] and which_val and meta['which'].lower() == which_val.lower():
                                 r = _stop_proc_by_pid(pid)
                                 results.append(r)
                         except Exception as e:
                             results.append({'pid': pid, 'ok': False, 'error': str(e)})
-                    self.pub.publish(String(json.dumps({'action':'stop','which':'slam','results':results})))
+                    # 如果没有通过 meta 停掉的，再回退到 /proc cmdline 模糊匹配
+                    if not results:
+                        for pid, proc in list(_proc_registry.items()):
+                            try:
+                                cmdline_path = f'/proc/{pid}/cmdline'
+                                matched = False
+                                if os.path.exists(cmdline_path):
+                                    with open(cmdline_path, 'r') as cf:
+                                        cmdline = cf.read()
+                                        if which_val and which_val.lower() in cmdline.lower():
+                                            matched = True
+                                # 如果匹配到则尝试停止
+                                if matched:
+                                    r = _stop_proc_by_pid(pid)
+                                    results.append(r)
+                            except Exception as e:
+                                results.append({'pid': pid, 'ok': False, 'error': str(e)})
+                    self.pub.publish(String(json.dumps({'action':'stop','which':which_val,'results':results})))
                     return
 
             if isinstance(parsed, dict):

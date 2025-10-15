@@ -32,8 +32,13 @@ public:
     ~ShDialog();
 
 private slots:
-    void onRunButtonClicked();
-    void onCloseButtonClicked();
+    void onRunSLAMButtonClicked();
+    void onCloseSLAMButtonClicked();
+    void onRunControlButtonClicked();
+    void onCancelControlButtonClicked();
+    // 控制按键
+    void onControlButtonClicked();      
+    
 
 signals:
     void runScriptRequested(const QString &cmd);
@@ -41,6 +46,7 @@ signals:
 
 private:
     void init();
+    void bindSlots();
     bool eventFilter(QObject *watched, QEvent *event) override;
 
 
@@ -52,6 +58,7 @@ private:
     QTimer *featuredImagePullTimer;           // 定时器，用于从特征点图像监视器中获取最新帧
     CameraImageMonitor *cameraImageMonitor = nullptr; // 相机图像监视器
     QString m_featureTopic;
+
     
 };
 
