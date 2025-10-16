@@ -21,8 +21,7 @@ void BatteryMonitor::start()
     // send subscribe request for BatteryState
     QJsonObject subscribeMsg;
     subscribeMsg["op"] = "subscribe";
-    QString topic_name = loadTopicFromConfig("battery_topic");
-    subscribeMsg["topic"] = topic_name;
+    subscribeMsg["topic"] = battery_topic_name;
     subscribeMsg["type"] = "sensor_msgs/BatteryState";
     QJsonDocument doc(subscribeMsg);
     QString payload = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));

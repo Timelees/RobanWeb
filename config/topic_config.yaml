@@ -1,15 +1,32 @@
+# 电池话题
 battery_topic: "/MediumSize/SensorHub/BatteryState"            
-
+# 相机话题（压缩）
 cameraCompressed_topic: "/camera/color/image_raw/compressed"   
 cameraCompressed_topic_type: "sensor_msgs/CompressedImage"
-
+# 相机话题（原始）
 cameraRaw_topic: "/camera/color/image_raw"     
 cameraRaw_topic_type: "sensor_msgs/Image"
-
+# IMU话题
 imu_topic: "/MediumSize/SensorHub/Imu"           
-
+# SLAM特征点话题（压缩）
 featureImageCompressed_topic: "/SLAM/FeaturePoint/Image/compressed"      
 featureImageCompressed_topic_type: "sensor_msgs/CompressedImage"
-
+# SLAM特征点话题（原始）
 featureImageRaw_topic: "/SLAM/FeaturePoint/Image"
 featureImageRaw_topic_type: "sensor_msgs/Image"
+
+# SLAM地图点云话题
+slamPoint_topic: "/SLAM/MapPoints"
+slamPoint_topic_type: "sensor_msgs/PointCloud2"
+# SLAM关键帧话题
+slamKeyFrame_topic: "/SLAM/KeyFrames"
+slamKeyFrame_topic_type: "visualization_msgs/MarkerArray"
+
+
+
+# OpenGL渲染相机矩阵话题
+openGLMatrix_topic: "/SLAM/CameraOpenGLMatrix"
+openGLMatrix_topic_type: "std_msgs/Float64MultiArray"
+# 相机位姿
+cameraPose_topic: "/SLAM/CameraPose"
+cameraPose_topic_type: "geometry_msgs/PoseStamped"

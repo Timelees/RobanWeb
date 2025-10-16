@@ -4,6 +4,7 @@
 #include "util/load_param.hpp"
 
 
+
 ShDialog::ShDialog(WebSocketWorker *webSocketWorker, QWidget *parent)
     : QDialog(parent)
     , ui(new Ui::ShDialog)
@@ -52,6 +53,27 @@ ShDialog::~ShDialog()
         featuredImageMonitor = nullptr;
     }
 
+    // 清理SLAM地图监视器和线程
+    if(slamMapMonitor){
+        QMetaObject::invokeMethod(slamMapMonitor, "stop", Qt::BlockingQueuedConnection);
+    }
+    if(slamMapThread){
+        if(slamMapThread->isRunning()){
+            slamMapThread->quit();
+            slamMapThread->wait();
+        }
+        delete slamMapThread;
+        slamMapThread = nullptr;
+    }
+    if(slamMapMonitor){
+        delete slamMapMonitor;
+        slamMapMonitor = nullptr;
+    }
+    // 清理点云显示对象
+    if(pcd){
+        delete pcd;
+        pcd = nullptr;
+    }
 
     delete ui;
 }
@@ -67,7 +89,6 @@ void ShDialog::init()
     featuredImageMonitor = new CameraImageMonitor(m_worker, nullptr, m_featureTopic);
     featuredImageMonitor->moveToThread(featuredImageThread);
     featuredImageThread->start();
-
 
     // 避免图像显示标签在pixmap调整大小时自身也调整大小
     if (ui->featurePoint_Display) {
@@ -94,7 +115,17 @@ void ShDialog::init()
         });
     }
 
+    // 启动点云地图监视器和线程
+    slamMapThread = new QThread();
+    slamMapMonitor = new SlamMapMonitor(m_worker, nullptr);
+    slamMapMonitor->moveToThread(slamMapThread);
+    slamMapThread->start();
 
+    // Create a PointCloudDisplay widget and insert into UI placeholder (fill so it receives mouse events)
+    if (ui->pointCloud_Display) {
+        pcd = new PointCloudDisplay(ui->pointCloud_Display);
+        connect(slamMapMonitor, &SlamMapMonitor::pointCloudReceived, pcd, &PointCloudDisplay::onPointCloudReceived, Qt::QueuedConnection);
+    }
 
 }
 
@@ -115,6 +146,9 @@ void ShDialog::bindSlots(){
         }
     }, Qt::QueuedConnection);
 
+
+    // 连接webSocket信号到SLAM地图监视器槽函数
+    connect(m_worker, &WebSocketWorker::messageReceived, slamMapMonitor, &SlamMapMonitor::onMessageReceived, Qt::QueuedConnection);
 
 
     // 控制按钮槽函数
@@ -247,35 +281,23 @@ void ShDialog::onRunSLAMButtonClicked()
             featuredImagePullTimer->start();
         }
     }
-}
-// 启动遥控
-void ShDialog::onRunControlButtonClicked()
-{
-    QObject *s = sender();
-    if(!s){
-        qDebug() << "onRunControlButtonClicked: no sender";
-        return;
-    }
-    QString cmd = loadCmdFromConfig("start_control_bash");
-    if(!cmd.isEmpty()){
-        qDebug() << "Run control script requested:" << cmd;
-        // 通过webSocket发布启动脚本命令
-        QJsonObject pub;
-        pub["op"] = "publish";
-        pub["topic"] = "/robot/exec_sh";
-        pub["type"] = "std_msgs/String";
-        QJsonObject msg;
-        msg["data"] = cmd;
-        pub["msg"] = msg;
 
-        QJsonDocument doc(pub);
-        QString jsonString = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
-        QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, jsonString));
-        qDebug() << "Sent exec command to robot:" << cmd;
-    }else{
-        qDebug() << "Empty command, ignoring";
+    // 启动或确保 SLAM 地图点云订阅（通过 slamMapMonitor 发送 subscribe 请求）
+    if (slamMapMonitor) {
+        // If thread is not running (stopped previously), restart it
+        if (slamMapThread && !slamMapThread->isRunning()) {
+            slamMapMonitor->moveToThread(slamMapThread);
+            slamMapThread->start();
+        }
+        // ensure the worker->monitor connection exists (disconnect old then reconnect to avoid duplicates)
+        QObject::disconnect(m_worker, nullptr, slamMapMonitor, nullptr);
+        connect(m_worker, &WebSocketWorker::messageReceived, slamMapMonitor, &SlamMapMonitor::onMessageReceived, Qt::QueuedConnection);
+        // Ask the monitor to send a rosbridge subscribe request
+        QMetaObject::invokeMethod(slamMapMonitor, "start", Qt::QueuedConnection);
     }
+
 }
+
 
 
 // 关闭SLAM建图
@@ -322,7 +344,41 @@ void ShDialog::onCloseSLAMButtonClicked()
         ui->featurePoint_Display->clear();
     }
 
+    if (slamMapMonitor){
+        QMetaObject::invokeMethod(pcd, "clearPointCloud", Qt::QueuedConnection);
+    }
+
 }
+
+// 启动遥控
+void ShDialog::onRunControlButtonClicked()
+{
+    QObject *s = sender();
+    if(!s){
+        qDebug() << "onRunControlButtonClicked: no sender";
+        return;
+    }
+    QString cmd = loadCmdFromConfig("start_control_bash");
+    if(!cmd.isEmpty()){
+        qDebug() << "Run control script requested:" << cmd;
+        // 通过webSocket发布启动脚本命令
+        QJsonObject pub;
+        pub["op"] = "publish";
+        pub["topic"] = "/robot/exec_sh";
+        pub["type"] = "std_msgs/String";
+        QJsonObject msg;
+        msg["data"] = cmd;
+        pub["msg"] = msg;
+
+        QJsonDocument doc(pub);
+        QString jsonString = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+        QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, jsonString));
+        qDebug() << "Sent exec command to robot:" << cmd;
+    }else{
+        qDebug() << "Empty command, ignoring";
+    }
+}
+
 
 // 取消遥控
 void ShDialog::onCancelControlButtonClicked()
@@ -353,6 +409,7 @@ void ShDialog::onCancelControlButtonClicked()
     qDebug() << "Sent stop control command to robot:" << innerStr;
 }
 
+// 接收控制按钮点击事件
 void ShDialog::onControlButtonClicked()
 {
     QObject *s = sender();

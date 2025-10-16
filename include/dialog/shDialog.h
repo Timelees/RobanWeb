@@ -15,6 +15,8 @@
 
 
 #include "ros_process/cameraImage.h"
+#include "ros_process/slamMapPoint.h"
+#include "ros_process/pointclouddisplay.h"
 
 namespace Ui
 {
@@ -59,7 +61,10 @@ private:
     CameraImageMonitor *cameraImageMonitor = nullptr; // 相机图像监视器
     QString m_featureTopic;
 
+    SlamMapMonitor *slamMapMonitor = nullptr; // SLAM地图点云监视器
+    QThread *slamMapThread = nullptr;       // SLAM地图点云处理线程
     
+    PointCloudDisplay *pcd = nullptr; // QOpenGL点云显示
 };
 
 #endif // SHDIALOG_H

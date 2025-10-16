@@ -83,6 +83,10 @@ rosrun bodyhub cmd_executor.py
 
 **TODO:点云数据显示**
 
+SLAM功能包编译：
+```
+cd /home/lemon/robot_ros_application/catkin_ws && catkin_make -DCATKIN_WHITELIST_PACKAGES="" --force-cmake --pkg SLAM -j4
+```
 
 7.键盘控制
 
