@@ -34,6 +34,7 @@ protected:
     // mouse interaction
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
 
 protected:
@@ -57,6 +58,8 @@ private:
     QMutex mtx_;
     // optional external OpenGL camera matrix (row-major 4x4 values)
     QVector<double> camera_mat;
+    // compute ModelView (column-major) from Twc (row-major list in camera_mat). Returns true if produced.
+    bool computeModelViewFromTwc(GLfloat out[16]);
  
     float rotY = 0.0f;
     float rotX = 0.0f;

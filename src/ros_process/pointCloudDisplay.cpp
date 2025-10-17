@@ -85,24 +85,25 @@ void PointCloudDisplay::paintGL()
 
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    // Apply camera transform: translate (pan), then rotate, then zoom
-    glTranslatef(panX, panY, -distance);
-    glRotatef(rotX, 1.0f, 0.0f, 0.0f);
-    glRotatef(rotY, 0.0f, 1.0f, 0.0f);
 
-    // If we have an external OpenGL matrix, multiply it here
-    {
-        QMutexLocker locker(&mtx_);
-        if (camera_mat.size() == 16) {
-            // assume incoming mat is row-major 4x4, OpenGL expects column-major
-            GLfloat gmat[16];
-            for (int r = 0; r < 4; ++r) {
-                for (int c = 0; c < 4; ++c) {
-                    gmat[c*4 + r] = static_cast<GLfloat>(camera_mat[r*4 + c]);
-                }
-            }
-            glMultMatrixf(gmat);
-        }
+    // Try to compute ModelView = inverse(Twc) from the received Twc (camera->world) matrix.
+    // computeModelViewFromTwc is thread-safe and reads camera_mat under lock.
+    GLfloat modelView[16];
+    if (computeModelViewFromTwc(modelView)) {
+        // Compose final ModelView = I * B, where B = inverse(Twc) (modelView)
+        // and I is the interactive transform built from pan/rotate/zoom. We do this by
+        // loading identity, applying I, then multiplying by B (glMultMatrixf).
+        glLoadIdentity();
+        glTranslatef(panX, panY, -distance);
+        glRotatef(rotX, 1.0f, 0.0f, 0.0f);
+        glRotatef(rotY, 0.0f, 1.0f, 0.0f);
+        glMultMatrixf(modelView);
+    } else {
+        // fallback: interactive camera (pan/rotate/zoom)
+        glLoadIdentity();
+        glTranslatef(panX, panY, -distance);
+        glRotatef(rotX, 1.0f, 0.0f, 0.0f);
+        glRotatef(rotY, 0.0f, 1.0f, 0.0f);
     }
 
     // 绘制点云
@@ -121,11 +122,63 @@ void PointCloudDisplay::paintGL()
     drawCameraPoses();
 }
 
+bool PointCloudDisplay::computeModelViewFromTwc(GLfloat out[16])
+{
+    QMutexLocker locker(&mtx_);
+    if (camera_mat.size() != 16) return false;
+    // camera_mat is row-major Twc: [ r00 r01 r02 tx; r10 r11 r12 ty; r20 r21 r22 tz; 0 0 0 1 ]
+    // inverse for rigid transform: invT = [ R^T, -R^T * t; 0 1 ]
+    double r00 = camera_mat[0]; double r01 = camera_mat[1]; double r02 = camera_mat[2]; double tx = camera_mat[3];
+    double r10 = camera_mat[4]; double r11 = camera_mat[5]; double r12 = camera_mat[6]; double ty = camera_mat[7];
+    double r20 = camera_mat[8]; double r21 = camera_mat[9]; double r22 = camera_mat[10]; double tz = camera_mat[11];
+    // last row is assumed [0 0 0 1]
+
+    // R^T
+    double m00 = r00; double m01 = r10; double m02 = r20;
+    double m10 = r01; double m11 = r11; double m12 = r21;
+    double m20 = r02; double m21 = r12; double m22 = r22;
+
+    // -R^T * t
+    double itx = -(m00 * tx + m01 * ty + m02 * tz);
+    double ity = -(m10 * tx + m11 * ty + m12 * tz);
+    double itz = -(m20 * tx + m21 * ty + m22 * tz);
+
+    // pack into column-major GLfloat out[16]
+    out[0]  = static_cast<GLfloat>(m00); out[4]  = static_cast<GLfloat>(m01); out[8]  = static_cast<GLfloat>(m02); out[12] = static_cast<GLfloat>(itx);
+    out[1]  = static_cast<GLfloat>(m10); out[5]  = static_cast<GLfloat>(m11); out[9]  = static_cast<GLfloat>(m12); out[13] = static_cast<GLfloat>(ity);
+    out[2]  = static_cast<GLfloat>(m20); out[6]  = static_cast<GLfloat>(m21); out[10] = static_cast<GLfloat>(m22); out[14] = static_cast<GLfloat>(itz);
+    out[3]  = 0.0f;                         out[7]  = 0.0f;                         out[11] = 0.0f;                         out[15] = 1.0f;
+
+    // Apply a 180-degree rotation about world Z to match ORB-SLAM2 Viewer orientation (rotate initial view)
+    // RotZ180 * out  (left-multiply)
+    GLfloat rot[16] = {
+        -1.0f, 0.0f, 0.0f, 0.0f,
+         0.0f,-1.0f, 0.0f, 0.0f,
+         0.0f, 0.0f, 1.0f, 0.0f,
+         0.0f, 0.0f, 0.0f, 1.0f
+    };
+    GLfloat tmp[16];
+    for (int r = 0; r < 4; ++r) {
+        for (int c = 0; c < 4; ++c) {
+            float sum = 0.0f;
+            for (int k = 0; k < 4; ++k) {
+                sum += rot[c*4 + k] * out[k*4 + r];
+            }
+            tmp[c*4 + r] = sum;
+        }
+    }
+    memcpy(out, tmp, sizeof(tmp));
+
+    return true;
+}
+
 // 鼠标事件
 void PointCloudDisplay::mousePressEvent(QMouseEvent *event)
 {
     lastPos = event->pos();
     lastButton = event->button();
+    // ensure widget receives keyboard focus so key events and focus dependent behavior work
+    setFocus();
     event->accept();
 }
 
@@ -133,16 +186,24 @@ void PointCloudDisplay::mouseMoveEvent(QMouseEvent *event)
 {
     QPoint delta = event->pos() - lastPos;
     lastPos = event->pos();
-    if (event->buttons() & Qt::LeftButton) {
+    // use stored lastButton to determine interaction rather than event->buttons() which may be unreliable across platforms
+    if (lastButton == Qt::LeftButton) {
         // pan
         panX += delta.x() * 0.002f; // scale to view
         panY -= delta.y() * 0.002f;
-    } else if (event->buttons() & Qt::RightButton) {
+    } else if (lastButton == Qt::RightButton) {
         // rotate
         rotY += delta.x() * 0.5f;
         rotX += delta.y() * 0.5f;
     }
     update();
+    event->accept();
+}
+
+void PointCloudDisplay::mouseReleaseEvent(QMouseEvent *event)
+{
+    Q_UNUSED(event);
+    lastButton = Qt::NoButton;
     event->accept();
 }
 void PointCloudDisplay::wheelEvent(QWheelEvent *event)
@@ -169,9 +230,9 @@ void PointCloudDisplay::onCameraPoseReceived(const QVector3D &pos, const QVector
 {
     {
         QMutexLocker locker(&mtx_);
+        camera_poses.clear();
         camera_poses.append(qMakePair(pos, dir));
     }
-    // qDebug() << "PointCloudDisplay::onCameraPoseReceived -> pos=" << pos << " dir=" << dir;
     update();
 }
 
@@ -327,7 +388,9 @@ void PointCloudDisplay::drawCameraPoses(){
     glLineWidth(1.0f);
 
     // also draw bright green points at camera centers for visibility
-    glPointSize(6.0f);
+    // temporarily disable depth test so world-space camera markers are clearly visible on top
+    glDisable(GL_DEPTH_TEST);
+    glPointSize(8.0f);
     glBegin(GL_POINTS);
     for (const auto &pr : poses) {
         const QVector3D &pp = pr.first;
@@ -336,6 +399,7 @@ void PointCloudDisplay::drawCameraPoses(){
     }
     glEnd();
     glPointSize(1.2f);
+    glEnable(GL_DEPTH_TEST);
 
     for (const auto &pr : poses) {
         const QVector3D &p = pr.first;
@@ -369,7 +433,10 @@ void PointCloudDisplay::drawCameraPoses(){
         glTranslatef(p.x(), p.y(), p.z());
         if (ang != 0.0f) glRotatef(ang, axis.x(), axis.y(), axis.z());
 
-        glBegin(GL_LINES);
+    // draw wireframe pyramid; draw on top by briefly disabling depth test for visibility
+    glDisable(GL_DEPTH_TEST);
+    glLineWidth(2.0f);
+    glBegin(GL_LINES);
         glVertex3f(0,0,0); glVertex3f(wcam,hcam,zcam);
         glVertex3f(0,0,0); glVertex3f(wcam,-hcam,zcam);
         glVertex3f(0,0,0); glVertex3f(-wcam,-hcam,zcam);
@@ -380,8 +447,13 @@ void PointCloudDisplay::drawCameraPoses(){
 
         glVertex3f(-wcam,hcam,zcam); glVertex3f(wcam,hcam,zcam);
         glVertex3f(-wcam,-hcam,zcam); glVertex3f(wcam,-hcam,zcam);
-        glEnd();
+    glEnd();
+    glLineWidth(1.0f);
+    glEnable(GL_DEPTH_TEST);
 
-        glPopMatrix();
+    glPopMatrix();
     }
+    // In follow mode (haveView) we draw a centered HUD camera glyph and do not draw
+    // the world-space camera pose (to avoid duplicate/confusing markers).
+    return;
 }
