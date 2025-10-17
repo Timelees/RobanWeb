@@ -23,10 +23,10 @@ slamKeyFrame_topic: "/SLAM/KeyFrames"
 slamKeyFrame_topic_type: "visualization_msgs/MarkerArray"
 
 
-
 # OpenGL渲染相机矩阵话题
 openGLMatrix_topic: "/SLAM/CameraOpenGLMatrix"
 openGLMatrix_topic_type: "std_msgs/Float64MultiArray"
-# 相机位姿
-cameraPose_topic: "/SLAM/CameraPose"
+# 相机位置
+cameraPose_topic: "/SLAM/CameraPoint"
 cameraPose_topic_type: "geometry_msgs/PoseStamped"
+

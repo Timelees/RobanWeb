@@ -125,6 +125,9 @@ void ShDialog::init()
     if (ui->pointCloud_Display) {
         pcd = new PointCloudDisplay(ui->pointCloud_Display);
         connect(slamMapMonitor, &SlamMapMonitor::pointCloudReceived, pcd, &PointCloudDisplay::onPointCloudReceived, Qt::QueuedConnection);
+        connect(slamMapMonitor, &SlamMapMonitor::keyFrameMarkers, pcd, &PointCloudDisplay::onKeyFrameMarkers, Qt::QueuedConnection);
+        connect(slamMapMonitor, &SlamMapMonitor::cameraMatrixReceived, pcd, &PointCloudDisplay::onCameraMatrixReceived, Qt::QueuedConnection);
+        connect(slamMapMonitor, &SlamMapMonitor::cameraPoseReceived, pcd, &PointCloudDisplay::onCameraPoseReceived, Qt::QueuedConnection);
     }
 
 }
@@ -344,8 +347,22 @@ void ShDialog::onCloseSLAMButtonClicked()
         ui->featurePoint_Display->clear();
     }
 
-    if (slamMapMonitor){
+    // Disconnect worker -> slamMapMonitor to stop receiving further messages immediately
+    if (m_worker && slamMapMonitor) {
+        QObject::disconnect(m_worker, nullptr, slamMapMonitor, nullptr);
+    }
+
+    // Ask slamMapMonitor to stop (unsubscribe) and wait for it to finish to avoid races
+    if (slamMapMonitor) {
+        QMetaObject::invokeMethod(slamMapMonitor, "stop", Qt::QueuedConnection);
+    }
+
+    // Clear point cloud and keyframe visuals immediately
+    if (pcd) {
         QMetaObject::invokeMethod(pcd, "clearPointCloud", Qt::QueuedConnection);
+        QMetaObject::invokeMethod(pcd, "clearKeyFrames", Qt::QueuedConnection);
+        QMetaObject::invokeMethod(pcd, "clearCameraPoses", Qt::QueuedConnection);
+        QMetaObject::invokeMethod(pcd, "clearCameraMatrix", Qt::QueuedConnection);
     }
 
 }
