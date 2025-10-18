@@ -11,13 +11,13 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>脚本功能</string>
+   <string>建图与控制</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
     <widget class="QGroupBox" name="groupBox">
      <property name="title">
-      <string>脚本控制</string>
+      <string/>
      </property>
      <layout class="QGridLayout" name="gridLayout_2">
       <item row="0" column="0">
@@ -32,53 +32,80 @@
          <enum>Qt::Horizontal</enum>
         </property>
         <widget class="QGroupBox" name="groupBox_SLAM">
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(255, 255, 255);
+border:2px solid rgb(255, 255, 255);
+border-radius:15px</string>
+         </property>
          <property name="title">
           <string>SLAM</string>
          </property>
-         <layout class="QVBoxLayout" name="verticalLayout_4" stretch="0,0,2">
+         <layout class="QVBoxLayout" name="verticalLayout_4" stretch="0,0,3">
+          <property name="topMargin">
+           <number>12</number>
+          </property>
           <item>
-           <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,0,0,0">
-            <property name="spacing">
-             <number>6</number>
+           <widget class="QGroupBox" name="groupBox_3">
+            <property name="styleSheet">
+             <string notr="true">background-color: rgb(245, 245, 245);
+border:2px solid rgb(255, 255, 255);
+border-radius:15px</string>
             </property>
-            <item>
-             <widget class="QPushButton" name="startSlam_Button">
-              <property name="text">
-               <string>启动SLAM建图</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="locationSlam_Button">
-              <property name="text">
-               <string>SLAM建图定位模式</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="closeSlam_Button">
-              <property name="text">
-               <string>关闭</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <spacer name="horizontalSpacer_3">
-              <property name="orientation">
-               <enum>Qt::Horizontal</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>40</width>
-                <height>20</height>
-               </size>
-              </property>
-             </spacer>
-            </item>
-           </layout>
+            <property name="title">
+             <string/>
+            </property>
+            <layout class="QVBoxLayout" name="verticalLayout_6">
+             <item>
+              <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,0,0,0">
+               <property name="spacing">
+                <number>6</number>
+               </property>
+               <item>
+                <widget class="QPushButton" name="startSlam_Button">
+                 <property name="text">
+                  <string>启动SLAM建图</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QPushButton" name="locationSlam_Button">
+                 <property name="text">
+                  <string>SLAM建图定位模式</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QPushButton" name="closeSlam_Button">
+                 <property name="text">
+                  <string>关闭</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <spacer name="horizontalSpacer_3">
+                 <property name="orientation">
+                  <enum>Qt::Horizontal</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>40</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                </spacer>
+               </item>
+              </layout>
+             </item>
+            </layout>
+           </widget>
           </item>
           <item>
            <widget class="QGroupBox" name="groupBox_2">
+            <property name="styleSheet">
+             <string notr="true">background-color: rgb(245, 245, 245);
+border:2px solid rgb(255, 255, 255);
+border-radius:15px</string>
+            </property>
             <property name="title">
              <string/>
             </property>
@@ -135,124 +162,152 @@
            </widget>
           </item>
           <item>
-           <widget class="QSplitter" name="splitter_2">
-            <property name="orientation">
-             <enum>Qt::Horizontal</enum>
+           <widget class="QGroupBox" name="groupBox_5">
+            <property name="styleSheet">
+             <string notr="true">background-color: rgb(245, 245, 245);
+border:2px solid rgb(255, 255, 255);
+border-radius:15px</string>
             </property>
-            <property name="handleWidth">
-             <number>5</number>
+            <property name="title">
+             <string/>
             </property>
-            <widget class="QWidget" name="">
-             <layout class="QVBoxLayout" name="verticalLayout_2" stretch="0,1">
-              <item>
-               <layout class="QHBoxLayout" name="horizontalLayout_2">
-                <item>
-                 <widget class="QLabel" name="label_2">
-                  <property name="text">
-                   <string>点云图</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <spacer name="horizontalSpacer">
-                  <property name="orientation">
-                   <enum>Qt::Horizontal</enum>
-                  </property>
-                  <property name="sizeHint" stdset="0">
-                   <size>
-                    <width>40</width>
-                    <height>20</height>
-                   </size>
-                  </property>
-                 </spacer>
-                </item>
-               </layout>
-              </item>
-              <item>
-               <widget class="QOpenGLWidget" name="pointCloud_Display"/>
-              </item>
-             </layout>
-            </widget>
-            <widget class="QWidget" name="">
-             <layout class="QVBoxLayout" name="verticalLayout_3" stretch="0,1">
-              <item>
-               <layout class="QHBoxLayout" name="horizontalLayout_3">
-                <item>
-                 <widget class="QLabel" name="label_3">
-                  <property name="text">
-                   <string>特征点</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <spacer name="horizontalSpacer_2">
-                  <property name="orientation">
-                   <enum>Qt::Horizontal</enum>
-                  </property>
-                  <property name="sizeHint" stdset="0">
-                   <size>
-                    <width>40</width>
-                    <height>20</height>
-                   </size>
-                  </property>
-                 </spacer>
-                </item>
-               </layout>
-              </item>
-              <item>
-               <widget class="QLabel" name="featurePoint_Display">
-                <property name="frameShape">
-                 <enum>QFrame::Box</enum>
-                </property>
-                <property name="text">
-                 <string/>
-                </property>
+            <layout class="QVBoxLayout" name="verticalLayout_7">
+             <item>
+              <widget class="QSplitter" name="splitter_2">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="handleWidth">
+                <number>5</number>
+               </property>
+               <widget class="QWidget" name="layoutWidget">
+                <layout class="QVBoxLayout" name="verticalLayout_2" stretch="0,1">
+                 <item>
+                  <layout class="QHBoxLayout" name="horizontalLayout_2">
+                   <item>
+                    <widget class="QLabel" name="label_2">
+                     <property name="text">
+                      <string>点云图</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <spacer name="horizontalSpacer">
+                     <property name="orientation">
+                      <enum>Qt::Horizontal</enum>
+                     </property>
+                     <property name="sizeHint" stdset="0">
+                      <size>
+                       <width>40</width>
+                       <height>20</height>
+                      </size>
+                     </property>
+                    </spacer>
+                   </item>
+                  </layout>
+                 </item>
+                 <item>
+                  <widget class="QOpenGLWidget" name="pointCloud_Display"/>
+                 </item>
+                </layout>
                </widget>
-              </item>
-             </layout>
-            </widget>
+               <widget class="QWidget" name="layoutWidget">
+                <layout class="QVBoxLayout" name="verticalLayout_3" stretch="0,1">
+                 <item>
+                  <layout class="QHBoxLayout" name="horizontalLayout_3">
+                   <item>
+                    <widget class="QLabel" name="label_3">
+                     <property name="text">
+                      <string>特征点</string>
+                     </property>
+                    </widget>
+                   </item>
+                   <item>
+                    <spacer name="horizontalSpacer_2">
+                     <property name="orientation">
+                      <enum>Qt::Horizontal</enum>
+                     </property>
+                     <property name="sizeHint" stdset="0">
+                      <size>
+                       <width>40</width>
+                       <height>20</height>
+                      </size>
+                     </property>
+                    </spacer>
+                   </item>
+                  </layout>
+                 </item>
+                 <item>
+                  <widget class="QLabel" name="featurePoint_Display">
+                   <property name="frameShape">
+                    <enum>QFrame::Box</enum>
+                   </property>
+                   <property name="text">
+                    <string/>
+                   </property>
+                  </widget>
+                 </item>
+                </layout>
+               </widget>
+              </widget>
+             </item>
+            </layout>
            </widget>
           </item>
          </layout>
         </widget>
         <widget class="QGroupBox" name="groupBox_control">
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(255, 255, 255);
+border:2px solid rgb(255, 255, 255);
+border-radius:15px</string>
+         </property>
          <property name="title">
           <string>机器人控制</string>
          </property>
-         <layout class="QVBoxLayout" name="verticalLayout_5" stretch="0,0,2">
+         <layout class="QVBoxLayout" name="verticalLayout_5" stretch="0,2">
+          <property name="topMargin">
+           <number>12</number>
+          </property>
           <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_5">
-            <item>
-             <widget class="QPushButton" name="startControl_Button">
-              <property name="text">
-               <string>启动控制</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="cancelControl_Button">
-              <property name="text">
-               <string>关闭控制</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-          <item>
-           <spacer name="verticalSpacer">
-            <property name="orientation">
-             <enum>Qt::Vertical</enum>
+           <widget class="QGroupBox" name="groupBox_6">
+            <property name="styleSheet">
+             <string notr="true">background-color: rgb(245, 245, 245);
+border:2px solid rgb(255, 255, 255);
+border-radius:15px</string>
             </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>20</width>
-              <height>40</height>
-             </size>
+            <property name="title">
+             <string/>
             </property>
-           </spacer>
+            <layout class="QVBoxLayout" name="verticalLayout_8">
+             <item>
+              <layout class="QHBoxLayout" name="horizontalLayout_5">
+               <item>
+                <widget class="QPushButton" name="startControl_Button">
+                 <property name="text">
+                  <string>启动控制</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QPushButton" name="cancelControl_Button">
+                 <property name="text">
+                  <string>关闭控制</string>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+            </layout>
+           </widget>
           </item>
           <item>
            <widget class="QGroupBox" name="groupBox_4">
+            <property name="styleSheet">
+             <string notr="true">background-color: rgb(245, 245, 245);
+border:2px solid rgb(255, 255, 255);
+border-radius:15px</string>
+            </property>
             <property name="title">
              <string/>
             </property>

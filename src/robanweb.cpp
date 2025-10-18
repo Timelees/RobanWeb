@@ -4,6 +4,7 @@
 #include "socket_process/websocketworker.h"
 #include "util/load_param.hpp"
 
+
 robanweb::robanweb(QWidget* parent)
     : QMainWindow(parent)
     , ui(new Ui_robanweb)
@@ -14,11 +15,8 @@ robanweb::robanweb(QWidget* parent)
     , reconnectAttempts(0)
 {
     ui->setupUi(this);
-    // 设置菜单栏和状态栏
-    settingMenuBar();
+    // 设置状态栏
     settingStatusBar();
-
-  
 
     init(); 
     bindSlots();        // 绑定相关槽函数
@@ -64,11 +62,6 @@ void robanweb::init(){
     imagePullTimer = new QTimer(this);
     imagePullTimer->setInterval(50); // 默认 20 FPS
 
-    // 菜单栏创建动作并连接信号槽
-    connectAction = new QAction("连接设置", this);
-    ui->connectSetting->addAction(connectAction);
-    bashAction = new QAction("脚本功能", this);
-    ui->startSh->addAction(bashAction);
 
     // ros话题接收对象
     batteryMonitor = new BatteryMonitor(webSocketWorker, this);         // 电池数据
@@ -98,19 +91,17 @@ void robanweb::init(){
     if (ui->imageRawDisplay) {
         ui->imageRawDisplay->installEventFilter(this);
     }
+ 
     // connect imagePullTimer once to cameraImageMonitor requestFrame (use queued connection)
     if (imagePullTimer && cameraImageMonitor) {
         connect(imagePullTimer, &QTimer::timeout, this, [this]() {
             QMetaObject::invokeMethod(cameraImageMonitor, "requestFrame", Qt::QueuedConnection);
         });
     }
+
     
 }
 
-// 设置菜单栏组件
-void robanweb::settingMenuBar(){
-    return;
-}
 
 // 设置状态栏组件
 void robanweb::settingStatusBar(){
@@ -129,9 +120,12 @@ void robanweb::settingStatusBar(){
 }
 
 void robanweb::bindSlots(){
-    // 菜单栏连接信号槽
-    connect(connectAction, &QAction::triggered, this, &robanweb::onConnectSettingTriggered);
-    connect(bashAction, &QAction::triggered, this, &robanweb::onBashActionTriggered);
+    // 连接信号槽
+    connect(ui->connect_Button, &QPushButton::clicked, this, &robanweb::onConnectSettingButtonClicked);
+    // SLAM和控制按钮槽
+    connect(ui->SLAM_Control_Button, &QPushButton::clicked, this, &robanweb::onSlamControlButtonClicked);
+    // 语音控制按钮槽
+    connect(ui->voice_Button, &QPushButton::clicked, this, &robanweb::onVoiceControlButtonClicked);
 
     // 当线程启动时可做初始化
     connect(webSocketThread, &QThread::finished, webSocketWorker, &QObject::deleteLater);
@@ -164,7 +158,6 @@ void robanweb::bindSlots(){
     }, Qt::QueuedConnection);
 
 
-    
     // 更新IMU数据显示
     connect(imuMonitor, &ImuMonitor::orientationUpdated, this, [this](double w, double x, double y, double z){
         if (ui) {
@@ -191,8 +184,8 @@ void robanweb::bindSlots(){
     
 
 }
-// 脚本功能触发
-void robanweb::onBashActionTriggered()
+// SLAM控制按钮槽函数
+void robanweb::onSlamControlButtonClicked()
 {
     ShDialog dialog(webSocketWorker, this);
     // connect dialog signal to main slot
@@ -203,8 +196,8 @@ void robanweb::onBashActionTriggered()
 }
 
 
-// 菜单栏连接设置触发
-void robanweb::onConnectSettingTriggered(){
+// 连接设置槽函数
+void robanweb::onConnectSettingButtonClicked(){
     ConnectDialog dialog(this);
     connect(&dialog, &ConnectDialog::connectRequested, this, &robanweb::establishWebSocketConnection);
     if (dialog.exec() == QDialog::Accepted) {
@@ -220,6 +213,26 @@ void robanweb::onConnectSettingTriggered(){
     }
 }
 
+// 语音控制按钮槽函数
+void robanweb::onVoiceControlButtonClicked(){
+    QString cmd = loadCmdFromConfig("voiceControlScript");
+    if (!cmd.isEmpty()) {
+        QJsonObject pub;
+        pub["op"] = "publish";
+        pub["topic"] = "/robot/exec_sh";
+        pub["type"] = "std_msgs/String";
+        QJsonObject msg;
+        msg["data"] = cmd;
+        pub["msg"] = msg;
+        QJsonDocument doc(pub);
+        QString payload = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+        // 通过 worker 发送发布消息
+        QMetaObject::invokeMethod(webSocketWorker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload));
+        qDebug() << "Sent exec command to robot:" << cmd;
+    }else{
+        qDebug() << "Voice control script command is empty in config.";
+    }
+}
 
 // 建立webSocket连接
 void robanweb::establishWebSocketConnection(const QString &url)
@@ -268,15 +281,15 @@ void robanweb::onWebSocketConnected()
 }
 
 void robanweb::startSubscriptions(){
-    // 订阅 ROS 话题（例如 /robot_status）
-    QJsonObject subscribeMsg;
-    subscribeMsg["op"] = "subscribe";
-    subscribeMsg["topic"] = "/MediumSize/BodyHub/ServoPositions";    
-    subscribeMsg["type"] = "bodyhub/ServoPositionAngle"; 
-    QJsonDocument doc(subscribeMsg);
-    QString payload = QString(doc.toJson());
-    // 通过 worker 发送订阅消息
-    QMetaObject::invokeMethod(webSocketWorker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload));
+    // // 订阅 ROS 话题（例如 /robot_status）
+    // QJsonObject subscribeMsg;
+    // subscribeMsg["op"] = "subscribe";
+    // subscribeMsg["topic"] = "/MediumSize/BodyHub/ServoPositions";    
+    // subscribeMsg["type"] = "bodyhub/ServoPositionAngle"; 
+    // QJsonDocument doc(subscribeMsg);
+    // QString payload = QString(doc.toJson());
+    // // 通过 worker 发送订阅消息
+    // QMetaObject::invokeMethod(webSocketWorker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload));
 
 
     // 启动电量订阅

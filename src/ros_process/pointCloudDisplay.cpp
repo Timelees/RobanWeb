@@ -1,9 +1,5 @@
 #include "ros_process/pointCloudDisplay.h"
-#include <QPainter>
-#include <QOpenGLShaderProgram>
-#include <QMouseEvent>
-#include <QWheelEvent>
-#include <cmath>
+
 
 PointCloudDisplay::PointCloudDisplay(QWidget *parent)
     : QOpenGLWidget(parent)
@@ -264,10 +260,28 @@ void PointCloudDisplay::clearKeyFrames()
 // 更新相机矩阵
 void PointCloudDisplay::onCameraMatrixReceived(const QList<double> &mat)
 {
-    QMutexLocker locker(&mtx_);
-    camera_mat.clear();
-    for (double v : mat) camera_mat.append(v);
-    while (camera_mat.size() > 16) camera_mat.removeLast();
+    // copy camera matrix under lock then release before calling computeModelViewFromTwc
+    {
+        QMutexLocker locker(&mtx_);
+        camera_mat.clear();
+        for (double v : mat) camera_mat.append(v);
+        while (camera_mat.size() > 16) camera_mat.removeLast();
+    }
+
+    // If this is the first valid external camera matrix we receive since app start,
+    // auto-rotate the view by 180 degrees so the view faces the camera (matches manual right-drag).
+    if (!initialViewAligned) {
+        GLfloat tmp[16];
+        if (computeModelViewFromTwc(tmp)) {
+            // apply a 180-degree yaw to match user's expected initial orientation
+            rotY += 180.0f;
+            // normalize rotY into [-360,360] to prevent runaway
+            if (rotY > 360.0f) rotY = fmod(rotY, 360.0f);
+            initialViewAligned = true;
+            qDebug() << "PointCloudDisplay: auto-aligned initial view (rotY set to)" << rotY;
+        }
+    }
+
     update();
 }
 // 清空相机矩阵

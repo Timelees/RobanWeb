@@ -12,6 +12,8 @@
 #include <QJsonArray>
 #include <QProgressBar>
 
+
+
 #include "socket_process/websocketworker.h"
 #include "ros_process/battery.h"
 #include "ros_process/imu.h"
@@ -23,15 +25,16 @@ class robanweb : public QMainWindow {
 public:
     robanweb(QWidget* parent = nullptr);
     ~robanweb();
-    // 通过客户端发布话题
-    void publishToTopic(const QString &topic, const QString &type, const QJsonObject &msg);
+
+
 protected:
     void closeEvent(QCloseEvent *event) override;
 
 private slots:
-    void onConnectSettingTriggered();       // 连接设置 槽函数
-    void onBashActionTriggered();           // 脚本功能 槽函数
-    
+    void onConnectSettingButtonClicked();       // 连接设置 槽函数
+    void onSlamControlButtonClicked();           // SLAM控制按钮 槽函数
+    void onVoiceControlButtonClicked();         // 语音控制按钮 槽函数
+
     // webSocket 相关槽函数
     void onWebSocketConnected();            // 连接webSocket
     void onWebSocketDisconnected();
@@ -42,8 +45,7 @@ private slots:
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
 
-private:
-    void settingMenuBar();          
+private:        
     void settingStatusBar();
     void updateStatusLabel(const QString &status);  // 更新连接显示标签
     void bindSlots();                               // 绑定槽函数
@@ -58,9 +60,7 @@ private:
     QTimer *reconnectTimer;
     QString wsHost;
     QString wsPort;
-    // 菜单栏设置
-    QAction *connectAction;
-    QAction *bashAction;
+
     
     bool isReconnecting;
     int reconnectAttempts;

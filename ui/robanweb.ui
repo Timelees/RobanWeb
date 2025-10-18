@@ -6,27 +6,114 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1116</width>
-    <height>863</height>
+    <width>904</width>
+    <height>683</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>robanweb</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QGridLayout" name="gridLayout_2">
-    <item row="0" column="0">
-     <layout class="QHBoxLayout" name="horizontalLayout_4" stretch="3,1">
+   <layout class="QVBoxLayout" name="verticalLayout_4" stretch="0,2">
+    <item>
+     <widget class="QGroupBox" name="groupBox_5">
+      <property name="styleSheet">
+       <string notr="true">background-color: rgb(255, 255, 255);
+border:2px solid rgb(255, 255, 255);
+border-radius:15px</string>
+      </property>
+      <property name="title">
+       <string/>
+      </property>
+      <layout class="QHBoxLayout" name="horizontalLayout_5" stretch="0,0">
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_4">
+         <item>
+          <widget class="QPushButton" name="connect_Button">
+           <property name="styleSheet">
+            <string notr="true">background-color: rgb(245, 245, 245);
+border:2px solid rgb(255, 255, 255);
+border-radius:15px</string>
+           </property>
+           <property name="text">
+            <string>连接设置</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="SLAM_Control_Button">
+           <property name="styleSheet">
+            <string notr="true">background-color: rgb(245, 245, 245);
+border:2px solid rgb(255, 255, 255);
+border-radius:15px</string>
+           </property>
+           <property name="text">
+            <string>建图与控制</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="voice_Button">
+           <property name="styleSheet">
+            <string notr="true">background-color: rgb(245, 245, 245);
+border:2px solid rgb(255, 255, 255);
+border-radius:15px</string>
+           </property>
+           <property name="text">
+            <string>语音控制</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <spacer name="horizontalSpacer">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>40</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <layout class="QHBoxLayout" name="horizontalLayout_7" stretch="2,1">
       <item>
        <widget class="QGroupBox" name="groupBox_4">
+        <property name="styleSheet">
+         <string notr="true">background-color: rgb(255, 255, 255);
+border:2px solid rgb(255, 255, 255);
+border-radius:15px</string>
+        </property>
         <property name="title">
          <string>3D模型显示</string>
         </property>
-        <layout class="QVBoxLayout" name="verticalLayout_4">
+        <layout class="QHBoxLayout" name="horizontalLayout_6" stretch="0">
+         <property name="spacing">
+          <number>2</number>
+         </property>
+         <property name="leftMargin">
+          <number>2</number>
+         </property>
+         <property name="topMargin">
+          <number>14</number>
+         </property>
+         <property name="rightMargin">
+          <number>2</number>
+         </property>
+         <property name="bottomMargin">
+          <number>2</number>
+         </property>
          <item>
-          <widget class="QWidget" name="threeDDisplay" native="true">
+          <widget class="QOpenGLWidget" name="modelDisplay">
            <property name="styleSheet">
-            <string notr="true">background-color: rgb(255, 255, 255);</string>
+            <string notr="true"/>
            </property>
           </widget>
          </item>
@@ -35,10 +122,30 @@
       </item>
       <item>
        <widget class="QGroupBox" name="groupBox_3">
+        <property name="styleSheet">
+         <string notr="true">background-color: rgb(255, 255, 255);
+border:2px solid rgb(255, 255, 255);
+border-radius:15px</string>
+        </property>
         <property name="title">
          <string/>
         </property>
-        <layout class="QVBoxLayout" name="verticalLayout_3" stretch="1,0,3">
+        <layout class="QVBoxLayout" name="verticalLayout_3" stretch="1,3,3">
+         <property name="spacing">
+          <number>2</number>
+         </property>
+         <property name="leftMargin">
+          <number>2</number>
+         </property>
+         <property name="topMargin">
+          <number>2</number>
+         </property>
+         <property name="rightMargin">
+          <number>2</number>
+         </property>
+         <property name="bottomMargin">
+          <number>2</number>
+         </property>
          <item>
           <widget class="QGroupBox" name="groupBox">
            <property name="sizePolicy">
@@ -47,11 +154,18 @@
              <verstretch>0</verstretch>
             </sizepolicy>
            </property>
+           <property name="font">
+            <font>
+             <bold>true</bold>
+            </font>
+           </property>
            <property name="styleSheet">
-            <string notr="true">background-color: rgb(255, 255, 255);</string>
+            <string notr="true">background-color: rgb(245, 245, 245);
+border:2px solid rgb(255, 255, 255);
+border-radius:15px</string>
            </property>
            <property name="title">
-            <string>基本信息</string>
+            <string>位姿信息</string>
            </property>
            <layout class="QGridLayout" name="gridLayout">
             <property name="leftMargin">
@@ -59,6 +173,9 @@
             </property>
             <item row="0" column="0">
              <layout class="QVBoxLayout" name="verticalLayout">
+              <property name="topMargin">
+               <number>4</number>
+              </property>
               <item>
                <widget class="QLabel" name="label">
                 <property name="text">
@@ -198,60 +315,26 @@
           </widget>
          </item>
          <item>
-          <spacer name="verticalSpacer">
-           <property name="orientation">
-            <enum>Qt::Vertical</enum>
-           </property>
-           <property name="sizeType">
-            <enum>QSizePolicy::Minimum</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>20</width>
-             <height>10</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-         <item>
           <widget class="QGroupBox" name="groupBox_2">
+           <property name="font">
+            <font>
+             <bold>true</bold>
+            </font>
+           </property>
            <property name="styleSheet">
-            <string notr="true">background-color: rgb(255, 255, 255);</string>
+            <string notr="true">background-color: rgb(245, 245, 245);
+border:2px solid rgb(255, 255, 255);
+border-radius:15px</string>
            </property>
            <property name="title">
             <string>图像显示</string>
            </property>
            <layout class="QVBoxLayout" name="verticalLayout_6">
             <item>
-             <layout class="QVBoxLayout" name="verticalLayout_5" stretch="0,1">
-              <item>
-               <widget class="QLabel" name="label_4">
-                <property name="text">
-                 <string>点云图</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QLabel" name="pointCloudDisplay">
-                <property name="frameShape">
-                 <enum>QFrame::Box</enum>
-                </property>
-                <property name="text">
-                 <string/>
-                </property>
-               </widget>
-              </item>
-             </layout>
-            </item>
-            <item>
-             <layout class="QVBoxLayout" name="verticalLayout_2" stretch="0,1">
-              <item>
-               <widget class="QLabel" name="label_5">
-                <property name="text">
-                 <string>相机原图</string>
-                </property>
-               </widget>
-              </item>
+             <layout class="QVBoxLayout" name="verticalLayout_2" stretch="1">
+              <property name="topMargin">
+               <number>4</number>
+              </property>
               <item>
                <widget class="QLabel" name="imageRawDisplay">
                 <property name="frameShape">
@@ -267,6 +350,31 @@
            </layout>
           </widget>
          </item>
+         <item>
+          <widget class="QGroupBox" name="groupBox_6">
+           <property name="font">
+            <font>
+             <bold>true</bold>
+            </font>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">background-color: rgb(245, 245, 245);
+border:2px solid rgb(255, 255, 255);
+border-radius:15px</string>
+           </property>
+           <property name="title">
+            <string>日志</string>
+           </property>
+           <layout class="QVBoxLayout" name="verticalLayout_5">
+            <property name="topMargin">
+             <number>12</number>
+            </property>
+            <item>
+             <widget class="QPlainTextEdit" name="plainTextEdit"/>
+            </item>
+           </layout>
+          </widget>
+         </item>
         </layout>
        </widget>
       </item>
@@ -275,37 +383,6 @@
    </layout>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
-  <widget class="QMenuBar" name="menubar">
-   <property name="geometry">
-    <rect>
-     <x>0</x>
-     <y>0</y>
-     <width>1116</width>
-     <height>22</height>
-    </rect>
-   </property>
-   <property name="layoutDirection">
-    <enum>Qt::LeftToRight</enum>
-   </property>
-   <widget class="QMenu" name="mainMenu">
-    <property name="title">
-     <string>主界面</string>
-    </property>
-   </widget>
-   <widget class="QMenu" name="startSh">
-    <property name="title">
-     <string>功能脚本启动</string>
-    </property>
-   </widget>
-   <widget class="QMenu" name="connectSetting">
-    <property name="title">
-     <string>连接设置</string>
-    </property>
-   </widget>
-   <addaction name="mainMenu"/>
-   <addaction name="startSh"/>
-   <addaction name="connectSetting"/>
-  </widget>
  </widget>
  <resources/>
  <connections/>

@@ -135,6 +135,18 @@ void ShDialog::init()
         pcd->resize(ui->pointCloud_Display->size());
     }
 
+    // 设置点云显示和特征点显示区域比例
+    if (ui->splitter_2) {
+        // index 0 is the left widget (point cloud), index 1 is the right widget (feature points)
+        ui->splitter_2->setStretchFactor(0, 2);
+        ui->splitter_2->setStretchFactor(1, 1);
+    }
+    if(ui->splitter){
+        // index 0 is the top widget, index 1 is the bottom widget
+        ui->splitter->setStretchFactor(0, 3);
+        ui->splitter->setStretchFactor(1, 1);
+    }
+
     // 初始化时隐藏定位模式按钮
     if (ui->groupBox_2) {
         ui->groupBox_2->setVisible(false);

@@ -1,3 +1,4 @@
-start_slam_bash: "source ~/robot_ros_application/catkin_ws/devel/setup.bash && rosrun SLAM RGBD true false"
-start_slam_location_bash: "source ~/robot_ros_application/catkin_ws/devel/setup.bash && rosrun SLAM RGBD true true"
+start_slam_bash: "/home/lemon/slam.sh"
+start_slam_location_bash: "/home/lemon/slam_tt.sh"
 start_control_bash: "/home/lemon/move.sh"
+voiceControlScript: "/home/lemon/largeModel.sh"

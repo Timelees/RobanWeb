@@ -69,6 +69,8 @@ Viewer::Viewer(System* pSystem, FrameDrawer *pFrameDrawer, MapDrawer *pMapDrawer
 void Viewer::Run()
 {
     ros::NodeHandle nh;
+    // Subscriber to external localization mode topic
+    ros::Subscriber localizationModeSub = nh.subscribe<std_msgs::Bool>("/SLAM/localizationMode", 1, &Viewer::LocalizationModeCallback, this);
     
     featurePointQuantityMsg.data.resize(2);
     ros::Publisher featurePointQuantity = nh.advertise<std_msgs::UInt32MultiArray>("SLAM/FeaturePoint/Quantity", 0);
@@ -129,6 +131,13 @@ void Viewer::Run()
     bool bFollow = true;
     bool bLocalizationMode = mbReuse;
 
+    // Ensure initial external flag matches member
+    {
+        unique_lock<mutex> lock(mLocalizationMutex);
+        // initialize if not set yet
+        // mExternalLocalizationMode default false until callback sets it
+    }
+
     while(1)
     {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -148,6 +157,20 @@ void Viewer::Run()
         else if(!menuFollowCamera && bFollow)
         {
             bFollow = false;
+        }
+
+        // First, process incoming ROS messages so callbacks update external flag
+        ros::spinOnce();
+
+        // If an external request was received, update the Pangolin UI var accordingly
+        {
+            unique_lock<mutex> lock(mLocalizationMutex);
+            // Only update Pangolin control when external differs from current menu state
+            // Note: Pangolin Var<bool> can be assigned like a regular bool
+            if(mExternalLocalizationMode != static_cast<bool>(menuLocalizationMode))
+            {
+                menuLocalizationMode = mExternalLocalizationMode;
+            }
         }
 
         if(menuLocalizationMode && !bLocalizationMode)
@@ -410,6 +433,12 @@ void Viewer::Release()
 {
     unique_lock<mutex> lock(mMutexStop);
     mbStopped = false;
+}
+
+void Viewer::LocalizationModeCallback(const std_msgs::Bool::ConstPtr& msg)
+{
+    unique_lock<mutex> lock(mLocalizationMutex);
+    mExternalLocalizationMode = msg->data;
 }
 
 }

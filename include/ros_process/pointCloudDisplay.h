@@ -9,6 +9,11 @@
 #include <QPoint>
 #include <QMouseEvent>
 #include <QWheelEvent>
+#include <QPainter>
+#include <QOpenGLShaderProgram>
+#include <QMouseEvent>
+#include <QWheelEvent>
+#include <cmath>
 
 class PointCloudDisplay : public QOpenGLWidget, protected QOpenGLFunctions
 {
@@ -64,6 +69,7 @@ private:
     float rotY = 0.0f;
     float rotX = 0.0f;
     float distance = 2.5f;
+    bool initialViewAligned = false; // whether we've auto-aligned the view to camera on first Twc
     QPoint lastPos;
     float panX = 0.0f;
     float panY = 0.0f;

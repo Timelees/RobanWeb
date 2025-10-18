@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>635</width>
-    <height>401</height>
+    <height>402</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -16,10 +16,19 @@
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
     <widget class="QGroupBox" name="groupBox">
+     <property name="styleSheet">
+      <string notr="true">background-color: rgb(245, 245, 245);
+border:2px solid rgb(255, 255, 255);
+border-radius:15px
+</string>
+     </property>
      <property name="title">
       <string>连接参数</string>
      </property>
      <layout class="QVBoxLayout" name="verticalLayout_4">
+      <property name="topMargin">
+       <number>12</number>
+      </property>
       <item>
        <layout class="QVBoxLayout" name="verticalLayout_3">
         <item>
