@@ -12,7 +12,14 @@ PointCloudDisplay::PointCloudDisplay(QWidget *parent)
     , distance(2.5f)
     , lastPos(QPoint())
 {
-    setMinimumSize(320, 240);
+    if (parent) {
+        // match the UI placeholder widget size and policy when embedded in shDialog
+        setMinimumSize(parent->size());
+        setSizePolicy(parent->sizePolicy());
+        resize(parent->size());
+    } else {
+        setMinimumSize(320, 240);
+    }
     setFocusPolicy(Qt::StrongFocus);
 }
 

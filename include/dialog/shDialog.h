@@ -38,6 +38,8 @@ private slots:
     void onCloseSLAMButtonClicked();
     void onRunControlButtonClicked();
     void onCancelControlButtonClicked();
+    // localization checkbox toggled
+    void onLocalizationModeToggled(bool checked);
     // 控制按键
     void onControlButtonClicked();      
     
@@ -55,16 +57,17 @@ private:
 private:
     Ui::ShDialog *ui;
     WebSocketWorker *m_worker;
-    QThread *featuredImageThread;       // 特征点图像处理线程
-    CameraImageMonitor *featuredImageMonitor; // 特征点图像监视器
-    QTimer *featuredImagePullTimer;           // 定时器，用于从特征点图像监视器中获取最新帧
-    CameraImageMonitor *cameraImageMonitor = nullptr; // 相机图像监视器
+    QThread *featuredImageThread;                       // 特征点图像处理线程
+    CameraImageMonitor *featuredImageMonitor;           // 特征点图像监视器
+    QTimer *featuredImagePullTimer;                     // 定时器，用于从特征点图像监视器中获取最新帧
+    CameraImageMonitor *cameraImageMonitor = nullptr;   // 相机图像监视器
     QString m_featureTopic;
 
-    SlamMapMonitor *slamMapMonitor = nullptr; // SLAM地图点云监视器
-    QThread *slamMapThread = nullptr;       // SLAM地图点云处理线程
+    SlamMapMonitor *slamMapMonitor = nullptr;       // SLAM地图点云监视器
+    QThread *slamMapThread = nullptr;               // SLAM地图点云处理线程
     
-    PointCloudDisplay *pcd = nullptr; // QOpenGL点云显示
+    PointCloudDisplay *pcd = nullptr;           // QOpenGL点云显示
+    bool localizationAdvertised = false;        // 是否已发布定位模式话题
 };
 
 #endif // SHDIALOG_H

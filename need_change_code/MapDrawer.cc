@@ -99,7 +99,7 @@ void MapDrawer::DrawMapPoints()
 
 void MapDrawer::DrawKeyFrames(const bool bDrawKF, const bool bDrawGraph)
 {
-    const float &w = mKeyFrameSize;     // mKeyFrameSize = 0.05
+    const float &w = mKeyFrameSize;
     const float h = w*0.75;
     const float z = w*0.6;
 

@@ -30,3 +30,5 @@ openGLMatrix_topic_type: "std_msgs/Float64MultiArray"
 cameraPose_topic: "/SLAM/CameraPoint"
 cameraPose_topic_type: "geometry_msgs/PoseStamped"
 
+
+
