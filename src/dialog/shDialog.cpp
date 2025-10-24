@@ -268,9 +268,15 @@ void ShDialog::onRunSLAMButtonClicked()
     // 从config文件加载命令
     if (s == ui->startSlam_Button) {
         cmd = loadCmdFromConfig("start_slam_bash");
+        if(cmd.isEmpty()){
+            cmd = "/home/lemon/slam.sh";
+        }
         ui->localization_checkBox->setChecked(false);   // 非定位模式
     } else if (s == ui->locationSlam_Button) {
         cmd = loadCmdFromConfig("start_slam_location_bash");
+        if(cmd.isEmpty()){
+            cmd = "/home/lemon/slam_tt.sh";
+        }
         ui->localization_checkBox->setChecked(true);    // 定位模式
     } else {
         qDebug() << "Unknown run source";
@@ -450,6 +456,9 @@ void ShDialog::onRunControlButtonClicked()
         return;
     }
     QString cmd = loadCmdFromConfig("start_control_bash");
+    if(cmd.isEmpty()){
+        cmd = "/home/lemon/move.sh";
+    }
     if(!cmd.isEmpty()){
         qDebug() << "Run control script requested:" << cmd;
         // 通过webSocket发布启动脚本命令

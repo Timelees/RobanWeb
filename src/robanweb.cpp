@@ -217,6 +217,9 @@ void robanweb::onConnectSettingButtonClicked(){
 // 语音控制按钮槽函数
 void robanweb::onVoiceControlButtonClicked(){
     QString cmd = loadCmdFromConfig("voiceControlScript");
+    if(cmd.isEmpty()){
+        cmd = "/home/lemon/largeModel.sh";
+    }
     if (!cmd.isEmpty()) {
         QJsonObject pub;
         pub["op"] = "publish";
