@@ -36,6 +36,22 @@ void CameraImageMonitor::topic_parse(){
     featureImageCompressed_topic_name = loadTopicFromConfig("featureImageCompressed_topic");
     featureImageCompressed_topic_type = loadTopicFromConfig("featureImageCompressed_topic_type");
 
+    // 话题解析异常处理
+    if(cameraCompressed_topic_name.isEmpty() || cameraRaw_topic_name.isEmpty() || featureImageRaw_topic_name.isEmpty() || featureImageCompressed_topic_name.isEmpty()){
+        cameraCompressed_topic_name = "/camera/color/image_raw/compressed" ;
+        cameraCompressed_topic_type = "sensor_msgs/CompressedImage";
+
+        cameraRaw_topic_name = "/camera/color/image_raw";
+        cameraRaw_topic_type = "sensor_msgs/Image";
+
+        featureImageCompressed_topic_name = "/SLAM/FeaturePoint/Image/compressed";
+        featureImageCompressed_topic_type = "sensor_msgs/CompressedImage";
+
+        featureImageRaw_topic_name = "/SLAM/FeaturePoint/Image";
+        featureImageRaw_topic_type = "sensor_msgs/Image";
+    }
+
+
     // act_topic_name may have been set by constructor from provided topic; if empty, choose defaults
     if (act_topic_name.isEmpty()) {
         act_topic_name = cameraCompressed_topic_name;

@@ -28,6 +28,7 @@ signals:
 private:
     WebSocketWorker *m_worker;
     QString imu_topic_name; // IMU话题名称
+    QString imu_pose_topic_name; // IMU位姿话题名称
 };
 
 

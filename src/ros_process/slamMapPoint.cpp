@@ -20,6 +20,22 @@ void SlamMapMonitor::loadTopicFromParams(){
     cameraOpenGLMatrix_topic_type = loadTopicFromConfig("openGLMatrix_topic_type");
     cameraPose_topic_name = loadTopicFromConfig("cameraPose_topic");
     cameraPose_topic_type = loadTopicFromConfig("cameraPose_topic_type");
+
+    // 话题解析异常处理
+    if(slamPoint_topic_name.isEmpty() || slamKeyFrame_topic_name.isEmpty() || cameraOpenGLMatrix_topic_name.isEmpty() || cameraPose_topic_name.isEmpty()){
+        slamPoint_topic_name = "/SLAM/MapPoints"; 
+        slamPoint_topic_type = "sensor_msgs/PointCloud2";
+
+        slamKeyFrame_topic_name = "/SLAM/KeyFrames";
+        slamKeyFrame_topic_type = "visualization_msgs/MarkerArray";
+
+        cameraOpenGLMatrix_topic_name = "/SLAM/CameraOpenGLMatrix";
+        cameraOpenGLMatrix_topic_type = "std_msgs/Float64MultiArray";
+
+        cameraPose_topic_name = "/SLAM/CameraPoint";
+        cameraPose_topic_type = "geometry_msgs/PoseStamped";
+    }
+
 }
 
 // 订阅SLAM点云话题

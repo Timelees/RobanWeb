@@ -11,6 +11,9 @@ BatteryMonitor::BatteryMonitor(WebSocketWorker *worker, QObject *parent)
     : QObject(parent), m_worker(worker)
 {
     battery_topic_name = loadTopicFromConfig("battery_topic");
+    if(battery_topic_name.isEmpty()) {
+        battery_topic_name = "/MediumSize/SensorHub/BatteryState"; // 话题解析失败，使用默认话题
+    }
 }
 BatteryMonitor::~BatteryMonitor() {}
 
@@ -27,9 +30,6 @@ void BatteryMonitor::start()
     QString payload = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
     QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload));
 }
-
-
-
 
 
 void BatteryMonitor::onMessageReceived(const QString &message)

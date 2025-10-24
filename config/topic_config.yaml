@@ -7,7 +7,10 @@ cameraCompressed_topic_type: "sensor_msgs/CompressedImage"
 cameraRaw_topic: "/camera/color/image_raw"     
 cameraRaw_topic_type: "sensor_msgs/Image"
 # IMU话题
-imu_topic: "/MediumSize/SensorHub/Imu"           
+imu_topic: "/MediumSize/SensorHub/Imu"   
+# IMU位姿话题
+imu_pose_topic: "/MediumSize/SensorHub/ImuPose"
+
 # SLAM特征点话题（压缩）
 featureImageCompressed_topic: "/SLAM/FeaturePoint/Image/compressed"      
 featureImageCompressed_topic_type: "sensor_msgs/CompressedImage"

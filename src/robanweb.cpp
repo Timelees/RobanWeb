@@ -161,10 +161,11 @@ void robanweb::bindSlots(){
     // 更新IMU数据显示
     connect(imuMonitor, &ImuMonitor::orientationUpdated, this, [this](double w, double x, double y, double z){
         if (ui) {
-            ui->ori_w->setText(QString::number(w, 'f', 2));
-            ui->ori_x->setText(QString::number(x, 'f', 2));
-            ui->ori_y->setText(QString::number(y, 'f', 2));
-            ui->ori_z->setText(QString::number(z, 'f', 2));
+            // Update labels; wrapped in invokeMethod to be safe if called from other threads
+            QMetaObject::invokeMethod(ui->ori_w, "setText", Qt::QueuedConnection, Q_ARG(QString, QString::number(w, 'f', 2)));
+            QMetaObject::invokeMethod(ui->ori_x, "setText", Qt::QueuedConnection, Q_ARG(QString, QString::number(x, 'f', 2)));
+            QMetaObject::invokeMethod(ui->ori_y, "setText", Qt::QueuedConnection, Q_ARG(QString, QString::number(y, 'f', 2)));
+            QMetaObject::invokeMethod(ui->ori_z, "setText", Qt::QueuedConnection, Q_ARG(QString, QString::number(z, 'f', 2)));
         }
     }, Qt::QueuedConnection);
     connect(imuMonitor, &ImuMonitor::angularVelocityUpdated, this, [this](double x, double y, double z){

@@ -64,6 +64,10 @@ Viewer::Viewer(System* pSystem, FrameDrawer *pFrameDrawer, MapDrawer *pMapDrawer
     mViewpointZ = fSettings["Viewer.ViewpointZ"];
     mViewpointF = fSettings["Viewer.ViewpointF"];
     mbReuse = bReuse;
+
+    // Initialize external localization flags
+    mExternalLocalizationMode = false;
+    mExternalLocalizationReceived = false;
 }
 
 void Viewer::Run()
@@ -165,9 +169,9 @@ void Viewer::Run()
         // If an external request was received, update the Pangolin UI var accordingly
         {
             unique_lock<mutex> lock(mLocalizationMutex);
-            // Only update Pangolin control when external differs from current menu state
-            // Note: Pangolin Var<bool> can be assigned like a regular bool
-            if(mExternalLocalizationMode != static_cast<bool>(menuLocalizationMode))
+            // Only update Pangolin control when we have received at least one external message
+            // This prevents overwriting the UI default/initial state when no external topic is used.
+            if(mExternalLocalizationReceived && (mExternalLocalizationMode != static_cast<bool>(menuLocalizationMode)))
             {
                 menuLocalizationMode = mExternalLocalizationMode;
             }
@@ -439,6 +443,7 @@ void Viewer::LocalizationModeCallback(const std_msgs::Bool::ConstPtr& msg)
 {
     unique_lock<mutex> lock(mLocalizationMutex);
     mExternalLocalizationMode = msg->data;
+    mExternalLocalizationReceived = true;
 }
 
 }

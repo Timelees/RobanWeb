@@ -92,6 +92,7 @@ private:
     // For external control of localization mode via ROS topic
     std::mutex mLocalizationMutex;
     bool mExternalLocalizationMode;
+    bool mExternalLocalizationReceived;
     void LocalizationModeCallback(const std_msgs::Bool::ConstPtr& msg);
 
 };

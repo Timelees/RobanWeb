@@ -57,7 +57,10 @@
 3.IMU数据显示
 右侧信息栏显示机器人位姿信息，包括oritention, linear_acceleration,angular_velocity
 
-**TODO: oritention始终为0，需要在底层代码中进行处理**
+将need_change_code中的SensorHubNode.py替换到机器人端的~/robot_ros_application/catkin_ws/src/sensorhub/scripts路径下的SensorHubNode.py,并编译
+```
+python3 -m py_compile /home/lemon/robot_ros_application/catkin_ws/src/sensorhub/scripts/SensorHubNode.py
+```
 
 4.相机图像显示
 
