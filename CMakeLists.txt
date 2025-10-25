@@ -31,7 +31,8 @@ file(GLOB_RECURSE SRC_FILES
 list(REMOVE_ITEM SRC_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/util/test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/util/test_viewer.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/util/test.cpp"
+    # also remove test sources placed under src/test/
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/test/test_viewer.cpp"
 )
 
 # 收集UI文件（递归以防子目录）
@@ -113,7 +114,7 @@ endif()
 
 # assimp测试
 # Create a small viewer test executable that uses Qt and Assimp to display a model
-set(TEST_VIEWER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/util/test_viewer.cpp")
+set(TEST_VIEWER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/test/test_viewer.cpp")
 if (EXISTS ${TEST_VIEWER_SRC})
     add_executable(test_viewer ${TEST_VIEWER_SRC})
     target_include_directories(test_viewer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_BINARY_DIR})
