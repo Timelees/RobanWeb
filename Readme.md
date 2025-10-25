@@ -32,7 +32,23 @@
 
 ## 使用教程
 
+**assimp库的安装**
+
+参考博客：https://blog.csdn.net/weixin_44518102/article/details/125436218?ops_request_misc=%257B%2522request%255Fid%2522%253A%25221ef85b073f4146e037932b633e16507f%2522%252C%2522scm%2522%253A%252220140713.130102334..%2522%257D&request_id=1ef85b073f4146e037932b633e16507f&biz_id=0&utm_medium=distribute.pc_search_result.none-task-blog-2~all~sobaiduend~default-1-125436218-null-null.142^v102^pc_search_result_base1&utm_term=%20QT%E7%8E%AF%E5%A2%83%E4%B8%8B%E9%85%8D%E7%BD%AEassimp%E5%BA%93&spm=1018.2226.3001.4187
+
+直接安装的assimp Github上的最新版本，用CMake构建，使用Qt中的mingw进行编译后，将build/include下的assimp文件夹复制到本项目的include文件夹中进行替换；build/lib下的libassimp.dll.a复制到本项目的lib文件夹下进行替换；build/bin下的libassimp-6.dll进行替换。
+
+对项目进行编译，通过后，会在build中生成一个test_viewer.exe文件，执行以下指令运行，弹出窗口可以显示机器人模型，即表示assimp库安装成功。
+
+```
+.\test_viewer.exe "..\\assets\\Roban.fbx"
+```
+
+![alt text](image/assimp_test.png)
+
+
 主界面
+
 ![alt text](image/main_window.png)
 
 1.通信连接
