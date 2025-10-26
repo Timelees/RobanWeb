@@ -11,8 +11,6 @@
 #include <QWheelEvent>
 #include <QPainter>
 #include <QOpenGLShaderProgram>
-#include <QMouseEvent>
-#include <QWheelEvent>
 #include <cmath>
 
 class PointCloudDisplay : public QOpenGLWidget, protected QOpenGLFunctions
@@ -41,8 +39,7 @@ protected:
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
-
-protected:
+    
     void initializeGL() override;
     void resizeGL(int w, int h) override;
     void paintGL() override;

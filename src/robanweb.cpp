@@ -3,6 +3,9 @@
 #include "dialog/shDialog.h"
 #include "socket_process/websocketworker.h"
 #include "util/load_param.hpp"
+// layout helper for replacing placeholder widget
+#include <QLayout>
+#include <QBoxLayout>
 
 
 robanweb::robanweb(QWidget* parent)
@@ -99,6 +102,49 @@ void robanweb::init(){
         });
     }
 
+    // 3D模型显示初始化
+    QString modelPath = "..\\assets\\Roban.fbx"; // 默认模型路径
+    if (ui->modelDisplay) {
+        QWidget *placeholder = ui->modelDisplay; // UI 中的占位 widget
+        QWidget *parent = placeholder->parentWidget();
+        QRect geom = placeholder->geometry();
+        QLayout *parentLayout = parent ? parent->layout() : nullptr;
+
+        // 在同一父容器中创建 ModelDisplay，并在父 layout 中替换占位 widget（如果存在）
+        modelDisplay = new ModelDisplay(modelPath, parent ? parent : placeholder);
+        modelDisplay->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
+        if (parentLayout) {
+            // 在 layout 中找到占位位置并替换
+            int idx = -1;
+            for (int i = 0; i < parentLayout->count(); ++i) {
+                QLayoutItem *it = parentLayout->itemAt(i);
+                if (it && it->widget() == placeholder) {
+                    idx = i;
+                    break;
+                }
+            }
+            if (idx != -1) {
+                parentLayout->removeWidget(placeholder);
+                placeholder->hide();
+                // If the parent layout is a box layout we can insert at index, otherwise append
+                if (QBoxLayout *box = qobject_cast<QBoxLayout *>(parentLayout)) {
+                    box->insertWidget(idx, modelDisplay);
+                } else {
+                    // fallback: add to layout (will appear at end)
+                    parentLayout->addWidget(modelDisplay);
+                }
+            } else {
+                // 找不到占位 index，回退为手动定位
+                modelDisplay->setGeometry(geom);
+            }
+        } else {
+            // 父容器没有 layout，直接按占位 geometry 放置
+            modelDisplay->setGeometry(geom);
+        }
+
+        modelDisplay->show();
+    }
     
 }
 
@@ -330,57 +376,6 @@ void robanweb::onWebSocketError(const QString &error)
     }
 }
 
-// void robanweb::onWebSocketMessageReceived(const QString &message)
-// {
-//     // Quick skip: if message likely contains camera image data or is very large, avoid full JSON parse
-//     // Camera messages contain the camera topic name; also messages with a "data" field tend to be large
-//     if (message.contains("/camera/color/image_raw") || message.contains("/camera/color/image_raw/compressed") || message.contains("\"data\"") || message.size() > 20000) {
-//         // Let CameraImageMonitor (running in worker thread) handle image decoding to avoid blocking UI
-//         return;
-//     }
-
-//     QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8());
-//     if (!doc.isObject()) return;
-//     QJsonObject obj = doc.object();
-
-//     if (obj.contains("msg") && obj["msg"].isObject()) {
-//         QJsonObject msgObj = obj["msg"].toObject();
-//         QJsonDocument msgDoc(msgObj);
-//         QString msgJson = QString::fromUtf8(msgDoc.toJson(QJsonDocument::Compact));
-//         // qDebug() << "收到 msg JSON:" << msgJson;
-//     }
-
-//     if (obj["op"].toString() == "publish"
-//         && obj["topic"].toString() == "/MediumSize/BodyHub/ServoPositions") {
-
-//         QJsonObject msgObj = obj["msg"].toObject();
-//         if (msgObj.contains("angle") && msgObj["angle"].isArray()) {
-//             QJsonArray angles = msgObj["angle"].toArray();
-//             QStringList parts;
-//             for (const QJsonValue &v : angles) {
-//                 parts << QString::number(v.toDouble());
-//             }
-//             QString data = parts.join(", ");
-//             qDebug() << "收到话题 angle:" << data;
-//         } else {
-//             qDebug() << "未找到 angle 字段或类型不匹配，msg:" << QJsonDocument(msgObj).toJson(QJsonDocument::Compact);
-//         }
-//     }
-
-
-// }
-
-// void robanweb::publishToTopic(const QString &topic, const QString &type, const QJsonObject &msg)
-// {
-//     QJsonObject publishMsg;
-//     publishMsg["op"] = "publish";
-//     publishMsg["topic"] = topic;
-//     publishMsg["type"] = type;
-//     publishMsg["msg"] = msg;
-
-//     QJsonDocument doc(publishMsg);
-//     webSocket->sendTextMessage(QString(doc.toJson()));
-// }
 
 void robanweb::updateStatusLabel(const QString &status)
 {

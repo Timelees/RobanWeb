@@ -14,6 +14,9 @@ find_package(Qt6 COMPONENTS WebSockets REQUIRED)
 find_package(Qt6 COMPONENTS Sql REQUIRED)
 find_package(Qt6 COMPONENTS OpenGLWidgets REQUIRED)
 
+# Try to find Assimp (optional). If found, CMake will provide target assimp::assimp
+find_package(assimp QUIET)
+
 # 设置包含目录
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -28,12 +31,18 @@ file(GLOB_RECURSE SRC_FILES
 )
 
 # Exclude test-only sources from the main executable (they are built as separate targets)
-list(REMOVE_ITEM SRC_FILES
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/util/test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/util/test_viewer.cpp"
-    # also remove test sources placed under src/test/
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/test/test_viewer.cpp"
-)
+# Some environments return different path separators, so filter entries that reside under src/test or are named test_*.cpp
+set(_FILTERED_SRC_FILES)
+foreach(_f ${SRC_FILES})
+    string(REPLACE "\\" "/" _f_unix "${_f}")
+    string(TOLOWER "${_f_unix}" _f_unix_low)
+    if(_f_unix_low MATCHES "/src/test/" OR _f_unix_low MATCHES "/src/util/test" OR _f_unix_low MATCHES "/src/test_")
+        message(VERBOSE "Excluding test source from main target: ${_f}")
+    else()
+        list(APPEND _FILTERED_SRC_FILES "${_f}")
+    endif()
+endforeach()
+set(SRC_FILES ${_FILTERED_SRC_FILES})
 
 # 收集UI文件（递归以防子目录）
 file(GLOB_RECURSE UI_FILES 
@@ -100,6 +109,15 @@ endif()
         )
         # Also copy for test_assimp if target exists (guarded later after target creation)
         set(_copy_assimp_dll_for_test TRUE)
+    endif()
+
+    # Link Assimp to the main project if available (ModelDisplay and other code use Assimp)
+    if (TARGET assimp::assimp)
+        target_link_libraries(${PROJECT_NAME} PRIVATE assimp::assimp)
+    elseif (ASSIMP_LIB)
+        target_link_libraries(${PROJECT_NAME} PRIVATE ${ASSIMP_LIB})
+    else()
+        message(WARNING "Assimp not linked to ${PROJECT_NAME}. If your project uses Assimp (model loading), set ASSIMP_ROOT or provide libassimp in project lib/ to link.")
     endif()
 # 设置目标属性，确保MOC能找到头文件
 target_include_directories(${PROJECT_NAME} PRIVATE 

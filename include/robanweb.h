@@ -18,6 +18,7 @@
 #include "ros_process/battery.h"
 #include "ros_process/imu.h"
 #include "ros_process/cameraImage.h"
+#include "model_display/modelDisplay.h"
 
 class robanweb : public QMainWindow {
     Q_OBJECT
@@ -73,4 +74,5 @@ private:
     CameraImageMonitor *cameraImageMonitor = nullptr;
     QTimer *imagePullTimer = nullptr;           // 定时器，用于从相机监视器中获取最新帧
 
+    ModelDisplay *modelDisplay = nullptr;        // 3D模型显示
 };
