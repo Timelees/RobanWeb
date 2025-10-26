@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <cmath>
 #include <QDir>
+#include <set>
 
 // 简单网格结构，保存从 Assimp 导入后的顶点、法线、UV、索引以及贴图信息
 struct SimpleMesh {
@@ -164,6 +165,15 @@ protected:
         cameraDistance -= delta * 0.01f;
         cameraDistance = qMax(0.1f, cameraDistance);
         update();
+    }
+
+    // press 'B' to print bone transforms
+    void keyPressEvent(QKeyEvent *e) override {
+        if (e->key() == Qt::Key_B) {
+            debugPrintBoneTransforms(modelPath);
+        } else {
+            QOpenGLWidget::keyPressEvent(e);
+        }
     }
 
 private:
@@ -327,6 +337,90 @@ private:
         // center/scale: compute bounding box and center model
         computeBounds();
         return true;
+    }
+
+    // Helper: convert aiMatrix4x4 to readable string (4x4)
+    QString aiMatToString(const aiMatrix4x4 &m) {
+        char buf[512];
+        snprintf(buf, sizeof(buf), "[ % .6f % .6f % .6f % .6f ; % .6f % .6f % .6f % .6f ; % .6f % .6f % .6f % .6f ; % .6f % .6f % .6f % .6f ]",
+                 m.a1,m.a2,m.a3,m.a4, m.b1,m.b2,m.b3,m.b4, m.c1,m.c2,m.c3,m.c4, m.d1,m.d2,m.d3,m.d4);
+        return QString::fromUtf8(buf);
+    }
+
+    // extract translation and rotation (Euler angles in degrees) from aiMatrix4x4
+    void aiMatToTranslationEuler(const aiMatrix4x4 &m, QVector3D &outPos, QVector3D &outEulerDeg) {
+        // Using the same row-major mapping as Mat4::fromAi earlier:
+        // R = [ a1 a2 a3; b1 b2 b3; c1 c2 c3 ]
+        float tx = m.a4; float ty = m.b4; float tz = m.c4;
+        outPos = QVector3D(tx, ty, tz);
+        float R00 = m.a1, R01 = m.a2, R02 = m.a3;
+        float R10 = m.b1, R11 = m.b2, R12 = m.b3;
+        float R20 = m.c1, R21 = m.c2, R22 = m.c3;
+        // extract Euler angles (ZYX order): yaw(Z), pitch(Y), roll(X)
+        float yaw, pitch, roll;
+        if (R20 < 1.0f) {
+            if (R20 > -1.0f) {
+                pitch = asinf(R20);
+                roll = atan2f(-R21, R22);
+                yaw = atan2f(-R10, R00);
+            } else {
+                // R20 <= -1
+                pitch = -M_PI_2;
+                roll = -atan2f(R12, R11);
+                yaw = 0.0f;
+            }
+        } else {
+            // R20 >= +1
+            pitch = M_PI_2;
+            roll = atan2f(R12, R11);
+            yaw = 0.0f;
+        }
+        outEulerDeg = QVector3D(roll * 180.0f / M_PI, pitch * 180.0f / M_PI, yaw * 180.0f / M_PI);
+    }
+
+    // Print bone/node transforms: position, Euler angles, and local matrix (parent->child)
+    void debugPrintBoneTransforms(const QString &modelFile) {
+        Assimp::Importer importer;
+        const aiScene* scene = importer.ReadFile(modelFile.toStdString(), aiProcess_JoinIdenticalVertices|aiProcess_Triangulate);
+        if (!scene) { qDebug() << "debugPrintBoneTransforms: failed to load scene:" << importer.GetErrorString(); return; }
+        // build node map
+        std::map<QString,const aiNode*> nodeMap;
+        std::function<void(const aiNode*)> build = [&](const aiNode* n){
+            nodeMap[QString::fromUtf8(n->mName.C_Str())] = n;
+            for (unsigned int i=0;i<n->mNumChildren;++i) build(n->mChildren[i]);
+        };
+        if (scene->mRootNode) build(scene->mRootNode);
+
+        // gather bone names from meshes
+        std::set<QString> boneNames;
+        for (unsigned int mi=0; mi<scene->mNumMeshes; ++mi) {
+            const aiMesh* mesh = scene->mMeshes[mi];
+            for (unsigned int bi=0; bi<mesh->mNumBones; ++bi) boneNames.insert(QString::fromUtf8(mesh->mBones[bi]->mName.C_Str()));
+        }
+
+        qDebug() << "--- Bone transforms for model:" << modelFile << "(bones count=" << boneNames.size() << ")";
+        for (const QString &bname : boneNames) {
+            auto it = nodeMap.find(bname);
+            if (it == nodeMap.end()) { qDebug() << "Bone node not found for" << bname; continue; }
+            const aiNode* node = it->second;
+            aiMatrix4x4 local = node->mTransformation;
+            // compute global by walking parents
+            aiMatrix4x4 global = local;
+            const aiNode* p = node->mParent;
+            while (p) { global = p->mTransformation * global; p = p->mParent; }
+            QVector3D pos, euler;
+            aiMatToTranslationEuler(local, pos, euler);
+            QVector3D gpos, geuler;
+            aiMatToTranslationEuler(global, gpos, geuler);
+            qDebug() << "Bone:" << bname;
+            qDebug() << "  local pos:" << pos << " local euler (roll,x pitch,y yaw,z):" << euler;
+            qDebug() << "  global pos:" << gpos << " global euler:" << geuler;
+            qDebug() << "  local matrix:" << aiMatToString(local);
+            qDebug() << "  global matrix:" << aiMatToString(global);
+            // parent->child matrix is local (child transform relative to parent)
+            if (node->mParent) qDebug() << "  parent->child (local) matrix:" << aiMatToString(local) << " parent name:" << QString::fromUtf8(node->mParent->mName.C_Str());
+        }
+        qDebug() << "--- end bone transforms ---";
     }
 
     // computeBounds: 计算模型包围盒并将模型居中归一化到一个合适的缩放范围

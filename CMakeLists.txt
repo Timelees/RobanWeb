@@ -133,26 +133,34 @@ endif()
 # assimp测试
 # Create a small viewer test executable that uses Qt and Assimp to display a model
 set(TEST_VIEWER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/test/test_viewer.cpp")
+set(TEST_MODEL_BONE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/test/test_model_bone.cpp")
 if (EXISTS ${TEST_VIEWER_SRC})
     add_executable(test_viewer ${TEST_VIEWER_SRC})
+    add_executable(test_model_bone ${TEST_MODEL_BONE_SRC})
     target_include_directories(test_viewer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_BINARY_DIR})
+    target_include_directories(test_model_bone PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_BINARY_DIR})
     target_link_libraries(test_viewer PRIVATE Qt6::Widgets Qt6::OpenGLWidgets)
+    target_link_libraries(test_model_bone PRIVATE  Qt6::Widgets Qt6::OpenGLWidgets)
 
     # prefer imported target if available
     if (TARGET assimp::assimp)
         target_link_libraries(test_viewer PRIVATE assimp::assimp)
+        target_link_libraries(test_model_bone PRIVATE assimp::assimp)
     elseif (ASSIMP_LIB)
         target_link_libraries(test_viewer PRIVATE ${ASSIMP_LIB})
+        target_link_libraries(test_model_bone PRIVATE ${ASSIMP_LIB})
     else()
         message(WARNING "Assimp not found for test_viewer. Set ASSIMP_ROOT or put libassimp.dll.a into project lib/ to link.")
     endif()
 
     if (WIN32)
         target_link_libraries(test_viewer PRIVATE opengl32)
+        target_link_libraries(test_model_bone PRIVATE opengl32)
     else()
         find_package(OpenGL REQUIRED)
         if (TARGET OpenGL::GL)
             target_link_libraries(test_viewer PRIVATE OpenGL::GL)
+            target_link_libraries(test_model_bone PRIVATE OpenGL::GL)
         endif()
     endif()
 
@@ -161,6 +169,10 @@ if (EXISTS ${TEST_VIEWER_SRC})
         add_custom_command(TARGET test_viewer POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${CMAKE_CURRENT_SOURCE_DIR}/bin/libassimp-6.dll" $<TARGET_FILE_DIR:test_viewer>
+        )
+        add_custom_command(TARGET test_model_bone POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/bin/libassimp-6.dll" $<TARGET_FILE_DIR:test_model_bone>
         )
     endif()
 endif()
