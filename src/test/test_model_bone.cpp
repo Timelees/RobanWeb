@@ -529,6 +529,19 @@ private:
     // original unskinned vertex positions per mesh
     std::vector<std::vector<float>> originalMeshVertices; // 保存了未变形（原始）的顶点数组
 
+    // Compact per-vertex influence cache used at runtime to speed CPU skinning.
+    // We keep up to 4 influences per vertex (common practice) in a contiguous layout
+    // to avoid many small heap allocations / indirections during skinning.
+    struct CompactInfluence {
+        unsigned char count; // number of influences (0..4)
+        int boneIdx[4];
+        float weight[4];
+    };
+    std::vector<std::vector<CompactInfluence>> compactInfluences; // per-mesh compacted influences
+
+    // Reusable flat bone matrix cache to avoid allocating per-frame
+    std::vector<float> cachedFlatBoneM; // nbones * 12 floats
+
     // mapping from bone name to one-or-more (joint id, axis) entries loaded from CSV
     std::map<QString, std::vector<std::pair<int, char>>> boneToJointMap; // 骨骼名称到关节ID和旋转轴的映射（允许多个）
     // place rows loaded from CSV
@@ -822,6 +835,45 @@ private:
         for (size_t i = 0; i < meshes.size(); ++i)
             originalMeshVertices[i] = meshes[i].vertices;
 
+        // Build compact influence cache: keep up to 4 highest-weight influences per vertex
+        compactInfluences.clear();
+        compactInfluences.resize(meshesInfluences.size());
+        for (size_t mi = 0; mi < meshesInfluences.size(); ++mi) {
+            size_t vcount = meshesInfluences[mi].size();
+            compactInfluences[mi].resize(vcount);
+            for (size_t vi = 0; vi < vcount; ++vi) {
+                const auto &inf = meshesInfluences[mi][vi];
+                // copy into local vector and sort by weight desc to keep top 4
+                std::vector<std::pair<int,float>> tmp = inf;
+                if (tmp.size() > 1) {
+                    std::sort(tmp.begin(), tmp.end(), [](const std::pair<int,float> &a, const std::pair<int,float> &b){ return a.second > b.second; });
+                }
+                CompactInfluence ci;
+                ci.count = 0;
+                float sumw = 0.0f;
+                for (size_t k = 0; k < tmp.size() && k < 4; ++k) {
+                    ci.boneIdx[k] = tmp[k].first;
+                    ci.weight[k] = tmp[k].second;
+                    sumw += ci.weight[k];
+                    ci.count++;
+                }
+                // normalize weights if sum > 0
+                if (sumw > 1e-8f) {
+                    for (unsigned char k = 0; k < ci.count; ++k)
+                        ci.weight[k] /= sumw;
+                } else {
+                    // fallback: no influences -> identity (count=0)
+                    ci.count = 0;
+                }
+                // fill remaining slots to keep deterministic memory content
+                for (unsigned char k = ci.count; k < 4; ++k) {
+                    ci.boneIdx[k] = -1;
+                    ci.weight[k] = 0.0f;
+                }
+                compactInfluences[mi][vi] = ci;
+            }
+        }
+
         // print bones info for debug: list bones, mapped node index, offset translation,
         // and how many vertices are influenced by each bone (quick sanity check)
         // qDebug() << "--- Bones summary after loadModel ---";
@@ -854,17 +906,26 @@ private:
             return;
         const QVector<double> &row = placeRows[currentPlaceRow];        
         std::map<int, double> jointAngles;
-        // 获取关节角度到jointAngles
+        // 获取关节角度到jointAngles,并对对应关节做变换处理，适应坐标系
         for (int i = 0; i < row.size(); ++i)
         {
             int jointId = i + 1; // angle1 -> joint 1
-            jointAngles[jointId] = row[i];  
-            // qDebug() << "Joint" << jointId << "angle(deg):" << row[i];    
+            if(jointId == 2 || jointId == 3 || jointId == 4 || jointId == 6 || jointId == 11 || jointId == 12 || jointId == 13 || jointId == 16 || jointId == 22)
+            {
+                // 对于这些关节，需要取反以适应坐标系差异
+                jointAngles[jointId] = -row[i];  
+            }else if(jointId == 14){
+                // 对于关节14，需要加上90度以适应坐标系差异
+                jointAngles[jointId] = row[i] + 90.0;
+            }else if(jointId == 17){
+                // 对于关节17，需要减去90度以适应坐标系差异
+                jointAngles[jointId] = row[i] - 90.0;
+            }
+            else
+                jointAngles[jointId] = row[i];  
         }
         applyJointAngles(jointAngles);
         currentPlaceRow = (currentPlaceRow + 1) % (int)placeRows.size();        // 导致循环播放动画
-        // debug: report cameraDistance each frame to see if it changes during playback
-        // qDebug() << "advancePlaceFrame: frame" << currentPlaceRow << " cameraDistance=" << cameraDistance;
     }
 
     // 应用关节角度到骨骼并更新网格顶点，显示动画
@@ -997,7 +1058,10 @@ private:
 
         // final bone matrices = global(node) * offset
         size_t nbones = bones.size();
-        std::vector<float> flatBoneM(nbones * 12, 0.0f); // store only 3x4 rows [r0 r1 r2 r3; r4..] as 12 floats per bone (row-major 3x4)
+        // reuse cachedFlatBoneM vector to avoid per-frame allocation
+        cachedFlatBoneM.clear();
+        cachedFlatBoneM.resize(nbones * 12);
+        float *flatBoneM = cachedFlatBoneM.data();
         for (size_t bi = 0; bi < nbones; ++bi)
         {
             const BoneInfo &b = bones[bi];
@@ -1067,16 +1131,16 @@ private:
             }
         }
 
-        // CPU skinning: for each mesh and vertex
+        // CPU skinning optimized: use compactInfluences and cachedFlatBoneM to reduce indirections
         for (size_t mi = 0; mi < meshes.size(); ++mi)
         {
             SimpleMesh &m = meshes[mi];
             if (mi >= originalMeshVertices.size())
                 continue;
             const std::vector<float> &orig = originalMeshVertices[mi];
-            if (orig.size() / 3 != meshesInfluences[mi].size())
+            if (orig.size() / 3 != compactInfluences[mi].size())
                 continue;
-            const size_t vcount = meshesInfluences[mi].size();
+            const size_t vcount = compactInfluences[mi].size();
             float *out = m.vertices.data();
             const float *inp = orig.data();
             for (size_t vi = 0; vi < vcount; ++vi)
@@ -1091,12 +1155,18 @@ private:
                 const float y = inp[3 * vi + 1];
                 const float z = inp[3 * vi + 2];
                 float ax = 0.0f, ay = 0.0f, az = 0.0f;
-                float totalW = 0.0f;
-                const auto &inf = meshesInfluences[mi][vi];
-                for (size_t k = 0; k < inf.size(); ++k)
+                const CompactInfluence &ci = compactInfluences[mi][vi];
+                if (ci.count == 0) {
+                    out[3 * vi + 0] = x;
+                    out[3 * vi + 1] = y;
+                    out[3 * vi + 2] = z;
+                    continue;
+                }
+                // unroll up to 4 influences for speed
+                for (unsigned char k = 0; k < ci.count; ++k)
                 {
-                    int bidx = inf[k].first;
-                    float w = inf[k].second;
+                    int bidx = ci.boneIdx[k];
+                    float w = ci.weight[k];
                     if (bidx < 0 || (size_t)bidx >= nbones)
                         continue;
                     size_t off = (size_t)bidx * 12;
@@ -1107,19 +1177,6 @@ private:
                     ax += tx * w;
                     ay += ty * w;
                     az += tz * w;
-                    totalW += w;
-                }
-                if (totalW <= 1e-6f)
-                {
-                    ax = x;
-                    ay = y;
-                    az = z;
-                }
-                else if (fabs(totalW - 1.0f) > 1e-5f)
-                {
-                    ax /= totalW;
-                    ay /= totalW;
-                    az /= totalW;
                 }
                 out[3 * vi + 0] = ax;
                 out[3 * vi + 1] = ay;
