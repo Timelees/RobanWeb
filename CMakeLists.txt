@@ -17,9 +17,19 @@ find_package(Qt6 COMPONENTS OpenGLWidgets REQUIRED)
 # Try to find Assimp (optional). If found, CMake will provide target assimp::assimp
 find_package(assimp QUIET)
 
+# Try more variants to improve detection on Windows/vcpkg environments
+if (NOT TARGET assimp::assimp)
+    find_package(assimp CONFIG QUIET)
+endif()
+if (NOT TARGET assimp::assimp)
+    find_package(Assimp QUIET)
+endif()
+
+
 # 设置包含目录
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/task_manager
 )
 
 # 设置UIC的搜索路径，让它在ui目录中查找.ui文件
@@ -53,6 +63,10 @@ file(GLOB_RECURSE UI_FILES
 file(GLOB_RECURSE HEADER_FILES 
     "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h"
 )
+
+# 确保 robotControlDialog.ui 被包含
+list(APPEND UI_FILES "${CMAKE_CURRENT_SOURCE_DIR}/ui/robotControlDialog.ui")
+
 
 # aux_source_directory(./src srcs)
 
@@ -129,26 +143,57 @@ if(WIN32)
     set_target_properties(robanweb PROPERTIES WIN32_EXECUTABLE FALSE)
 endif()
 
+# Build an OBJECT library from the main sources so test targets can link the
+# compiled object files (this avoids duplicating implementation in test targets
+# while keeping the main executable layout unchanged).
+## Build object list excluding the main entry point so we don't pull in multiple mains
+set(ROBANWEB_OBJ_SOURCES)
+foreach(_f ${SRC_FILES})
+    # exclude the primary executable entrypoint
+    if (NOT (_f STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp"))
+        list(APPEND ROBANWEB_OBJ_SOURCES "${_f}")
+    endif()
+endforeach()
+
+add_library(robanweb_objs OBJECT ${ROBANWEB_OBJ_SOURCES} ${HEADER_FILES} ${UI_FILES})
+target_include_directories(robanweb_objs PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_BINARY_DIR})
+# Link Qt modules here so autogen and compilation have proper include paths. Note: OBJECT libraries do not
+# propagate link libraries to consuming targets, so test executables still need to link required Qt libs.
+target_link_libraries(robanweb_objs PRIVATE Qt6::Widgets Qt6::WebSockets Qt6::Sql Qt6::OpenGLWidgets)
+
+
 
 # assimp测试
 # Create a small viewer test executable that uses Qt and Assimp to display a model
 set(TEST_VIEWER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/test/test_viewer.cpp")
 set(TEST_MODEL_BONE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/test/test_model_bone.cpp")
+set(TEST_MODEL_SCENE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/test/test_model_scene.cpp")
 if (EXISTS ${TEST_VIEWER_SRC})
     add_executable(test_viewer ${TEST_VIEWER_SRC})
     add_executable(test_model_bone ${TEST_MODEL_BONE_SRC})
+    add_executable(test_model_scene ${TEST_MODEL_SCENE_SRC})
+    # Ensure test targets that use RobotManager link its implementation
+    
     target_include_directories(test_viewer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_BINARY_DIR})
     target_include_directories(test_model_bone PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_BINARY_DIR})
-    target_link_libraries(test_viewer PRIVATE Qt6::Widgets Qt6::OpenGLWidgets)
-    target_link_libraries(test_model_bone PRIVATE  Qt6::Widgets Qt6::OpenGLWidgets)
+    target_include_directories(test_model_scene PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_BINARY_DIR})
+    target_link_libraries(test_viewer PRIVATE Qt6::Widgets Qt6::OpenGLWidgets Qt6::WebSockets Qt6::Sql)
+    target_link_libraries(test_model_bone PRIVATE  Qt6::Widgets Qt6::OpenGLWidgets Qt6::WebSockets Qt6::Sql)
+    target_link_libraries(test_model_scene PRIVATE  Qt6::Widgets Qt6::OpenGLWidgets Qt6::WebSockets Qt6::Sql)
+    # Link in compiled object files from main sources so tests get the implementation
+    target_link_libraries(test_viewer PRIVATE $<TARGET_OBJECTS:robanweb_objs>)
+    target_link_libraries(test_model_bone PRIVATE $<TARGET_OBJECTS:robanweb_objs>)
+    target_link_libraries(test_model_scene PRIVATE $<TARGET_OBJECTS:robanweb_objs>)
 
     # prefer imported target if available
     if (TARGET assimp::assimp)
         target_link_libraries(test_viewer PRIVATE assimp::assimp)
         target_link_libraries(test_model_bone PRIVATE assimp::assimp)
+        target_link_libraries(test_model_scene PRIVATE assimp::assimp)
     elseif (ASSIMP_LIB)
         target_link_libraries(test_viewer PRIVATE ${ASSIMP_LIB})
         target_link_libraries(test_model_bone PRIVATE ${ASSIMP_LIB})
+        target_link_libraries(test_model_scene PRIVATE ${ASSIMP_LIB})
     else()
         message(WARNING "Assimp not found for test_viewer. Set ASSIMP_ROOT or put libassimp.dll.a into project lib/ to link.")
     endif()
@@ -156,11 +201,13 @@ if (EXISTS ${TEST_VIEWER_SRC})
     if (WIN32)
         target_link_libraries(test_viewer PRIVATE opengl32)
         target_link_libraries(test_model_bone PRIVATE opengl32)
+        target_link_libraries(test_model_scene PRIVATE opengl32)
     else()
         find_package(OpenGL REQUIRED)
         if (TARGET OpenGL::GL)
             target_link_libraries(test_viewer PRIVATE OpenGL::GL)
             target_link_libraries(test_model_bone PRIVATE OpenGL::GL)
+            target_link_libraries(test_model_scene PRIVATE OpenGL::GL)
         endif()
     endif()
 
@@ -173,6 +220,10 @@ if (EXISTS ${TEST_VIEWER_SRC})
         add_custom_command(TARGET test_model_bone POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${CMAKE_CURRENT_SOURCE_DIR}/bin/libassimp-6.dll" $<TARGET_FILE_DIR:test_model_bone>
+        )
+        add_custom_command(TARGET test_model_scene POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/bin/libassimp-6.dll" $<TARGET_FILE_DIR:test_model_scene>
         )
     endif()
 endif()

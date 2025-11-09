@@ -19,6 +19,7 @@
 #include "ros_process/imu.h"
 #include "ros_process/cameraImage.h"
 #include "model_display/modelDisplay.h"
+#include "task_manager/taskmanager.h"
 
 class robanweb : public QMainWindow {
     Q_OBJECT
@@ -35,6 +36,8 @@ private slots:
     void onConnectSettingButtonClicked();       // 连接设置 槽函数
     void onSlamControlButtonClicked();           // SLAM控制按钮 槽函数
     void onVoiceControlButtonClicked();         // 语音控制按钮 槽函数
+    void onrobanControlButtonclicked();         // 机器人控制按钮 槽函数
+    void onTaskExecuted(const QString& scriptPath); // 任务执行 槽函数
 
     // webSocket 相关槽函数
     void onWebSocketConnected();            // 连接webSocket
@@ -75,4 +78,6 @@ private:
     QTimer *imagePullTimer = nullptr;           // 定时器，用于从相机监视器中获取最新帧
 
     ModelDisplay *modelDisplay = nullptr;        // 3D模型显示
+    
+    TaskManager *taskManager = nullptr;        // 任务管理器
 };

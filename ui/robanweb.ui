@@ -6,9 +6,15 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>904</width>
-    <height>539</height>
+    <width>1000</width>
+    <height>600</height>
    </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>950</width>
+    <height>500</height>
+   </size>
   </property>
   <property name="windowTitle">
    <string>robanweb</string>
@@ -17,6 +23,12 @@
    <layout class="QVBoxLayout" name="verticalLayout_4" stretch="0,2">
     <item>
      <widget class="QGroupBox" name="groupBox_5">
+      <property name="minimumSize">
+       <size>
+        <width>850</width>
+        <height>60</height>
+       </size>
+      </property>
       <property name="styleSheet">
        <string notr="true">background-color: rgb(255, 255, 255);
 border:2px solid rgb(255, 255, 255);
@@ -25,35 +37,83 @@ border-radius:15px</string>
       <property name="title">
        <string/>
       </property>
-      <layout class="QHBoxLayout" name="horizontalLayout_5" stretch="0,0">
+      <layout class="QHBoxLayout" name="horizontalLayout_5" stretch="1">
+       <property name="leftMargin">
+        <number>5</number>
+       </property>
+       <property name="rightMargin">
+        <number>5</number>
+       </property>
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout_4">
+         <property name="spacing">
+          <number>10</number>
+         </property>
+         <property name="sizeConstraint">
+          <enum>QLayout::SizeConstraint::SetMinimumSize</enum>
+         </property>
          <item>
           <widget class="QPushButton" name="connect_Button">
+           <property name="minimumSize">
+            <size>
+             <width>100</width>
+             <height>30</height>
+            </size>
+           </property>
            <property name="styleSheet">
             <string notr="true">background-color: rgb(245, 245, 245);
 border:2px solid rgb(255, 255, 255);
 border-radius:15px</string>
            </property>
            <property name="text">
-            <string>连接设置</string>
+            <string>机器人列表</string>
            </property>
           </widget>
          </item>
          <item>
           <widget class="QPushButton" name="SLAM_Control_Button">
+           <property name="minimumSize">
+            <size>
+             <width>100</width>
+             <height>30</height>
+            </size>
+           </property>
            <property name="styleSheet">
             <string notr="true">background-color: rgb(245, 245, 245);
 border:2px solid rgb(255, 255, 255);
 border-radius:15px</string>
            </property>
            <property name="text">
-            <string>建图与控制</string>
+            <string>SLAM建图</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="roban_Control_Button">
+           <property name="minimumSize">
+            <size>
+             <width>100</width>
+             <height>30</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">background-color: rgb(245, 245, 245);
+border:2px solid rgb(255, 255, 255);
+border-radius:15px</string>
+           </property>
+           <property name="text">
+            <string>机器人控制</string>
            </property>
           </widget>
          </item>
          <item>
           <widget class="QPushButton" name="voice_Button">
+           <property name="minimumSize">
+            <size>
+             <width>100</width>
+             <height>30</height>
+            </size>
+           </property>
            <property name="styleSheet">
             <string notr="true">background-color: rgb(245, 245, 245);
 border:2px solid rgb(255, 255, 255);
@@ -65,19 +125,6 @@ border-radius:15px</string>
           </widget>
          </item>
         </layout>
-       </item>
-       <item>
-        <spacer name="horizontalSpacer">
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
-         </property>
-         <property name="sizeHint" stdset="0">
-          <size>
-           <width>40</width>
-           <height>20</height>
-          </size>
-         </property>
-        </spacer>
        </item>
       </layout>
      </widget>
@@ -165,7 +212,7 @@ border:2px solid rgb(255, 255, 255);
 border-radius:15px</string>
            </property>
            <property name="title">
-            <string>位姿信息</string>
+            <string>机器人信息</string>
            </property>
            <layout class="QGridLayout" name="gridLayout">
             <property name="leftMargin">
@@ -188,7 +235,7 @@ border-radius:15px</string>
                 <item>
                  <widget class="QLabel" name="ori_x">
                   <property name="frameShape">
-                   <enum>QFrame::Box</enum>
+                   <enum>QFrame::Shape::Box</enum>
                   </property>
                   <property name="text">
                    <string/>
@@ -198,7 +245,7 @@ border-radius:15px</string>
                 <item>
                  <widget class="QLabel" name="ori_y">
                   <property name="frameShape">
-                   <enum>QFrame::Box</enum>
+                   <enum>QFrame::Shape::Box</enum>
                   </property>
                   <property name="text">
                    <string/>
@@ -208,7 +255,7 @@ border-radius:15px</string>
                 <item>
                  <widget class="QLabel" name="ori_z">
                   <property name="frameShape">
-                   <enum>QFrame::Box</enum>
+                   <enum>QFrame::Shape::Box</enum>
                   </property>
                   <property name="text">
                    <string/>
@@ -218,7 +265,7 @@ border-radius:15px</string>
                 <item>
                  <widget class="QLabel" name="ori_w">
                   <property name="frameShape">
-                   <enum>QFrame::Box</enum>
+                   <enum>QFrame::Shape::Box</enum>
                   </property>
                   <property name="text">
                    <string/>
@@ -239,7 +286,7 @@ border-radius:15px</string>
                 <item>
                  <widget class="QLabel" name="ang_x">
                   <property name="frameShape">
-                   <enum>QFrame::Box</enum>
+                   <enum>QFrame::Shape::Box</enum>
                   </property>
                   <property name="text">
                    <string/>
@@ -249,7 +296,7 @@ border-radius:15px</string>
                 <item>
                  <widget class="QLabel" name="ang_y">
                   <property name="frameShape">
-                   <enum>QFrame::Box</enum>
+                   <enum>QFrame::Shape::Box</enum>
                   </property>
                   <property name="text">
                    <string/>
@@ -259,7 +306,7 @@ border-radius:15px</string>
                 <item>
                  <widget class="QLabel" name="ang_z">
                   <property name="frameShape">
-                   <enum>QFrame::Box</enum>
+                   <enum>QFrame::Shape::Box</enum>
                   </property>
                   <property name="text">
                    <string/>
@@ -280,7 +327,7 @@ border-radius:15px</string>
                 <item>
                  <widget class="QLabel" name="lin_x">
                   <property name="frameShape">
-                   <enum>QFrame::Box</enum>
+                   <enum>QFrame::Shape::Box</enum>
                   </property>
                   <property name="text">
                    <string/>
@@ -290,7 +337,7 @@ border-radius:15px</string>
                 <item>
                  <widget class="QLabel" name="lin_y">
                   <property name="frameShape">
-                   <enum>QFrame::Box</enum>
+                   <enum>QFrame::Shape::Box</enum>
                   </property>
                   <property name="text">
                    <string/>
@@ -300,7 +347,7 @@ border-radius:15px</string>
                 <item>
                  <widget class="QLabel" name="lin_z">
                   <property name="frameShape">
-                   <enum>QFrame::Box</enum>
+                   <enum>QFrame::Shape::Box</enum>
                   </property>
                   <property name="text">
                    <string/>
@@ -327,7 +374,7 @@ border:2px solid rgb(255, 255, 255);
 border-radius:15px</string>
            </property>
            <property name="title">
-            <string>图像显示</string>
+            <string>机器人视角</string>
            </property>
            <layout class="QVBoxLayout" name="verticalLayout_6">
             <item>
@@ -338,7 +385,7 @@ border-radius:15px</string>
               <item>
                <widget class="QLabel" name="imageRawDisplay">
                 <property name="frameShape">
-                 <enum>QFrame::Box</enum>
+                 <enum>QFrame::Shape::Box</enum>
                 </property>
                 <property name="text">
                  <string/>
@@ -363,14 +410,76 @@ border:2px solid rgb(255, 255, 255);
 border-radius:15px</string>
            </property>
            <property name="title">
-            <string>日志</string>
+            <string>任务列表</string>
            </property>
            <layout class="QVBoxLayout" name="verticalLayout_5">
             <property name="topMargin">
              <number>12</number>
             </property>
             <item>
-             <widget class="QPlainTextEdit" name="plainTextEdit"/>
+             <widget class="QListWidget" name="taskListWidget">
+              <property name="styleSheet">
+               <string notr="true">background-color: rgb(250, 250, 250);</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="taskButtonLayout">
+              <item>
+               <widget class="QPushButton" name="addTaskButton">
+                <property name="minimumSize">
+                 <size>
+                  <width>80</width>
+                  <height>25</height>
+                 </size>
+                </property>
+                <property name="styleSheet">
+                 <string notr="true">background-color: rgb(245, 245, 245);
+border:2px solid rgb(255, 255, 255);
+border-radius:10px</string>
+                </property>
+                <property name="text">
+                 <string>添加任务</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="importTaskButton">
+                <property name="minimumSize">
+                 <size>
+                  <width>80</width>
+                  <height>25</height>
+                 </size>
+                </property>
+                <property name="styleSheet">
+                 <string notr="true">background-color: rgb(245, 245, 245);
+border:2px solid rgb(255, 255, 255);
+border-radius:10px</string>
+                </property>
+                <property name="text">
+                 <string>导入代码</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="runTaskButton">
+                <property name="minimumSize">
+                 <size>
+                  <width>80</width>
+                  <height>25</height>
+                 </size>
+                </property>
+                <property name="styleSheet">
+                 <string notr="true">background-color: rgb(245, 245, 245);
+border:2px solid rgb(255, 255, 255);
+border-radius:10px</string>
+                </property>
+                <property name="text">
+                 <string>执行任务</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
             </item>
            </layout>
           </widget>

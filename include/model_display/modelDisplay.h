@@ -22,16 +22,8 @@
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
 
-// 简单网格结构，保存从 Assimp 导入后的顶点、法线、UV、索引以及贴图信息
-struct SimpleMesh {
-    std::vector<float> vertices;            // x,y,z
-    std::vector<float> normals;             // x,y,z
-    std::vector<float> texcoords;           // u,v
-    std::vector<unsigned int> indices;    // triangle indices
-    QString diffuseTexPath;
-    QImage diffuseImage;                  // for embedded textures
-    unsigned int texId = 0;
-};
+// reuse shared mesh/helpers definitions
+#include "model_display/meshes.h"
 
 class ModelDisplay: public QOpenGLWidget, protected QOpenGLFunctions
 {

@@ -1,6 +1,7 @@
 #include "robanweb.h"
 #include "dialog/connectdialog.h"
 #include "dialog/shDialog.h"
+#include "dialog/robotControlDialog.h"
 #include "socket_process/websocketworker.h"
 #include "util/load_param.hpp"
 // layout helper for replacing placeholder widget
@@ -48,6 +49,11 @@ robanweb::~robanweb()
         imageThread = nullptr;
         cameraImageMonitor = nullptr;
     }
+    // 清理任务管理器
+    if(taskManager) {
+        delete taskManager;
+        taskManager = nullptr;
+    }
     delete reconnectTimer;
     // delete imagePullTimer;
     delete ui; 
@@ -59,6 +65,24 @@ void robanweb::init(){
     webSocketThread = new QThread(this);
     webSocketWorker->moveToThread(webSocketThread);
     webSocketThread->start();
+    
+    // 初始化任务管理器
+    // 注：ui->taskListWidget 等组件在 robanweb.ui 中定义
+    if (ui->taskListWidget && ui->addTaskButton && ui->importTaskButton && ui->runTaskButton) {
+        try {
+            taskManager = new TaskManager(ui->taskListWidget, 
+                                         ui->addTaskButton, 
+                                         ui->importTaskButton, 
+                                         ui->runTaskButton, 
+                                         webSocketWorker, 
+                                         this);
+            qDebug() << "任务管理器初始化成功";
+        } catch (...) {
+            qDebug() << "任务管理器初始化失败";
+        }
+    } else {
+        qDebug() << "任务管理器UI组件未找到";
+    }
     
     reconnectTimer->setInterval(5000); // 每5秒尝试重连
     // 图像拉取定时器（UI 拉取最新缓存帧，避免信号队列积压）
@@ -172,6 +196,15 @@ void robanweb::bindSlots(){
     connect(ui->SLAM_Control_Button, &QPushButton::clicked, this, &robanweb::onSlamControlButtonClicked);
     // 语音控制按钮槽
     connect(ui->voice_Button, &QPushButton::clicked, this, &robanweb::onVoiceControlButtonClicked);
+    // 机器人控制按钮槽
+    connect(ui->roban_Control_Button, &QPushButton::clicked, this, &robanweb::onrobanControlButtonclicked);
+    
+    // 连接任务管理器信号 - 使用 SIGNAL/SLOT 宏语法连接信号槽
+    if (taskManager) {
+        connect(taskManager, SIGNAL(taskExecuted(const QString&)), 
+                this, SLOT(onTaskExecuted(const QString&)));
+    }
+
 
     // 当线程启动时可做初始化
     connect(webSocketThread, &QThread::finished, webSocketWorker, &QObject::deleteLater);
@@ -231,6 +264,14 @@ void robanweb::bindSlots(){
     
 
 }
+
+// 任务执行槽函数
+void robanweb::onTaskExecuted(const QString& scriptPath)
+{
+    qDebug() << "执行任务脚本:" << scriptPath;
+    // 如果需要，可以在这里添加更多处理逻辑
+}
+
 // SLAM控制按钮槽函数
 void robanweb::onSlamControlButtonClicked()
 {
@@ -242,6 +283,14 @@ void robanweb::onSlamControlButtonClicked()
     }
 }
 
+//机器人控制按钮槽函数
+void robanweb::onrobanControlButtonclicked()
+{
+    RobotControlDialog dialog(webSocketWorker, this);
+    if(dialog.exec() == QDialog::Accepted){
+        qDebug() << "机器人控制对话框开启";
+    }
+}
 
 // 连接设置槽函数
 void robanweb::onConnectSettingButtonClicked(){
