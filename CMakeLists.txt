@@ -168,32 +168,38 @@ target_link_libraries(robanweb_objs PRIVATE Qt6::Widgets Qt6::WebSockets Qt6::Sq
 set(TEST_VIEWER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/test/test_viewer.cpp")
 set(TEST_MODEL_BONE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/test/test_model_bone.cpp")
 set(TEST_MODEL_SCENE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/test/test_model_scene.cpp")
+set(TEST_SCENE_LOC_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/test/test_scene_loc.cpp")
 if (EXISTS ${TEST_VIEWER_SRC})
     add_executable(test_viewer ${TEST_VIEWER_SRC})
     add_executable(test_model_bone ${TEST_MODEL_BONE_SRC})
     add_executable(test_model_scene ${TEST_MODEL_SCENE_SRC})
+    add_executable(test_scene_loc ${TEST_SCENE_LOC_SRC})
     # Ensure test targets that use RobotManager link its implementation
     
     target_include_directories(test_viewer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_BINARY_DIR})
     target_include_directories(test_model_bone PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_BINARY_DIR})
     target_include_directories(test_model_scene PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_BINARY_DIR})
+    target_include_directories(test_scene_loc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_BINARY_DIR})
     target_link_libraries(test_viewer PRIVATE Qt6::Widgets Qt6::OpenGLWidgets Qt6::WebSockets Qt6::Sql)
     target_link_libraries(test_model_bone PRIVATE  Qt6::Widgets Qt6::OpenGLWidgets Qt6::WebSockets Qt6::Sql)
     target_link_libraries(test_model_scene PRIVATE  Qt6::Widgets Qt6::OpenGLWidgets Qt6::WebSockets Qt6::Sql)
+    target_link_libraries(test_scene_loc PRIVATE  Qt6::Widgets Qt6::OpenGLWidgets Qt6::WebSockets Qt6::Sql)
     # Link in compiled object files from main sources so tests get the implementation
     target_link_libraries(test_viewer PRIVATE $<TARGET_OBJECTS:robanweb_objs>)
     target_link_libraries(test_model_bone PRIVATE $<TARGET_OBJECTS:robanweb_objs>)
     target_link_libraries(test_model_scene PRIVATE $<TARGET_OBJECTS:robanweb_objs>)
-
+    target_link_libraries(test_scene_loc PRIVATE $<TARGET_OBJECTS:robanweb_objs>)
     # prefer imported target if available
     if (TARGET assimp::assimp)
         target_link_libraries(test_viewer PRIVATE assimp::assimp)
         target_link_libraries(test_model_bone PRIVATE assimp::assimp)
         target_link_libraries(test_model_scene PRIVATE assimp::assimp)
+        target_link_libraries(test_scene_loc PRIVATE assimp::assimp)
     elseif (ASSIMP_LIB)
         target_link_libraries(test_viewer PRIVATE ${ASSIMP_LIB})
         target_link_libraries(test_model_bone PRIVATE ${ASSIMP_LIB})
         target_link_libraries(test_model_scene PRIVATE ${ASSIMP_LIB})
+        target_link_libraries(test_scene_loc PRIVATE ${ASSIMP_LIB})
     else()
         message(WARNING "Assimp not found for test_viewer. Set ASSIMP_ROOT or put libassimp.dll.a into project lib/ to link.")
     endif()
@@ -202,12 +208,14 @@ if (EXISTS ${TEST_VIEWER_SRC})
         target_link_libraries(test_viewer PRIVATE opengl32)
         target_link_libraries(test_model_bone PRIVATE opengl32)
         target_link_libraries(test_model_scene PRIVATE opengl32)
+        target_link_libraries(test_scene_loc PRIVATE opengl32)
     else()
         find_package(OpenGL REQUIRED)
         if (TARGET OpenGL::GL)
             target_link_libraries(test_viewer PRIVATE OpenGL::GL)
             target_link_libraries(test_model_bone PRIVATE OpenGL::GL)
             target_link_libraries(test_model_scene PRIVATE OpenGL::GL)
+            target_link_libraries(test_scene_loc PRIVATE OpenGL::GL)
         endif()
     endif()
 
@@ -224,6 +232,10 @@ if (EXISTS ${TEST_VIEWER_SRC})
         add_custom_command(TARGET test_model_scene POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${CMAKE_CURRENT_SOURCE_DIR}/bin/libassimp-6.dll" $<TARGET_FILE_DIR:test_model_scene>
+        )
+        add_custom_command(TARGET test_scene_loc POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/bin/libassimp-6.dll" $<TARGET_FILE_DIR:test_scene_loc>
         )
     endif()
 endif()

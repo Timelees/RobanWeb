@@ -669,7 +669,7 @@ bool RobotManager::loadModel(const std::string &file)
     // }
     // qDebug() << "--- end bones summary ---";
 
-    qDebug() << "RobotManager: loaded model meshes=" << m_meshes.size() << " bones=" << m_bones.size();
+    // qDebug() << "RobotManager: loaded model meshes=" << m_meshes.size() << " bones=" << m_bones.size();
     return true;
 }
 

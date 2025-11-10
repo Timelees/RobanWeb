@@ -10,6 +10,8 @@
 #include <QImage>
 #include <QDebug>
 #include <QMatrix4x4>
+#include <QVector3D>
+#include <QColor>
 #include <QDir>
 #include <QByteArray>
 #include <QPainter>
@@ -41,9 +43,50 @@ public:
     const std::vector<SimpleMesh> &meshes() const { return m_meshes; }
     bool loaded() const { return m_loaded; }
 
+    // Ray pick against loaded meshes. rayOrigin and rayDir are in model space.
+    // Returns true and sets outHit (model-space) if an intersection was found.
+    bool pickIntersect(const QVector3D &rayOrigin, const QVector3D &rayDir, QVector3D &outHit) const;
+
+    // 标记类型
+    enum MarkerType { Marker_Map = 0, Marker_Pickup = 1, Marker_Place = 2 };
+
+    // 标记数据结构（由 SceneManager 管理）
+    struct Marker
+    {
+        int id = -1;               // 唯一 id
+        MarkerType type = Marker_Map;
+        QVector3D pos;            // 模型空间坐标
+        float radius = 0.05f;     // 可视半径（模型单位）
+        int meshIndex = -1;       // 对应 m_meshes 中的索引
+        QColor color;             // 显示颜色
+    };
+
+    // 添加一个标记（会在内部创建球体 mesh 并返回分配的 marker id）
+    int addCalibrationMarker(MarkerType type, const QVector3D &pos, float radius = 0.05f, const QColor &color = QColor(0, 255, 0));
+
+    // 删除指定 id 的标记（返回是否成功）
+    bool removeMarkerById(int id);
+
+    // 根据射线拾取已存在的标记，找到最近的一个，返回 marker id 或 -1
+    int pickMarkerByRay(const QVector3D &rayOrigin, const QVector3D &rayDir, QVector3D &outHit) const;
+
+    // 保存/加载标记到磁盘（默认保存在模型目录下的 calib_points.json）
+    bool saveMarkers(const QString &path = QString());
+    bool loadMarkers(const QString &path = QString());
+
+    // 删除所有标记（移除所有标记数据，并清空对应 mesh 的几何数据）
+    void clearAllMarkers();
+
+    const std::vector<Marker> &markers() const { return m_markers; }
+
 private:
     QString m_modelPath;
     std::vector<SimpleMesh> m_meshes;
     bool loadSucceeded = false;
     bool m_loaded = false;
+    // 内部标记存储
+    std::vector<Marker> m_markers;
+    int m_nextMarkerId = 1;
+    // 内部函数：创建球体 mesh 并返回 mesh 索引（仅 SceneManager 内部使用）
+    int addMarkerSphere(const QVector3D &pos, float radius = 0.05f, const QColor &color = QColor(0, 255, 0));
 };  

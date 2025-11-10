@@ -1,5 +1,8 @@
 #include "model_display/sceneManager.h"
 #include <QCoreApplication>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
 
 SceneManager::SceneManager(const QString &modelPath, QObject *parent)
     : QObject(parent), m_modelPath(modelPath)
@@ -22,10 +25,10 @@ bool SceneManager::loadModel(const std::string &file)
         return false;
     }
     m_meshes.clear();
-    qDebug() << "Loading model:" << QString::fromStdString(file) << "\n"
-             << "materials:" << scene->mNumMaterials << "\n"
-             << "embedded_textures:" << scene->mNumTextures << "\n"
-             << "meshes:" << scene->mNumMeshes;
+    // qDebug() << "Loading model:" << QString::fromStdString(file) << "\n"
+    //          << "materials:" << scene->mNumMaterials << "\n"
+    //          << "embedded_textures:" << scene->mNumTextures << "\n"
+    //          << "meshes:" << scene->mNumMeshes;
 
     QFileInfo modelInfo(QString::fromStdString(file));
     QString modelDir = modelInfo.absolutePath();
@@ -122,14 +125,14 @@ bool SceneManager::loadModel(const std::string &file)
                         if (!found.isEmpty())
                         {
                             matTexPaths[mi] = QDir::cleanPath(found);
-                            qDebug() << "Material" << mi << "resolved relative path ->" << matTexPaths[mi];
+                            // qDebug() << "Material" << mi << "resolved relative path ->" << matTexPaths[mi];
                         }
                         else
                         {
                             // fallback: keep modelDir + rel (may be missing) so downstream code can report it
                             QString full = QDir::cleanPath(modelDir + QDir::separator() + rel);
                             matTexPaths[mi] = full;
-                            qDebug() << "Material" << mi << "relative path (fallback) ->" << matTexPaths[mi];
+                            // qDebug() << "Material" << mi << "relative path (fallback) ->" << matTexPaths[mi];
                         }
                     }
                     else
@@ -139,7 +142,7 @@ bool SceneManager::loadModel(const std::string &file)
                         // normalize separators and clean path
                         orig = QDir::cleanPath(orig);
                         matTexPaths[mi] = orig;
-                        qDebug() << "Material" << mi << "orig path ->" << matTexPaths[mi];
+                        // qDebug() << "Material" << mi << "orig path ->" << matTexPaths[mi];
                     }
                 }
             }
@@ -151,7 +154,7 @@ bool SceneManager::loadModel(const std::string &file)
             bool exists = false;
             if (hasPath)
                 exists = QFile::exists(matTexPaths[mi]);
-            qDebug() << "Material" << mi << "summary: raw='" << QString::fromStdString(rawP) << "' embedded=" << embedded << " path='" << matTexPaths[mi] << "' exists=" << exists;
+            // qDebug() << "Material" << mi << "summary: raw='" << QString::fromStdString(rawP) << "' embedded=" << embedded << " path='" << matTexPaths[mi] << "' exists=" << exists;
         }
     }
 
@@ -217,7 +220,7 @@ bool SceneManager::loadModel(const std::string &file)
     // always add a ground grid mesh under the scene for reference (Blender-like)
     // create after loading so it overlays (or underlays) scene geometry as desired
     createGridMesh(50.0f, 80, -0.001f);
-    qDebug() << "SceneManager: loaded meshes=" << m_meshes.size();
+    // qDebug() << "SceneManager: loaded meshes=" << m_meshes.size();
     return m_loaded;
 }
 
@@ -278,3 +281,324 @@ void SceneManager::createGridMesh(float size, int divisions, float yOffset)
     // push grid as the first mesh so it's drawn before other scene meshes
     m_meshes.insert(m_meshes.begin(), std::move(sm));
 }
+
+// Moller-Trumbore ray-triangle intersection Möller–Trumbore 射线三角形相交函数
+static bool rayTriangleIntersect(const QVector3D &orig, const QVector3D &dir,
+                                 const QVector3D &v0, const QVector3D &v1, const QVector3D &v2,
+                                 float &outT)
+{
+    const float EPS = 1e-6f;
+    QVector3D edge1 = v1 - v0;
+    QVector3D edge2 = v2 - v0;
+    QVector3D pvec = QVector3D::crossProduct(dir, edge2);
+    float det = QVector3D::dotProduct(edge1, pvec);
+    if (det > -EPS && det < EPS)
+        return false; // parallel
+    float invDet = 1.0f / det;
+    QVector3D tvec = orig - v0;
+    float u = QVector3D::dotProduct(tvec, pvec) * invDet;
+    if (u < 0.0f || u > 1.0f)
+        return false;
+    QVector3D qvec = QVector3D::crossProduct(tvec, edge1);
+    float v = QVector3D::dotProduct(dir, qvec) * invDet;
+    if (v < 0.0f || u + v > 1.0f)
+        return false;
+    float t = QVector3D::dotProduct(edge2, qvec) * invDet;
+    if (t <= EPS)
+        return false;
+    outT = t;
+    return true;
+}
+// 对场景中三角形进行逐三角形检测（跳过插入的网格地面），返回最近交点（模型坐标）
+bool SceneManager::pickIntersect(const QVector3D &rayOrigin, const QVector3D &rayDir, QVector3D &outHit) const
+{
+    bool found = false;
+    float bestT = 1e30f;
+    QVector3D bestHit;
+    // skip the first mesh if it's the grid (we insert grid at begin)
+    size_t startIdx = 0;
+    if (!m_meshes.empty())
+    {
+        // heuristic: grid has 4 vertices and 6 indices
+        if (m_meshes[0].vertices.size() == 12 && m_meshes[0].indices.size() == 6)
+            startIdx = 1;
+    }
+    for (size_t mi = startIdx; mi < m_meshes.size(); ++mi)
+    {
+        const SimpleMesh &m = m_meshes[mi];
+        const std::vector<float> &v = m.vertices;
+        const std::vector<unsigned int> &idx = m.indices;
+        for (size_t i = 0; i + 2 < idx.size(); i += 3)
+        {
+            unsigned int ia = idx[i];
+            unsigned int ib = idx[i + 1];
+            unsigned int ic = idx[i + 2];
+            if (ia * 3 + 2 >= v.size() || ib * 3 + 2 >= v.size() || ic * 3 + 2 >= v.size())
+                continue;
+            QVector3D va(v[3 * ia], v[3 * ia + 1], v[3 * ia + 2]);
+            QVector3D vb(v[3 * ib], v[3 * ib + 1], v[3 * ib + 2]);
+            QVector3D vc(v[3 * ic], v[3 * ic + 1], v[3 * ic + 2]);
+            float t;
+            if (rayTriangleIntersect(rayOrigin, rayDir, va, vb, vc, t))
+            {
+                if (t < bestT)
+                {
+                    bestT = t;
+                    bestHit = rayOrigin + rayDir * t;
+                    found = true;
+                }
+            }
+        }
+    }
+    if (found)
+    {
+        outHit = bestHit;
+        return true;
+    }
+    return false;
+}
+
+// 生成简单 UV 球体网格并用一个小的纯色 QImage 作为漫反射贴图（绿色），将该球体加入场景网格列表中
+// create a simple UV sphere mesh centered at pos with given radius and solid color texture
+int SceneManager::addMarkerSphere(const QVector3D &pos, float radius, const QColor &color)
+{
+    SimpleMesh sm;
+    const int lat = 10;
+    const int lon = 12;
+    for (int j = 0; j <= lat; ++j)
+    {
+        float v = float(j) / float(lat);
+        float phi = v * M_PI; // 0..pi
+        float sinPhi = sinf(phi);
+        float cosPhi = cosf(phi);
+        for (int i = 0; i <= lon; ++i)
+        {
+            float u = float(i) / float(lon);
+            float theta = u * 2.0f * M_PI; // 0..2pi
+            float sinTheta = sinf(theta);
+            float cosTheta = cosf(theta);
+            QVector3D p = QVector3D(cosTheta * sinPhi, cosPhi, sinTheta * sinPhi) * radius + pos;
+            sm.vertices.push_back(p.x());
+            sm.vertices.push_back(p.y());
+            sm.vertices.push_back(p.z());
+            // normals
+            QVector3D n = (p - pos).normalized();
+            sm.normals.push_back(n.x());
+            sm.normals.push_back(n.y());
+            sm.normals.push_back(n.z());
+            // texcoords simple
+            sm.texcoords.push_back(u);
+            sm.texcoords.push_back(v);
+        }
+    }
+    // indices
+    for (int j = 0; j < lat; ++j)
+    {
+        for (int i = 0; i < lon; ++i)
+        {
+            int a = j * (lon + 1) + i;
+            int b = a + lon + 1;
+            int c = a + 1;
+            int d = b + 1;
+            sm.indices.push_back(a);
+            sm.indices.push_back(b);
+            sm.indices.push_back(c);
+            sm.indices.push_back(c);
+            sm.indices.push_back(b);
+            sm.indices.push_back(d);
+        }
+    }
+
+    // create a tiny solid-color texture so the sphere appears green
+    QImage tex(4, 4, QImage::Format_RGBA8888);
+    tex.fill(color);
+    sm.diffuseImage = tex;
+
+    m_meshes.push_back(std::move(sm));
+    return int(m_meshes.size() - 1);
+}
+
+// --- 标记点管理实现 ---
+// 内部：添加一个标注记录并生成对应 mesh
+int SceneManager::addCalibrationMarker(MarkerType type, const QVector3D &pos, float radius, const QColor &color)
+{
+    // 创建球体 mesh，返回 mesh 索引
+    int meshIdx = addMarkerSphere(pos, radius, color);
+    Marker mk;
+    mk.id = m_nextMarkerId++;
+    mk.type = type;
+    mk.pos = pos;
+    mk.radius = radius;
+    mk.meshIndex = meshIdx;
+    mk.color = color;
+    m_markers.push_back(mk);
+    return mk.id;
+}
+
+// 从磁盘读取 JSON 并创建标记（如果 path 为空则放在模型目录下的 calib_points.json）
+bool SceneManager::loadMarkers(const QString &path)
+{
+    QString p = path;
+    if (p.isEmpty())
+    {
+        QFileInfo fi(m_modelPath);
+        QString dir = fi.absolutePath();
+        p = QDir::cleanPath(dir + QDir::separator() + "calib_points.json");
+    }
+    qDebug() << "SceneManager::loadMarkers path=" << p;
+    if (!QFile::exists(p))
+    {
+        qDebug() << "SceneManager::loadMarkers: file does not exist:" << p;
+        return false;
+    }
+    QFile f(p);
+    if (!f.open(QIODevice::ReadOnly))
+        return false;
+    QByteArray data = f.readAll();
+    f.close();
+    QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (!doc.isArray())
+        return false;
+    QJsonArray arr = doc.array();
+    // clear existing markers (do not remove meshes to avoid reindex complexity)
+    // we will still create new meshes for loaded markers
+    for (const QJsonValue &v : arr)
+    {
+        if (!v.isObject()) continue;
+        QJsonObject o = v.toObject();
+        int t = o.value("type").toInt(0);
+        double x = o.value("x").toDouble();
+        double y = o.value("y").toDouble();
+        double z = o.value("z").toDouble();
+        double r = o.value("r").toDouble(0.05);
+        QColor c(o.value("colorR").toInt(0), o.value("colorG").toInt(255), o.value("colorB").toInt(0));
+        addCalibrationMarker(static_cast<MarkerType>(t), QVector3D(float(x), float(y), float(z)), float(r), c);
+    }
+    return true;
+}
+
+bool SceneManager::saveMarkers(const QString &path)
+{
+    QString p = path;
+    if (p.isEmpty())
+    {
+        QFileInfo fi(m_modelPath);
+        QString dir = fi.absolutePath();
+        p = QDir::cleanPath(dir + QDir::separator() + "calib_points.json");
+    }
+    qDebug() << "SceneManager::saveMarkers path=" << p;
+    QJsonArray arr;
+    for (const Marker &m : m_markers)
+    {
+        QJsonObject o;
+        o["id"] = m.id;
+        o["type"] = int(m.type);
+        o["x"] = m.pos.x();
+        o["y"] = m.pos.y();
+        o["z"] = m.pos.z();
+        o["r"] = m.radius;
+        o["colorR"] = m.color.red();
+        o["colorG"] = m.color.green();
+        o["colorB"] = m.color.blue();
+        arr.append(o);
+    }
+    QJsonDocument doc(arr);
+    QFile f(p);
+    QDir d = QFileInfo(p).absoluteDir();
+    if (!d.exists())
+    {
+        if (!d.mkpath("."))
+        {
+            qDebug() << "SceneManager::saveMarkers: failed to create dir" << d.absolutePath();
+            return false;
+        }
+    }
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    {
+        qDebug() << "SceneManager::saveMarkers: failed to open file for write" << p << "error:" << f.errorString();
+        return false;
+    }
+    qint64 written = f.write(doc.toJson(QJsonDocument::Indented));
+    f.close();
+    qDebug() << "SceneManager::saveMarkers: wrote bytes=" << written << " to " << p;
+    return written > 0;
+}
+
+bool SceneManager::removeMarkerById(int id)
+{
+    for (size_t i = 0; i < m_markers.size(); ++i)
+    {
+        if (m_markers[i].id == id)
+        {
+            int midx = m_markers[i].meshIndex;
+            if (midx >= 0 && midx < (int)m_meshes.size())
+            {
+                // clear geometry so it won't draw
+                m_meshes[midx].vertices.clear();
+                m_meshes[midx].indices.clear();
+                m_meshes[midx].normals.clear();
+                m_meshes[midx].texcoords.clear();
+                // free GL texture if any (defer to caller's GL context if needed)
+                if (m_meshes[midx].texId != 0)
+                {
+                    // Note: glDeleteTextures must be called in GL context; here we just reset id
+                    m_meshes[midx].texId = 0;
+                }
+            }
+            m_markers.erase(m_markers.begin() + i);
+            return true;
+        }
+    }
+    return false;
+}
+
+// 使用简单点-射线距离判定拾取标记（更快且与球体形状一致）
+int SceneManager::pickMarkerByRay(const QVector3D &rayOrigin, const QVector3D &rayDir, QVector3D &outHit) const
+{
+    int bestId = -1;
+    float bestT = 1e30f;
+    for (const Marker &m : m_markers)
+    {
+        // 项目：计算射线到点的最近点参数 t
+        QVector3D oc = m.pos - rayOrigin;
+        float t = QVector3D::dotProduct(oc, rayDir);
+        if (t <= 0) continue; // 在射线后方
+        QVector3D closest = rayOrigin + rayDir * t;
+        float dist2 = (closest - m.pos).lengthSquared();
+        if (dist2 <= m.radius * m.radius)
+        {
+            if (t < bestT)
+            {
+                bestT = t;
+                bestId = m.id;
+                outHit = closest;
+            }
+        }
+    }
+    return bestId;
+}
+
+void SceneManager::clearAllMarkers()
+{
+    // 清空所有与标记相关的 mesh 内容并释放记录
+    for (const Marker &m : m_markers)
+    {
+        int midx = m.meshIndex;
+        if (midx >= 0 && midx < (int)m_meshes.size())
+        {
+            m_meshes[midx].vertices.clear();
+            m_meshes[midx].indices.clear();
+            m_meshes[midx].normals.clear();
+            m_meshes[midx].texcoords.clear();
+            if (m_meshes[midx].texId != 0)
+            {
+                m_meshes[midx].texId = 0; // 实际 glDeleteTextures 由调用者在 GL 上下文中执行
+            }
+        }
+    }
+    m_markers.clear();
+    // 同步保存到磁盘：将标记文件更新为当前（空）状态，确保 JSON 中不再包含已删除的标定点
+    bool ok = saveMarkers();
+    qDebug() << "SceneManager::clearAllMarkers: saved empty markers ->" << ok;
+}
+
