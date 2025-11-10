@@ -3,7 +3,40 @@
 RobotManager::RobotManager(const QString &modelPath, QObject *parent)
     : QObject(parent), m_modelPath(modelPath)
 {
+    // 初始化整体旋转矩阵与欧拉角（默认无旋转）
+    m_worldRotation = Mat4::identity();
+    m_modelRotationDeg = QVector3D(0.0f, 0.0f, 0.0f);
+
     loadSucceeded = loadModel(modelPath.toStdString());
+
+    // 默认在模型加载成功后将模型整体绕 Y 轴旋转 90 度，便于视图初始展示。
+    // 说明：这里假定用户期望绕 Y 轴旋转，如需绕其他轴请告诉我。
+    if (loadSucceeded)
+    {
+        setModelRotation(QVector3D(0.0f, -90.0f, 0.0f));
+    }
+}
+
+// 设定模型整体旋转：传入度为单位的欧拉角 (x_deg, y_deg, z_deg)
+void RobotManager::setModelRotation(const QVector3D &eulerDeg)
+{
+    // 保存欧拉角
+    m_modelRotationDeg = eulerDeg;
+    const double PI = 3.14159265358979323846;
+    float rx = float(eulerDeg.x() * (PI / 180.0));
+    float ry = float(eulerDeg.y() * (PI / 180.0));
+    float rz = float(eulerDeg.z() * (PI / 180.0));
+
+    // 构造绕各轴的旋转矩阵（使用 Mat4 的静态方法）
+    Mat4 Rx = Mat4::rotationX(rx);
+    Mat4 Ry = Mat4::rotationY(ry);
+    Mat4 Rz = Mat4::rotationZ(rz);
+
+    // 内部按 Z * Y * X 的顺序复合旋转（与注释一致）
+    m_worldRotation = Rz * Ry * Rx;
+
+    // 重新应用当前关节角度以更新顶点（applyJointAngles 会触发 frameAdvanced）
+    applyJointAngles(m_currentJointAngles);
 }
 
 bool RobotManager::loadBoneJointMapping(const QString &csvPath)
@@ -85,7 +118,7 @@ bool RobotManager::loadPlaceCsv(const QString &csvPath, int intervalMs)
     m_cameraDistanceLockedDuringPlayback = true;
     qDebug() << "RobotManager: started animation, rows=" << m_placeRows.size() << " cameraDistanceLockedDuringPlayback=" << m_cameraDistanceLockedDuringPlayback;
 
-    emit animationStarted();
+    emit animationStarted();        // 连接ModelViewer, 设置视角
     m_currentRow = 0;
 
     return true;
@@ -311,6 +344,19 @@ void RobotManager::applyJointAngles(const std::map<int, double> &jointAngles)
                 az += tz * w;
             }
 
+            // 先围绕模型中心应用整体旋转（由 setModelRotation 设置），再应用世界平移
+            // 旋转在模型局部空间进行：把点平移到以模型中心为原点 -> 旋转 -> 平移回中心
+            float px = ax - m_modelCenterX;
+            float py = ay - m_modelCenterY;
+            float pz = az - m_modelCenterZ;
+            float rx = px * m_worldRotation.m[0][0] + py * m_worldRotation.m[0][1] + pz * m_worldRotation.m[0][2];
+            float ry = px * m_worldRotation.m[1][0] + py * m_worldRotation.m[1][1] + pz * m_worldRotation.m[1][2];
+            float rz = px * m_worldRotation.m[2][0] + py * m_worldRotation.m[2][1] + pz * m_worldRotation.m[2][2];
+
+            ax = rx + m_modelCenterX + m_worldTranslation.x();
+            ay = ry + m_modelCenterY + m_worldTranslation.y();
+            az = rz + m_modelCenterZ + m_worldTranslation.z();
+
             m.vertices[vi * 3 + 0] = ax;
             m.vertices[vi * 3 + 1] = ay;
             m.vertices[vi * 3 + 2] = az;
@@ -459,6 +505,8 @@ bool RobotManager::loadModel(const std::string &file)
         m_meshes.push_back(std::move(sm));
     }
 
+    
+
     // 处理材质
     // assign texture (embedded image or path) per mesh based on material index
     for (unsigned int mi = 0; mi < scene->mNumMeshes; ++mi)
@@ -531,6 +579,7 @@ bool RobotManager::loadModel(const std::string &file)
         NodeInfo n;
         n.name = QString::fromUtf8(node->mName.C_Str());
         n.parent = parentIdx;
+    
         n.local = Mat4::fromAi(node->mTransformation);
         n.originalLocal = Mat4::orthonormalizeRotationKeepTranslation(n.local);
         m_nodeInfos.push_back(n);
@@ -566,6 +615,7 @@ bool RobotManager::loadModel(const std::string &file)
                 BoneInfo bn;
                 bn.name = bname;
                 bn.offset = Mat4::fromAi(bone->mOffsetMatrix);
+                
                 // map node name to index if present
                 auto nit = m_nodeNameToIndex.find(bname);
                 if (nit != m_nodeNameToIndex.end())
@@ -738,11 +788,14 @@ void RobotManager::computeBounds()
         float diag = sqrt((maxx - minx) * (maxx - minx) + (maxy - miny) * (maxy - miny) + (maxz - minz) * (maxz - minz));
         float scale = (diag > 0.0001f) ? (1.0f / diag) : 1.0f;
 
-        // store model centering and scale but DO NOT mutate mesh vertex buffers.
+        // 模型中心和缩放， 对Y轴和Z轴做微调以适应视图位置
         m_modelCenterX = cx;
-        m_modelCenterY = cy;
-        m_modelCenterZ = cz;
+        m_modelCenterY = cy + -0.0419408;
+        m_modelCenterZ = cz - 1.2664;
         m_modelScale = scale;
+
+        qDebug() << "computeBounds: model center=(" << m_modelCenterX << "," << m_modelCenterY << "," << m_modelCenterZ << ")"
+                 << " scale=" << m_modelScale;
 
         if (!m_initialCameraDistanceSet)
         {
@@ -759,5 +812,112 @@ void RobotManager::computeBounds()
                 qDebug() << "computeBounds: cameraDistance locked during playback, skipping default zoom set";
             }
         }
+    }
+}
+
+// loadLocationCsv: 从 CSV 加载位置点 (x,y,z)。
+// 实现原则：不重新生成 mesh 或贴图，而是直接在已加载的 mesh 顶点上应用平移（基于加载时计算的模型中心 m_modelCenterX/Y/Z），
+// 从而把整个机器人模型移动到目标世界位置。若 intervalMs>0，则以定时器循环播放每一行位置并发出 frameAdvanced() 以触发视图刷新。
+bool RobotManager::loadLocationCsv(const QString &csvPath)
+{
+    QFile f(csvPath);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        qDebug() << "RobotManager: fail open location csv" << csvPath;
+        return false;
+    }
+    QTextStream ts(&f);
+    // 解析 CSV：仅把数据保存到 m_locationRows，其他行为（应用/播放）由单独的函数负责
+    m_locationRows.clear();
+    QString firstLine = ts.readLine();
+    auto tryParseLine = [&](const QString &line) {
+        QString s = line.trimmed();
+        if (s.isEmpty()) return;
+        QStringList parts = s.split(',');
+        if (parts.size() < 3) return;
+        bool okx = false, oky = false, okz = false;
+        double x = parts[0].trimmed().toDouble(&okx);
+        double y = parts[1].trimmed().toDouble(&oky);
+        double z = parts[2].trimmed().toDouble(&okz);
+        if (okx && oky && okz)
+            m_locationRows.push_back(QVector3D(float(x), float(y), float(z)));
+    };
+
+    // 如果第一行看起来像数据则解析
+    if (!firstLine.isEmpty() && (firstLine.at(0).isDigit() || firstLine.at(0) == QChar('-') || firstLine.startsWith("0")))
+        tryParseLine(firstLine);
+
+    while (!ts.atEnd())
+    {
+        QString line = ts.readLine();
+        tryParseLine(line);
+    }
+    f.close();
+
+    if (m_locationRows.empty())
+    {
+        qDebug() << "RobotManager::loadLocationCsv: no valid location rows in" << csvPath;
+        return false;
+    }
+
+    // 解析完成（不自动应用/播放），调用者可使用 applyLocationRow/startLocationPlayback
+    qDebug() << "RobotManager::loadLocationCsv: parsed" << m_locationRows.size() << "rows from" << csvPath;
+    return true;
+}
+
+// 将模型移动到给定的世界位置（直接修改 mesh 顶点为原始顶点 + delta）
+void RobotManager::applyLocation(const QVector3D &target)
+{
+    // store world translation (target relative to computed model center)
+    float tx = target.x() - m_modelCenterX;
+    float ty = target.y() - m_modelCenterY;
+    float tz = target.z() - m_modelCenterZ;
+    m_worldTranslation = QVector3D(tx, ty, tz);
+
+    // Recompute current displayed vertices using existing joint angles so
+    // the translation is applied on top of the current pose (avoid reverting
+    // to bind/original vertices). applyJointAngles will add m_worldTranslation
+    // into the skinned vertex results.
+    applyJointAngles(m_currentJointAngles);
+}
+
+// 应用已解析的第 row 行位置
+void RobotManager::applyLocationRow(int row)
+{
+    if (row < 0 || row >= m_locationRows.size())
+    {
+        qDebug() << "RobotManager::applyLocationRow: invalid row" << row;
+        return;
+    }
+    applyLocation(m_locationRows[row]);
+}
+
+// 启动按间隔播放位置的计时器
+bool RobotManager::startLocationPlayback(int intervalMs)
+{
+    if (m_locationRows.empty())
+    {
+        qDebug() << "RobotManager::startLocationPlayback: no location rows loaded";
+        return false;
+    }
+    stopLocationPlayback();
+    m_currentLocationRow = 0;
+    m_locationTimer = new QTimer(this);
+    connect(m_locationTimer, &QTimer::timeout, this, [this]() {
+        applyLocationRow(m_currentLocationRow);
+        m_currentLocationRow = (m_currentLocationRow + 1) % m_locationRows.size();
+    });
+    m_locationTimer->start(intervalMs);
+    qDebug() << "RobotManager::startLocationPlayback: started rows=" << m_locationRows.size() << " intervalMs=" << intervalMs;
+    return true;
+}
+
+void RobotManager::stopLocationPlayback()
+{
+    if (m_locationTimer)
+    {
+        m_locationTimer->stop();
+        delete m_locationTimer;
+        m_locationTimer = nullptr;
     }
 }

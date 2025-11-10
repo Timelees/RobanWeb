@@ -19,6 +19,7 @@
 #include <QColor>
 #include <QMenu>
 #include <QAction>
+#include <QToolTip>
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -130,6 +131,12 @@ public:
     hb->addWidget(btnSave);
     hb->addWidget(btnDelete);
     hb->addWidget(btnClearAll);
+    // ----------------------------------
+    // 播放位置（路径）按钮
+    QPushButton *btnPlayLocations = new QPushButton(QString::fromUtf8("播放位置"), m_topBar);
+    hb->addWidget(btnPlayLocations);
+    // ----------------------------------
+    
     hb->addStretch();
     // 连接信号
     connect(btnMap, &QPushButton::clicked, this, &ModelViewer::onAddMapMarker);
@@ -138,6 +145,24 @@ public:
     connect(btnSave, &QPushButton::clicked, this, &ModelViewer::onSaveMarkers);
     connect(btnDelete, &QPushButton::clicked, this, &ModelViewer::onDeleteSelected);
     connect(btnClearAll, &QPushButton::clicked, this, &ModelViewer::onClearAllMarkers);
+    // ---------------------------------------
+    // 非必要，后面实际使用通过接收slam位置的更新来更新模型位置
+    connect(btnPlayLocations, &QPushButton::clicked, this, [this, btnPlayLocations]() {
+        // 切换播放/停止
+        if (!m_locationPlaying) {
+            // 默认 500ms 间隔播放位置
+            if (m_robot && m_robot->startLocationPlayback(500)) {
+                m_locationPlaying = true;
+                btnPlayLocations->setText(QString::fromUtf8("停止播放"));
+            }
+        } else {
+            if (m_robot) m_robot->stopLocationPlayback();
+            m_locationPlaying = false;
+            btnPlayLocations->setText(QString::fromUtf8("播放位置"));
+        }
+    });
+
+    // ---------------------------------------
     // 初始布局（位置和高度）
     int th = btnMap->sizeHint().height() + 8;
     m_topBar->setGeometry(6, 6, width() - 12, th);
@@ -233,15 +258,17 @@ protected:
         // draw robot meshes
         if (m_robot)
             drawMeshes(m_robot->meshes());
+
     }
 
     void mousePressEvent(QMouseEvent *e) override
     {
         // 记录按下位置用于判断是否为点击（非拖拽）
         m_lastPos = e->pos();
+        // 记录按下位置（用于左键判断拖拽/点击，也用于右键信息显示阈值）
+        m_pressPos = e->pos();
         if (e->button() == Qt::LeftButton)
         {
-            m_pressPos = e->pos();
             m_pressed = true;
         }
         QOpenGLWidget::mousePressEvent(e);
@@ -272,7 +299,7 @@ protected:
                     else
                     {
                         // 记录场景中的点位作为待添加点（当点击菜单项时生效）
-                        QVector3D hit;
+                        QVector3D hit; // x y z
                         if (m_scene && m_scene->pickIntersect(origin, dir, hit))
                         {
                             m_pendingPickPos = hit;
@@ -283,20 +310,57 @@ protected:
                 }
             }
         }
+        // 右键点击标记点显示标记信息提示框
+        if (e->button() == Qt::RightButton)
+        {
+            QPoint delta = e->pos() - m_pressPos; // m_pressPos set on press only for left button; allow small movement anyway
+            if (delta.manhattanLength() < 12)
+            {
+                QVector3D origin, dir, hitMarkerPt;
+                if (screenPosToRay(e->pos(), origin, dir) && m_scene)
+                {
+                    int mid = m_scene->pickMarkerByRay(origin, dir, hitMarkerPt);
+                    if (mid >= 0)
+                    {
+                        QString txt = QString("id=%1\nx=%2\ny=%3\nz=%4")
+                                          .arg(mid)
+                                          .arg(hitMarkerPt.x(), 0, 'f', 3)
+                                          .arg(hitMarkerPt.y(), 0, 'f', 3)
+                                          .arg(hitMarkerPt.z(), 0, 'f', 3);
+                        QToolTip::showText(mapToGlobal(e->pos()), txt, this);
+                        qDebug() << "Right-click marker id=" << mid << " at " << hitMarkerPt;
+                    }
+                }
+            }
+        }
+
         m_pressed = false;
         QOpenGLWidget::mouseReleaseEvent(e);
     }
     void mouseMoveEvent(QMouseEvent *e) override
     {
         QPoint delta = e->pos() - m_lastPos;
+        // 左键按住：旋转视角（保留原先行为）
         if (e->buttons() & Qt::LeftButton)
         {
             m_rotX += delta.y() * 0.5f;
             m_rotY += delta.x() * 0.5f;
             update();
         }
+        // 右键按住：平移视角（左右/上下），通过修改模型中心实现
+        else if (e->buttons() & Qt::RightButton)
+        {
+            // pan speed 与相机距离相关，调节感受
+            float panFactor = 0.0025f * m_cameraDistance;
+            m_modelCenterX += delta.x() * panFactor; // 鼠标右移 -> 视点右移
+            m_modelCenterY -= delta.y() * panFactor; // 鼠标上移 -> 视点上移
+            update();
+        }
+
+        // 记录鼠标当前位置
         m_lastPos = e->pos();
     }
+
     void wheelEvent(QWheelEvent *e) override
     {
         int d = e->angleDelta().y();
@@ -477,7 +541,7 @@ private:
     // model centering/scale captured from meshes
     float m_modelCenterX = 0.0f, m_modelCenterY = 0.0f, m_modelCenterZ = 0.0f;
     float m_modelScale = 1.0f;
-    // initial camera distance capture
+    // 初始相机距离
     float m_initialCameraDistance = 11.6f;
     bool m_initialCameraDistanceSet = true;
     // when true, prevent non-interactive code from changing cameraDistance while animation is playing
@@ -492,6 +556,9 @@ private:
     int m_selectedMarkerId = -1;
     // 顶部工具栏（按钮行）
     QWidget *m_topBar = nullptr;
+
+    // 位置播放状态 （非必要，后面实际使用通过接收slam位置的更新来更新模型位置）
+    bool m_locationPlaying = false;
 
 public slots:
     // 菜单动作：在之前点击的位置添加不同颜色的标记
@@ -588,6 +655,23 @@ int main(int argc, char **argv)
         if (QFile::exists(p))
         {
             robot->loadPlaceCsv(p, 80);
+            break;
+        }
+    }
+
+    // 试着加载位置数据（location_test.csv），用于把机器人模型移动到场景中事先定义的位置
+    QStringList candLoc = {"test_config/location_test.csv", "src/test/test_config/location_test.csv", "..\\src\\test\\test_config\\location_test.csv", "./test_config/location_test.csv"};
+    for (const QString &p : candLoc)
+    {
+        if (QFile::exists(p))
+        {
+            // 仅解析 CSV（loadLocationCsv 现在仅解析数据），随后显式应用第一行位置
+            if (robot->loadLocationCsv(p)) {
+                // robot->applyLocationRow(0); // 直接把机器人放到 CSV 的第一行位置
+                qDebug() << "Parsed and applied first location row from:" << p;
+            } else {
+                qDebug() << "Failed to parse location CSV:" << p;
+            }
             break;
         }
     }

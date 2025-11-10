@@ -1426,9 +1426,9 @@ int main(int argc, char **argv)
         QStringLiteral("..\\src\\test\\test_config\\place.csv"),
         QStringLiteral("./test_config/place.csv")
     };
-    for (const QString &p : candPlace) {
-        if (QFile::exists(p)) { viewer.loadPlaceCsv(p, 80); qDebug() << "Loaded place.csv from" << p; break; }
-    }
+    // for (const QString &p : candPlace) {
+    //     if (QFile::exists(p)) { viewer.loadPlaceCsv(p, 80); qDebug() << "Loaded place.csv from" << p; break; }
+    // }
 #endif
     return app.exec();
 }
