@@ -50,35 +50,48 @@ static QString resolveTexturePathRuntime(const QString &path)
     QString fname = QFileInfo(path).fileName();
     QString cand;
     cand = QDir::cleanPath(appdir + QDir::separator() + path);
-    if (QFile::exists(cand)) return cand;
+    if (QFile::exists(cand))
+        return cand;
     cand = QDir::cleanPath(appdir + QDir::separator() + fname);
-    if (QFile::exists(cand)) return cand;
+    if (QFile::exists(cand))
+        return cand;
     // try cwd
     QString cwd = QDir::currentPath();
     cand = QDir::cleanPath(cwd + QDir::separator() + path);
-    if (QFile::exists(cand)) return cand;
+    if (QFile::exists(cand))
+        return cand;
     cand = QDir::cleanPath(cwd + QDir::separator() + fname);
-    if (QFile::exists(cand)) return cand;
+    if (QFile::exists(cand))
+        return cand;
     // try appdir/assets and cwd/assets
     cand = QDir::cleanPath(appdir + QDir::separator() + "assets" + QDir::separator() + fname);
-    if (QFile::exists(cand)) return cand;
+    if (QFile::exists(cand))
+        return cand;
     cand = QDir::cleanPath(cwd + QDir::separator() + "assets" + QDir::separator() + fname);
-    if (QFile::exists(cand)) return cand;
+    if (QFile::exists(cand))
+        return cand;
     // walk up from cwd and appdir looking for assets/<fname>
-    auto searchUp = [&](const QString &start) -> QString {
+    auto searchUp = [&](const QString &start) -> QString
+    {
         QDir d(start);
-        for (int i = 0; i < 6; ++i) {
-            if (!d.exists()) break;
+        for (int i = 0; i < 6; ++i)
+        {
+            if (!d.exists())
+                break;
             QString check = QDir::cleanPath(d.absolutePath() + QDir::separator() + "assets" + QDir::separator() + fname);
-            if (QFile::exists(check)) return check;
-            if (!d.cdUp()) break;
+            if (QFile::exists(check))
+                return check;
+            if (!d.cdUp())
+                break;
         }
         return QString();
     };
     QString r = searchUp(appdir);
-    if (!r.isEmpty()) return r;
+    if (!r.isEmpty())
+        return r;
     r = searchUp(cwd);
-    if (!r.isEmpty()) return r;
+    if (!r.isEmpty())
+        return r;
     return QString();
 }
 
@@ -110,44 +123,45 @@ public:
                 qDebug() << "ModelViewer: copied robot bounds center=(" << m_modelCenterX << m_modelCenterY << m_modelCenterZ << ") scale=" << m_modelScale;
             }
         }
-    // 在 widget 内部创建水平工具栏（按钮行），放在窗口顶部
-    m_topBar = new QWidget(this);
-    m_topBar->setObjectName("calibTopBar");
-    m_topBar->setAutoFillBackground(true);
-    QHBoxLayout *hb = new QHBoxLayout(m_topBar);
-    hb->setContentsMargins(4, 4, 4, 4);
-    hb->setSpacing(6);
-    // 创建五个按钮，按需连接到已有槽
-    QPushButton *btnMap = new QPushButton(QString::fromUtf8("地图标定"), m_topBar);
-    QPushButton *btnPickup = new QPushButton(QString::fromUtf8("取货点标定"), m_topBar);
-    QPushButton *btnPlace = new QPushButton(QString::fromUtf8("放置点标定"), m_topBar);
-    QPushButton *btnSave = new QPushButton(QString::fromUtf8("标定保存"), m_topBar);
-    QPushButton *btnDelete = new QPushButton(QString::fromUtf8("标定删除"), m_topBar);
-    QPushButton *btnClearAll = new QPushButton(QString::fromUtf8("全部删除"), m_topBar);
-    // 将按钮加入布局
-    hb->addWidget(btnMap);
-    hb->addWidget(btnPickup);
-    hb->addWidget(btnPlace);
-    hb->addWidget(btnSave);
-    hb->addWidget(btnDelete);
-    hb->addWidget(btnClearAll);
-    // ----------------------------------
-    // 播放位置（路径）按钮
-    QPushButton *btnPlayLocations = new QPushButton(QString::fromUtf8("播放位置"), m_topBar);
-    hb->addWidget(btnPlayLocations);
-    // ----------------------------------
-    
-    hb->addStretch();
-    // 连接信号
-    connect(btnMap, &QPushButton::clicked, this, &ModelViewer::onAddMapMarker);
-    connect(btnPickup, &QPushButton::clicked, this, &ModelViewer::onAddPickupMarker);
-    connect(btnPlace, &QPushButton::clicked, this, &ModelViewer::onAddPlaceMarker);
-    connect(btnSave, &QPushButton::clicked, this, &ModelViewer::onSaveMarkers);
-    connect(btnDelete, &QPushButton::clicked, this, &ModelViewer::onDeleteSelected);
-    connect(btnClearAll, &QPushButton::clicked, this, &ModelViewer::onClearAllMarkers);
-    // ---------------------------------------
-    // 非必要，后面实际使用通过接收slam位置的更新来更新模型位置
-    connect(btnPlayLocations, &QPushButton::clicked, this, [this, btnPlayLocations]() {
+        // 在 widget 内部创建水平工具栏（按钮行），放在窗口顶部
+        m_topBar = new QWidget(this);
+        m_topBar->setObjectName("calibTopBar");
+        m_topBar->setAutoFillBackground(true);
+        QHBoxLayout *hb = new QHBoxLayout(m_topBar);
+        hb->setContentsMargins(4, 4, 4, 4);
+        hb->setSpacing(6);
+        // 创建五个按钮，按需连接到已有槽
+        QPushButton *btnMap = new QPushButton(QString::fromUtf8("地图标定"), m_topBar);
+        QPushButton *btnPickup = new QPushButton(QString::fromUtf8("取货点标定"), m_topBar);
+        QPushButton *btnPlace = new QPushButton(QString::fromUtf8("放置点标定"), m_topBar);
+        QPushButton *btnSave = new QPushButton(QString::fromUtf8("标定保存"), m_topBar);
+        QPushButton *btnDelete = new QPushButton(QString::fromUtf8("标定删除"), m_topBar);
+        QPushButton *btnClearAll = new QPushButton(QString::fromUtf8("全部删除"), m_topBar);
+        // 将按钮加入布局
+        hb->addWidget(btnMap);
+        hb->addWidget(btnPickup);
+        hb->addWidget(btnPlace);
+        hb->addWidget(btnSave);
+        hb->addWidget(btnDelete);
+        hb->addWidget(btnClearAll);
+        // ----------------------------------
+        // 播放位置（路径）按钮
+        QPushButton *btnPlayLocations = new QPushButton(QString::fromUtf8("播放位置"), m_topBar);
+        hb->addWidget(btnPlayLocations);
+        // ----------------------------------
+
+        hb->addStretch();
+        // 连接信号
+        connect(btnMap, &QPushButton::clicked, this, &ModelViewer::onAddMapMarker);
+        connect(btnPickup, &QPushButton::clicked, this, &ModelViewer::onAddPickupMarker);
+        connect(btnPlace, &QPushButton::clicked, this, &ModelViewer::onAddPlaceMarker);
+        connect(btnSave, &QPushButton::clicked, this, &ModelViewer::onSaveMarkers);
+        connect(btnDelete, &QPushButton::clicked, this, &ModelViewer::onDeleteSelected);
+        connect(btnClearAll, &QPushButton::clicked, this, &ModelViewer::onClearAllMarkers);
+        // ---------------------------------------
+        // 非必要，后面实际使用通过接收slam位置的更新来更新模型位置
+        connect(btnPlayLocations, &QPushButton::clicked, this, [this, btnPlayLocations]()
+                {
         // 切换播放/停止
         if (!m_locationPlaying) {
             // 默认 500ms 间隔播放位置
@@ -159,13 +173,12 @@ public:
             if (m_robot) m_robot->stopLocationPlayback();
             m_locationPlaying = false;
             btnPlayLocations->setText(QString::fromUtf8("播放位置"));
-        }
-    });
+        } });
 
-    // ---------------------------------------
-    // 初始布局（位置和高度）
-    int th = btnMap->sizeHint().height() + 8;
-    m_topBar->setGeometry(6, 6, width() - 12, th);
+        // ---------------------------------------
+        // 初始布局（位置和高度）
+        int th = btnMap->sizeHint().height() + 8;
+        m_topBar->setGeometry(6, 6, width() - 12, th);
     }
 
 protected:
@@ -243,7 +256,8 @@ protected:
             return;
         }
 
-        if (!m_scene->loaded()){
+        if (!m_scene->loaded())
+        {
             QPainter p(this);
             p.setPen(Qt::black);
             p.drawText(rect(), Qt::AlignCenter, "Failed to load scene model\n");
@@ -259,6 +273,26 @@ protected:
         if (m_robot)
             drawMeshes(m_robot->meshes());
 
+        // 如果存在位置点，绘制轨迹线（绿色），使用 GL_LINE_STRIP 连续连接位置点
+        if (m_robot)
+        {
+            SimpleMesh traj = m_robot->buildTrajectoryMesh();
+            if (!traj.vertices.empty())
+            {
+                // 关闭纹理，设置线宽与颜色
+                glDisable(GL_TEXTURE_2D);
+                glLineWidth(2.0f);
+                glColor3f(0.0f, 1.0f, 0.0f); // 绿色
+                glBegin(GL_LINE_STRIP);
+                for (size_t vi = 0; vi + 2 < traj.vertices.size(); vi += 3)
+                {
+                    glVertex3f(traj.vertices[vi + 0], traj.vertices[vi + 1], traj.vertices[vi + 2]);
+                }
+                glEnd();
+                // 恢复默认颜色（白色），线宽和纹理状态由后续绘制自行调整
+                glColor3f(1.0f, 1.0f, 1.0f);
+            }
+        }
     }
 
     void mousePressEvent(QMouseEvent *e) override
@@ -417,6 +451,7 @@ private:
         outDir = (farWorld - nearWorld).normalized();
         return true;
     }
+
 private:
     void onRobotAnimationStarted();
 
@@ -435,12 +470,15 @@ private:
                 {
                     img = QImage(m.diffuseTexPath);
                     // runtime fallback: if direct load failed, try to resolve via common candidate locations
-                    if (img.isNull()) {
+                    if (img.isNull())
+                    {
                         QString resolved = resolveTexturePathRuntime(m.diffuseTexPath);
-                        if (!resolved.isEmpty()) {
+                        if (!resolved.isEmpty())
+                        {
                             qDebug() << "createMeshes: runtime resolved texture" << m.diffuseTexPath << "->" << resolved;
                             img = QImage(resolved);
-                            if (!img.isNull()) {
+                            if (!img.isNull())
+                            {
                                 // update diffuseTexPath to resolved absolute path so later checks reflect actual file
                                 m.diffuseTexPath = resolved;
                             }
@@ -564,8 +602,9 @@ public slots:
     // 菜单动作：在之前点击的位置添加不同颜色的标记
     void onAddMapMarker()
     {
-        if (!m_hasPendingPick || !m_scene) return;
-        m_scene->addCalibrationMarker(SceneManager::Marker_Map, m_pendingPickPos, 0.08f, QColor(0,200,0));
+        if (!m_hasPendingPick || !m_scene)
+            return;
+        m_scene->addCalibrationMarker(SceneManager::Marker_Map, m_pendingPickPos, 0.08f, QColor(0, 200, 0));
         // 确保在 GL 上下文中上传纹理
         makeCurrent();
         createMeshes(m_scene->meshes());
@@ -575,8 +614,9 @@ public slots:
     }
     void onAddPickupMarker()
     {
-        if (!m_hasPendingPick || !m_scene) return;
-        m_scene->addCalibrationMarker(SceneManager::Marker_Pickup, m_pendingPickPos, 0.08f, QColor(200,0,0));
+        if (!m_hasPendingPick || !m_scene)
+            return;
+        m_scene->addCalibrationMarker(SceneManager::Marker_Pickup, m_pendingPickPos, 0.08f, QColor(200, 0, 0));
         makeCurrent();
         createMeshes(m_scene->meshes());
         doneCurrent();
@@ -585,8 +625,9 @@ public slots:
     }
     void onAddPlaceMarker()
     {
-        if (!m_hasPendingPick || !m_scene) return;
-        m_scene->addCalibrationMarker(SceneManager::Marker_Place, m_pendingPickPos, 0.08f, QColor(0,0,200));
+        if (!m_hasPendingPick || !m_scene)
+            return;
+        m_scene->addCalibrationMarker(SceneManager::Marker_Place, m_pendingPickPos, 0.08f, QColor(0, 0, 200));
         makeCurrent();
         createMeshes(m_scene->meshes());
         doneCurrent();
@@ -596,14 +637,16 @@ public slots:
     // 保存当前标定点到磁盘
     void onSaveMarkers()
     {
-        if (!m_scene) return;
+        if (!m_scene)
+            return;
         bool ok = m_scene->saveMarkers();
         qDebug() << "saveMarkers ->" << ok;
     }
     // 删除当前选中的标记
     void onDeleteSelected()
     {
-        if (!m_scene) return;
+        if (!m_scene)
+            return;
         if (m_selectedMarkerId >= 0)
         {
             bool ok = m_scene->removeMarkerById(m_selectedMarkerId);
@@ -618,7 +661,8 @@ public slots:
     // 删除所有标记
     void onClearAllMarkers()
     {
-        if (!m_scene) return;
+        if (!m_scene)
+            return;
         m_scene->clearAllMarkers();
         makeCurrent();
         createMeshes(m_scene->meshes());
@@ -666,10 +710,13 @@ int main(int argc, char **argv)
         if (QFile::exists(p))
         {
             // 仅解析 CSV（loadLocationCsv 现在仅解析数据），随后显式应用第一行位置
-            if (robot->loadLocationCsv(p)) {
+            if (robot->loadLocationCsv(p))
+            {
                 // robot->applyLocationRow(0); // 直接把机器人放到 CSV 的第一行位置
                 qDebug() << "Parsed and applied first location row from:" << p;
-            } else {
+            }
+            else
+            {
                 qDebug() << "Failed to parse location CSV:" << p;
             }
             break;

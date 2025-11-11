@@ -1,3 +1,7 @@
+#ifndef SCENEMANAGER_H
+#define SCENEMANAGER_H
+
+
 #include <QApplication>
 #include <QOpenGLWidget>
 #include <QOpenGLFunctions>
@@ -89,4 +93,7 @@ private:
     int m_nextMarkerId = 1;
     // 内部函数：创建球体 mesh 并返回 mesh 索引（仅 SceneManager 内部使用）
     int addMarkerSphere(const QVector3D &pos, float radius = 0.05f, const QColor &color = QColor(0, 255, 0));
-};  
+};
+
+
+#endif // SCENEMANAGER_H

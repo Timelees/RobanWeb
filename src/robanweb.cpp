@@ -127,7 +127,12 @@ void robanweb::init(){
     }
 
     // 3D模型显示初始化
-    QString modelPath = "..\\assets\\Roban.fbx"; // 默认模型路径
+    QString modelRobot = QString::fromUtf8("..\\assets\\Roban.fbx"); // 默认机器人模型路径
+    QString modelScene = QString::fromUtf8("..\\assets\\scene.obj"); // 默认场景模型路径
+    
+    robotManager = new RobotManager(modelRobot, this);    // 机器人管理器
+    sceneManager = new SceneManager(modelScene, this);    // 场景管理器
+    
     if (ui->modelDisplay) {
         QWidget *placeholder = ui->modelDisplay; // UI 中的占位 widget
         QWidget *parent = placeholder->parentWidget();
@@ -135,7 +140,7 @@ void robanweb::init(){
         QLayout *parentLayout = parent ? parent->layout() : nullptr;
 
         // 在同一父容器中创建 ModelDisplay，并在父 layout 中替换占位 widget（如果存在）
-        modelDisplay = new ModelDisplay(modelPath, parent ? parent : placeholder);
+        modelDisplay = new ModelDisplay(robotManager, sceneManager, parent ? parent : placeholder);
         modelDisplay->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
         if (parentLayout) {
@@ -168,6 +173,8 @@ void robanweb::init(){
         }
 
         modelDisplay->show();
+
+     
     }
     
 }

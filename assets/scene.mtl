@@ -1,7 +1,7 @@
-# Blender 4.5.3 LTS MTL File: 'quit.blend'
+# Blender 4.4.1 MTL File: '机器人_动画.blend'
 # www.blender.org
 
-newmtl 材质
+newmtl 材质.001
 Ns 250.000000
 Ka 1.000000 1.000000 1.000000
 Ks 0.500000 0.500000 0.500000
@@ -9,4 +9,4 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 d 1.000000
 illum 2
-map_Kd E:/Code/C_C++_Code/C++project/RobanWeb/assets/C.png
+map_Kd Env_End.png

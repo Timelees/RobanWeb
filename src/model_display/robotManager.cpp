@@ -1,5 +1,5 @@
 #include "model_display/robotManager.h"
-
+#include "util/load_csv.hpp"
 RobotManager::RobotManager(const QString &modelPath, QObject *parent)
     : QObject(parent), m_modelPath(modelPath)
 {
@@ -10,11 +10,15 @@ RobotManager::RobotManager(const QString &modelPath, QObject *parent)
     loadSucceeded = loadModel(modelPath.toStdString());
 
     // 默认在模型加载成功后将模型整体绕 Y 轴旋转 90 度，便于视图初始展示。
-    // 说明：这里假定用户期望绕 Y 轴旋转，如需绕其他轴请告诉我。
     if (loadSucceeded)
     {
+
         setModelRotation(QVector3D(0.0f, -90.0f, 0.0f));
     }
+
+    // 设置关节映射
+    jointConfigPath = resolveConfigPath("boneToJoint.csv");
+    loadBoneJointMapping(jointConfigPath);
 }
 
 // 设定模型整体旋转：传入度为单位的欧拉角 (x_deg, y_deg, z_deg)
@@ -76,7 +80,7 @@ bool RobotManager::loadBoneJointMapping(const QString &csvPath)
     return true;
 }
 
-bool RobotManager::loadPlaceCsv(const QString &csvPath, int intervalMs)
+bool RobotManager::loadPlaceCsv(const QString &csvPath, int intervalMs, bool loop)
 {
     QFile f(csvPath);
     if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
@@ -107,6 +111,9 @@ bool RobotManager::loadPlaceCsv(const QString &csvPath, int intervalMs)
     }
     if (m_placeRows.empty())
         return false;
+
+    // set looping behavior according to caller (默认或调用者指定)
+    m_placeLooping = loop;
 
     if (!m_animTimer)
     {
@@ -752,7 +759,26 @@ void RobotManager::advancePlaceFrame()
         }
     }
     applyJointAngles(ja);
-    m_currentRow = (m_currentRow + 1) % (int)m_placeRows.size();
+
+    // m_currentRow = (m_currentRow + 1) % (int)m_placeRows.size(); 
+
+    // ---------------测试代码，从csv读取时是否循环读取---------------
+    if (m_placeLooping) {
+        m_currentRow = (m_currentRow + 1) % (int)m_placeRows.size();
+    } else {
+        // 非循环模式：到最后一行后保持不再回到开头，且停止计时器以节省资源
+        if (m_currentRow + 1 < (int)m_placeRows.size()) {
+            m_currentRow += 1;
+        } else {
+            // 已到最后一帧，停止计时器但保持当前行（最后一行）不变
+            if (m_animTimer) {
+                m_animTimer->stop();
+                // don't delete timer here; keep for potential future reuse
+            }
+        }
+    }
+    // ---------------测试代码，从csv读取时是否循环读取---------------
+
 }
 
 // computeBounds: 计算模型包围盒并将模型居中归一化到一个合适的缩放范围
@@ -801,7 +827,7 @@ void RobotManager::computeBounds()
         {
             if (!m_cameraDistanceLockedDuringPlayback)
             {
-                m_cameraDistance = 2.0f; // default zoom
+                m_cameraDistance = 11.6f; // default zoom
                 m_initialCameraDistance = m_cameraDistance;
                 m_initialCameraDistanceSet = true;
                 qDebug() << "computeBounds: set initialCameraDistance=" << m_initialCameraDistance;
@@ -861,6 +887,8 @@ bool RobotManager::loadLocationCsv(const QString &csvPath)
     }
 
     // 解析完成（不自动应用/播放），调用者可使用 applyLocationRow/startLocationPlayback
+    // 重置已播放计数，确保轨迹在未开始播放前不被绘制
+    m_playedLocationCount = 0;
     qDebug() << "RobotManager::loadLocationCsv: parsed" << m_locationRows.size() << "rows from" << csvPath;
     return true;
 }
@@ -889,11 +917,15 @@ void RobotManager::applyLocationRow(int row)
         qDebug() << "RobotManager::applyLocationRow: invalid row" << row;
         return;
     }
+    // 记录当前行并更新已播放计数，使轨迹只包含已经应用的点
+    m_currentLocationRow = row;
+    if (row + 1 > m_playedLocationCount)
+        m_playedLocationCount = row + 1;
     applyLocation(m_locationRows[row]);
 }
 
 // 启动按间隔播放位置的计时器
-bool RobotManager::startLocationPlayback(int intervalMs)
+bool RobotManager::startLocationPlayback(int intervalMs, bool loop)
 {
     if (m_locationRows.empty())
     {
@@ -902,13 +934,35 @@ bool RobotManager::startLocationPlayback(int intervalMs)
     }
     stopLocationPlayback();
     m_currentLocationRow = 0;
+    // reset played count so trajectory starts empty and grows as positions are applied
+    m_playedLocationCount = 0;
+    // set looping behavior according to caller
+    m_locationLooping = loop;
+
     m_locationTimer = new QTimer(this);
     connect(m_locationTimer, &QTimer::timeout, this, [this]() {
+        // apply current row
         applyLocationRow(m_currentLocationRow);
-        m_currentLocationRow = (m_currentLocationRow + 1) % m_locationRows.size();
+        if (m_locationLooping) {
+            // cycle
+            m_currentLocationRow = (m_currentLocationRow + 1) % m_locationRows.size();
+        } else {
+            // advance until last row, then stop and emit finished signal
+            if (m_currentLocationRow + 1 < (int)m_locationRows.size()) {
+                m_currentLocationRow += 1;
+            } else {
+                // reached last row: stop timer and notify 读取到最后一行位置后停止播放
+                if (m_locationTimer) {
+                    m_locationTimer->stop();
+                    delete m_locationTimer;
+                    m_locationTimer = nullptr;
+                }
+                emit locationPlaybackFinished();    // 发送位置更新结束的信号
+            }
+        }
     });
     m_locationTimer->start(intervalMs);
-    qDebug() << "RobotManager::startLocationPlayback: started rows=" << m_locationRows.size() << " intervalMs=" << intervalMs;
+    qDebug() << "RobotManager::startLocationPlayback: started rows=" << m_locationRows.size() << " intervalMs=" << intervalMs << " loop=" << m_locationLooping;
     return true;
 }
 
@@ -920,4 +974,42 @@ void RobotManager::stopLocationPlayback()
         delete m_locationTimer;
         m_locationTimer = nullptr;
     }
+}
+
+// 构建轨迹 mesh：把已解析的 m_locationRows 转为 SimpleMesh 的顶点数组，顶点顺序即为时间顺序。
+// 该函数只生成顶点数据（positions），渲染（GL_LINE_STRIP、颜色等）由调用者在 GL 上进行。
+SimpleMesh RobotManager::buildTrajectoryMesh() const
+{
+    SimpleMesh out;
+    if (m_locationRows.empty())
+        return out;
+
+    // 只返回已经播放/应用的点，以便视图逐步绘制轨迹
+    int count = qMin((int)m_locationRows.size(), m_playedLocationCount);
+    if (count <= 0)
+        return out;
+
+    out.vertices.reserve(count * 3);
+    for (int i = 0; i < count; ++i)
+    {
+        const QVector3D &p = m_locationRows[i];
+        out.vertices.push_back(p.x());
+        out.vertices.push_back(p.y());
+        out.vertices.push_back(p.z());
+    }
+
+    // 不填充 indices：ModelViewer 会使用无索引的 GL_LINE_STRIP 绘制或按需要读取 vertices
+    return out;
+}
+
+// 停止播放位置点的计时器
+void RobotManager::stopPlacePlayback()
+{
+    if (m_animTimer)
+    {
+        m_animTimer->stop();
+    }
+    // Unlock camera distance when stopping playback
+    m_cameraDistanceLockedDuringPlayback = false;
+    qDebug() << "RobotManager::stopPlacePlayback: stopped place animation";
 }

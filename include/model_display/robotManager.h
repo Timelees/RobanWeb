@@ -1,3 +1,6 @@
+#ifndef MODEL_DISPLAY_ROBOTMANAGER_H
+#define MODEL_DISPLAY_ROBOTMANAGER_H
+
 #include <QApplication>
 #include <QOpenGLWidget>
 #include <QOpenGLFunctions>
@@ -38,7 +41,8 @@ public:
 
 
     bool loadBoneJointMapping(const QString &csvPath);
-    bool loadPlaceCsv(const QString &csvPath, int intervalMs = 100);
+    bool loadPlaceCsv(const QString &csvPath, int intervalMs = 100, bool loop = true);
+    
 
     // 从 CSV 加载位置数据（每行 x,y,z），该函数仅负责解析并把数据保存到内部缓存
     // csvPath: CSV 路径，格式示例见 src/test/test_config/location_test.csv
@@ -58,12 +62,19 @@ public:
     // 调用后会重新应用当前关节角度并触发 frameAdvanced()，以便视图刷新展示新的姿态。
     void setModelRotation(const QVector3D &eulerDeg);
 
+    // 构建并返回用于绘制机器人移动轨迹的简单网格（line strip 格式，顶点顺序即为轨迹点的时间顺序）
+    // 颜色与渲染方式由调用者（视图）决定；
+    SimpleMesh buildTrajectoryMesh() const;
+
 
     // 启动按间隔播放已加载位置的计时器（intervalMs 毫秒），返回是否成功启动
-    bool startLocationPlayback(int intervalMs);
+    // 若 loop=false 则播放到最后一帧后停止并发出 locationPlaybackFinished()
+    bool startLocationPlayback(int intervalMs, bool loop = true);
 
     // 停止位置播放计时器（若存在）
     void stopLocationPlayback();
+    // 停止 place CSV 的计时器（若存在），用于外部中断动作播放
+    void stopPlacePlayback();
 
     // expose computed bounds for viewers
     std::vector<SimpleMesh> &meshes() { return m_meshes; }
@@ -80,6 +91,8 @@ public:
 signals:
     void frameAdvanced();
     void animationStarted();
+    // 当按非循环模式播放位置并到达最后一行时发出该信号
+    void locationPlaybackFinished();
 
 public slots:
     void applyJointAngles(const std::map<int, double> &jointAngles);
@@ -92,6 +105,7 @@ private:
 
 private:
     QString m_modelPath;
+    QString jointConfigPath;
     std::vector<SimpleMesh> m_meshes;
     bool loadSucceeded = false;
     std::vector<std::vector<std::vector<std::pair<int, float>>>> m_meshesInfluences; // 每个 mesh 的每个顶点的骨骼影响
@@ -125,5 +139,14 @@ private:
     QVector<QVector3D> m_locationRows; // 从 CSV 读取的 x,y,z 列表
     QTimer *m_locationTimer = nullptr; // 用于逐行播放位置（若 startLocationPlayback 被调用）
     int m_currentLocationRow = 0;
+    // 已经被播放/应用的轨迹点数量（用于逐步绘制轨迹，初始为0，启动播放时重置）
+    int m_playedLocationCount = 0;
+    // 位置播放是否循环（true）或在到最后一行保持并结束（false）
+    bool m_locationLooping = true;
+    // 是否在播放 place CSV 时循环（true）或在到最后一行保持不再循环（false）
+    bool m_placeLooping = true;
 
 };
+
+#endif // MODEL_DISPLAY_ROBOTMANAGER_H
+

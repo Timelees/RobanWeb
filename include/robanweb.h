@@ -20,6 +20,8 @@
 #include "ros_process/cameraImage.h"
 #include "model_display/modelDisplay.h"
 #include "task_manager/taskmanager.h"
+#include "model_display/robotManager.h"
+#include "model_display/sceneManager.h"
 
 class robanweb : public QMainWindow {
     Q_OBJECT
@@ -77,7 +79,9 @@ private:
     CameraImageMonitor *cameraImageMonitor = nullptr;
     QTimer *imagePullTimer = nullptr;           // 定时器，用于从相机监视器中获取最新帧
 
-    ModelDisplay *modelDisplay = nullptr;        // 3D模型显示
-    
+    ModelDisplay *modelDisplay = nullptr;        // 3D模型显示窗口
+    RobotManager *robotManager = nullptr;        // 机器人管理器
+    SceneManager *sceneManager = nullptr;        // 场景管理器
+
     TaskManager *taskManager = nullptr;        // 任务管理器
 };
