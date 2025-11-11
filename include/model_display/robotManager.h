@@ -61,6 +61,8 @@ public:
     // 参数 eulerDeg 表示绕 X、Y、Z 轴的角度（单位：度）。内部按 Z * Y * X 的顺序复合旋转。
     // 调用后会重新应用当前关节角度并触发 frameAdvanced()，以便视图刷新展示新的姿态。
     void setModelRotation(const QVector3D &eulerDeg);
+    // 返回当前模型的欧拉角（度），便于外部查询并在需要时恢复模型朝向
+    QVector3D modelRotationDeg() const { return m_modelRotationDeg; }
 
     // 构建并返回用于绘制机器人移动轨迹的简单网格（line strip 格式，顶点顺序即为轨迹点的时间顺序）
     // 颜色与渲染方式由调用者（视图）决定；
@@ -91,6 +93,8 @@ public:
 signals:
     void frameAdvanced();
     void animationStarted();
+    // 当 place CSV 播放到最后一帧并停止（非循环模式）时发出该信号
+    void placePlaybackFinished();
     // 当按非循环模式播放位置并到达最后一行时发出该信号
     void locationPlaybackFinished();
 

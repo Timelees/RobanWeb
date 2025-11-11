@@ -12,7 +12,6 @@ RobotManager::RobotManager(const QString &modelPath, QObject *parent)
     // 默认在模型加载成功后将模型整体绕 Y 轴旋转 90 度，便于视图初始展示。
     if (loadSucceeded)
     {
-
         setModelRotation(QVector3D(0.0f, -90.0f, 0.0f));
     }
 
@@ -69,7 +68,7 @@ bool RobotManager::loadBoneJointMapping(const QString &csvPath)
             m_boneToJoint[bone].push_back({jid, axis});
         }
     }
-    qDebug() << "RobotManager: loaded mapping entries" << m_boneToJoint.size();
+    // qDebug() << "RobotManager: loaded mapping entries" << m_boneToJoint.size();
     // apply mapping to bones if already loaded
     for (auto &b : m_bones)
     {
@@ -123,7 +122,7 @@ bool RobotManager::loadPlaceCsv(const QString &csvPath, int intervalMs, bool loo
     m_animTimer->start(intervalMs);
     // mark that playback is active and notify viewers; viewers will decide how to adjust camera
     m_cameraDistanceLockedDuringPlayback = true;
-    qDebug() << "RobotManager: started animation, rows=" << m_placeRows.size() << " cameraDistanceLockedDuringPlayback=" << m_cameraDistanceLockedDuringPlayback;
+    // qDebug() << "RobotManager: started animation, rows=" << m_placeRows.size() << " cameraDistanceLockedDuringPlayback=" << m_cameraDistanceLockedDuringPlayback;
 
     emit animationStarted();        // 连接ModelViewer, 设置视角
     m_currentRow = 0;
@@ -153,21 +152,10 @@ void RobotManager::applyJointAngles(const std::map<int, double> &jointAngles)
             return;
         const Mat4 &orig = m_nodeInfos[nodeIdx].originalLocal;
 
-        // {
-        //     float det = orig.det3();
-
-        //     float maxRow = orig.maxRowNorm3();
-        //     float minRow = 1e30f;
-        //     for(int r = 0; r < 3; ++r){
-        //         float n = sqrtf(orig.m[r][0]*orig.m[r][0] + orig.m[r][1]*orig.m[r][1] + orig.m[r][2]*orig.m[r][2]);
-        //         if (n < minRow) minRow = n;
-        //     }
-        //     if (fabs(det - 1.0f) > 1e-3f || fabs(maxRow - 1.0f) > 1e-3f || fabs(minRow - 1.0f) > 1e-3f) {
-        //         QString nodeName = (nodeIdx >=0 && nodeIdx < (int)m_nodeInfos.size()) ? m_nodeInfos[nodeIdx].name : QString("<unknown>");
-        //         // qDebug() << "applyRotationToNodeLocal: Node" << nodeIdx << nodeName << "originalLocal DET=" << det << " rowNorms(min,max)=" << minRow << maxRow;
-        //     }
-
-        // }
+    // diagnostic checks removed; do NOT emit placePlaybackFinished() here —
+    // placePlaybackFinished is emitted when the place playback sequence completes
+    // (handled in advancePlaceFrame) to avoid premature notifications during
+    // per-node transform application.
 
         // extract translation
         float tx = orig.m[0][3];
@@ -775,6 +763,8 @@ void RobotManager::advancePlaceFrame()
                 m_animTimer->stop();
                 // don't delete timer here; keep for potential future reuse
             }
+            // notify listeners that the place (action) playback reached its end
+            emit placePlaybackFinished();       // 当读取到csv最后一行时发出信号表示动画播放结束
         }
     }
     // ---------------测试代码，从csv读取时是否循环读取---------------
@@ -830,7 +820,7 @@ void RobotManager::computeBounds()
                 m_cameraDistance = 11.6f; // default zoom
                 m_initialCameraDistance = m_cameraDistance;
                 m_initialCameraDistanceSet = true;
-                qDebug() << "computeBounds: set initialCameraDistance=" << m_initialCameraDistance;
+                // qDebug() << "computeBounds: set initialCameraDistance=" << m_initialCameraDistance;
             }
             else
             {
@@ -889,7 +879,7 @@ bool RobotManager::loadLocationCsv(const QString &csvPath)
     // 解析完成（不自动应用/播放），调用者可使用 applyLocationRow/startLocationPlayback
     // 重置已播放计数，确保轨迹在未开始播放前不被绘制
     m_playedLocationCount = 0;
-    qDebug() << "RobotManager::loadLocationCsv: parsed" << m_locationRows.size() << "rows from" << csvPath;
+    // qDebug() << "RobotManager::loadLocationCsv: parsed" << m_locationRows.size() << "rows from" << csvPath;
     return true;
 }
 
@@ -962,7 +952,7 @@ bool RobotManager::startLocationPlayback(int intervalMs, bool loop)
         }
     });
     m_locationTimer->start(intervalMs);
-    qDebug() << "RobotManager::startLocationPlayback: started rows=" << m_locationRows.size() << " intervalMs=" << intervalMs << " loop=" << m_locationLooping;
+    // qDebug() << "RobotManager::startLocationPlayback: 开始更新位置started rows=" << m_locationRows.size() << " intervalMs=" << intervalMs << " loop=" << m_locationLooping;
     return true;
 }
 

@@ -445,7 +445,7 @@ bool SceneManager::loadMarkers(const QString &path)
         QString dir = fi.absolutePath();
         p = QDir::cleanPath(dir + QDir::separator() + "calib_points.json");
     }
-    qDebug() << "SceneManager::loadMarkers path=" << p;
+    // qDebug() << "SceneManager::loadMarkers path=" << p;
     if (!QFile::exists(p))
     {
         qDebug() << "SceneManager::loadMarkers: file does not exist:" << p;

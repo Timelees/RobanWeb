@@ -26,7 +26,7 @@ robanweb::robanweb(QWidget* parent)
     bindSlots();        // 绑定相关槽函数
     // 初始化状态标签
     updateStatusLabel("未连接");
-    qDebug() << "robanweb run in thread:" << QThread::currentThread();
+    // qDebug() << "robanweb run in thread:" << QThread::currentThread();
 }
 
 

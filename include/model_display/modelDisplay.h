@@ -109,6 +109,8 @@ private:
 
     // connection for demo sequence (used to disconnect when stopping demo)
     std::shared_ptr<QMetaObject::Connection> m_demoConn;
+    // 当 place 动画播放完成后触发旋转的连接句柄
+    std::shared_ptr<QMetaObject::Connection> m_demoPlaceConn;
 
     // rotation animation for demo 旋转动画测试参数
     QTimer *m_demoRotateTimer = nullptr;
