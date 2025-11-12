@@ -33,5 +33,9 @@ openGLMatrix_topic_type: "std_msgs/Float64MultiArray"
 cameraPose_topic: "/SLAM/CameraPoint"
 cameraPose_topic_type: "geometry_msgs/PoseStamped"
 
+# robot Pose话题
+pose_stamped_topic: "/initialpose"
+pose_stamped_topic_type: "geometry_msgs/PoseWithCovarianceStamped"
+
 
 

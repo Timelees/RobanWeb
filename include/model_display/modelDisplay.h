@@ -23,7 +23,7 @@
 #include <QMenu>
 #include <QAction>
 #include <QToolTip>
-
+#include <QLabel>
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
@@ -63,7 +63,7 @@ protected:
 
 
 private:
-    void setToolBar();         // 设置窗口顶部工具栏
+    void setDisplayWindow();         // 设置窗口界面
     static QString resolveTexturePathRuntime(const QString &path);
     bool screenPosToRay(const QPoint &p, QVector3D &outOrigin, QVector3D &outDir);     // 捕获鼠标射线
     void onRobotAnimationStarted();         // 机器人动画开始回调
@@ -78,6 +78,7 @@ public slots:
     void onSaveMarkers();        // 保存标记到磁盘
     void onDeleteSelected();     // 删除当前选中的标记
     void onClearAllMarkers();   // 删除所有标记
+    void onSceneMapping();      // 场景映射函数
 
 private:
     RobotManager *m_robot = nullptr;
@@ -103,6 +104,8 @@ private:
     int m_selectedMarkerId = -1;
     // 顶部工具栏（按钮行）
     QWidget *m_topBar = nullptr;
+    // 右键点击浮动显示信息标签
+    QLabel *m_tooltipLabel = nullptr;
 
     // 位置播放状态 （非必要，后面实际使用通过接收slam位置的更新来更新模型位置）
     bool m_locationPlaying = false;

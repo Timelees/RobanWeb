@@ -1,5 +1,6 @@
 #include "model_display/robotManager.h"
 #include "util/load_csv.hpp"
+#include <QDateTime>
 RobotManager::RobotManager(const QString &modelPath, QObject *parent)
     : QObject(parent), m_modelPath(modelPath)
 {
@@ -845,6 +846,7 @@ bool RobotManager::loadLocationCsv(const QString &csvPath)
     QTextStream ts(&f);
     // 解析 CSV：仅把数据保存到 m_locationRows，其他行为（应用/播放）由单独的函数负责
     m_locationRows.clear();
+    m_locationTimes.clear();
     QString firstLine = ts.readLine();
     auto tryParseLine = [&](const QString &line) {
         QString s = line.trimmed();
@@ -879,6 +881,8 @@ bool RobotManager::loadLocationCsv(const QString &csvPath)
     // 解析完成（不自动应用/播放），调用者可使用 applyLocationRow/startLocationPlayback
     // 重置已播放计数，确保轨迹在未开始播放前不被绘制
     m_playedLocationCount = 0;
+    // ensure timestamps vector matches rows (initialized to 0 -> not-yet-played)
+    m_locationTimes.resize(m_locationRows.size());
     // qDebug() << "RobotManager::loadLocationCsv: parsed" << m_locationRows.size() << "rows from" << csvPath;
     return true;
 }
@@ -933,6 +937,19 @@ bool RobotManager::startLocationPlayback(int intervalMs, bool loop)
     connect(m_locationTimer, &QTimer::timeout, this, [this]() {
         // apply current row
         applyLocationRow(m_currentLocationRow);
+        // record timestamp for this played row (seconds)记录时间戳
+        double t = QDateTime::currentDateTimeUtc().toMSecsSinceEpoch() / 1000.0;
+        if (m_currentLocationRow >= 0 && m_currentLocationRow < m_locationTimes.size())
+        {
+            m_locationTimes[m_currentLocationRow] = t;
+        }
+        else if (m_currentLocationRow >= 0 && m_currentLocationRow < m_locationRows.size())
+        {
+            // ensure m_locationTimes has same size
+            if (m_locationTimes.size() != m_locationRows.size())
+                m_locationTimes.resize(m_locationRows.size());
+            m_locationTimes[m_currentLocationRow] = t;
+        }
         if (m_locationLooping) {
             // cycle
             m_currentLocationRow = (m_currentLocationRow + 1) % m_locationRows.size();
@@ -980,12 +997,34 @@ SimpleMesh RobotManager::buildTrajectoryMesh() const
         return out;
 
     out.vertices.reserve(count * 3);
+    out.colors.reserve(count * 4);  // 颜色设置
     for (int i = 0; i < count; ++i)
     {
         const QVector3D &p = m_locationRows[i];
         out.vertices.push_back(p.x());
         out.vertices.push_back(p.y());
         out.vertices.push_back(p.z());
+        // 轨迹颜色设置
+        // default color green
+        float r = 0.0f, g = 1.0f, b = 0.0f;
+        float a = 1.0f;
+        // compute alpha based on time if available
+        if (i < m_locationTimes.size() && m_locationTimes[i] > 0 && m_trajectoryFadeSeconds > 0.0) {
+            double now = QDateTime::currentDateTimeUtc().toMSecsSinceEpoch() / 1000.0;
+            double playedT = m_locationTimes[i];
+            double age = now - playedT; // seconds since played
+            if (age >= m_trajectoryFadeSeconds) {
+                a = 0.0f;
+            } else if (age <= 0.0) {
+                a = 1.0f;
+            } else {
+                a = float(1.0 - (age / m_trajectoryFadeSeconds));
+            }
+        }
+        out.colors.push_back(r);
+        out.colors.push_back(g);
+        out.colors.push_back(b);
+        out.colors.push_back(a);
     }
 
     // 不填充 indices：ModelViewer 会使用无索引的 GL_LINE_STRIP 绘制或按需要读取 vertices

@@ -131,7 +131,7 @@ void robanweb::init(){
     QString modelScene = QString::fromUtf8("..\\assets\\scene.obj"); // 默认场景模型路径
     
     robotManager = new RobotManager(modelRobot, this);    // 机器人管理器
-    sceneManager = new SceneManager(modelScene, this);    // 场景管理器
+    sceneManager = new SceneManager(webSocketWorker, modelScene, this);    // 场景管理器
     
     if (ui->modelDisplay) {
         QWidget *placeholder = ui->modelDisplay; // UI 中的占位 widget

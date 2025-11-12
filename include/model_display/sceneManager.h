@@ -19,6 +19,7 @@
 #include <QDir>
 #include <QByteArray>
 #include <QPainter>
+#include <QThread>
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -30,6 +31,10 @@
 #include <cstring>
 
 #include "model_display/meshes.h"
+#include "socket_process/webSocketWorker.h"
+#include "ros_process/pose.h"
+
+class WebSocketWorker;
 
 // ---------- SceneManager ----------
 // 负责加载场景模型（静态），提供 meshes 给视图渲染
@@ -37,8 +42,12 @@ class SceneManager : public QObject
 {
     Q_OBJECT
 public:
+    explicit SceneManager(WebSocketWorker *webSocketWorker, const QString &modelPath, QObject *parent = nullptr);
+    // compatibility ctor used by tests/tools that don't provide a WebSocketWorker
     explicit SceneManager(const QString &modelPath, QObject *parent = nullptr);
     ~SceneManager() override;
+
+    void init();                             // 初始化
 
     bool loadModel(const std::string &file);        // 加载模型
     void createGridMesh(float size = 20.0f, int divisions = 20, float yOffset = 0.0f);      // 创建网格地面平面
@@ -63,6 +72,8 @@ public:
         float radius = 0.05f;     // 可视半径（模型单位）
         int meshIndex = -1;       // 对应 m_meshes 中的索引
         QColor color;             // 显示颜色
+        // 记录添加该标记时采集到的机器人位姿 (x,y,yaw)
+        QVector3D robotPoseAtCapture;
     };
 
     // 添加一个标记（会在内部创建球体 mesh 并返回分配的 marker id）
@@ -81,7 +92,14 @@ public:
     // 删除所有标记（移除所有标记数据，并清空对应 mesh 的几何数据）
     void clearAllMarkers();
 
+    void SceneMapping(); // 场景映射函数
+
+
     const std::vector<Marker> &markers() const { return m_markers; }
+
+private:
+    // 内部函数：创建球体 mesh 并返回 mesh 索引（仅 SceneManager 内部使用）
+    int addMarkerSphere(const QVector3D &pos, float radius = 0.05f, const QColor &color = QColor(0, 255, 0));
 
 private:
     QString m_modelPath;
@@ -91,8 +109,13 @@ private:
     // 内部标记存储
     std::vector<Marker> m_markers;
     int m_nextMarkerId = 1;
-    // 内部函数：创建球体 mesh 并返回 mesh 索引（仅 SceneManager 内部使用）
-    int addMarkerSphere(const QVector3D &pos, float radius = 0.05f, const QColor &color = QColor(0, 255, 0));
+
+    WebSocketWorker *m_worker;
+
+    PoseMonitor *poseMonitor;       // 位姿监视器
+    QVector3D robotPose;            // 机器人当前位姿
+
+    
 };
 
 

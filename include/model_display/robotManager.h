@@ -141,6 +141,10 @@ private:
 
     // --- 位置信息播放相关 ---
     QVector<QVector3D> m_locationRows; // 从 CSV 读取的 x,y,z 列表
+    // per-location timestamps in seconds (monotonic), aligned with m_locationRows
+    QVector<double> m_locationTimes;
+    // 轨迹持续时长
+    double m_trajectoryFadeSeconds = 5.0;
     QTimer *m_locationTimer = nullptr; // 用于逐行播放位置（若 startLocationPlayback 被调用）
     int m_currentLocationRow = 0;
     // 已经被播放/应用的轨迹点数量（用于逐步绘制轨迹，初始为0，启动播放时重置）

@@ -18,6 +18,8 @@ ModelDisplay::ModelDisplay(RobotManager *robot, SceneManager *scene, QWidget *pa
         setMinimumSize(577, 429);
     }
     setFocusPolicy(Qt::StrongFocus);
+   
+   
 
     if (m_robot)
     {
@@ -36,7 +38,9 @@ ModelDisplay::ModelDisplay(RobotManager *robot, SceneManager *scene, QWidget *pa
         }
     }
 
-    setToolBar(); // 设置顶部工具栏
+
+
+    setDisplayWindow(); // 设置窗口界面
 }
 
 ModelDisplay::~ModelDisplay() = default;
@@ -201,7 +205,7 @@ void ModelDisplay::test_showAction()
 }
 
 // 设置工具栏
-void ModelDisplay::setToolBar()
+void ModelDisplay::setDisplayWindow()
 {
     // 在 widget 内部创建水平工具栏（按钮行），放在窗口顶部
     m_topBar = new QWidget(this);
@@ -210,13 +214,15 @@ void ModelDisplay::setToolBar()
     QHBoxLayout *hb = new QHBoxLayout(m_topBar);
     hb->setContentsMargins(4, 4, 4, 4);
     hb->setSpacing(6);
-    // 创建五个按钮，按需连接到已有槽
+    // 创建按钮，按需连接到已有槽
     QPushButton *btnMap = new QPushButton(QString::fromUtf8("地图标定"), m_topBar);
     QPushButton *btnPickup = new QPushButton(QString::fromUtf8("取货点标定"), m_topBar);
     QPushButton *btnPlace = new QPushButton(QString::fromUtf8("放置点标定"), m_topBar);
     QPushButton *btnSave = new QPushButton(QString::fromUtf8("标定保存"), m_topBar);
     QPushButton *btnDelete = new QPushButton(QString::fromUtf8("标定删除"), m_topBar);
     QPushButton *btnClearAll = new QPushButton(QString::fromUtf8("全部删除"), m_topBar);
+    QPushButton *btnSceneMapping = new QPushButton(QString::fromUtf8("场景映射"), m_topBar);
+
     // 将按钮加入布局
     hb->addWidget(btnMap);
     hb->addWidget(btnPickup);
@@ -224,6 +230,8 @@ void ModelDisplay::setToolBar()
     hb->addWidget(btnSave);
     hb->addWidget(btnDelete);
     hb->addWidget(btnClearAll);
+    hb->addWidget(btnSceneMapping);
+
     // ----------------------------------
     // 播放位置（路径）按钮
     QPushButton *btnPlayLocations = new QPushButton(QString::fromUtf8("流程演示"), m_topBar);
@@ -238,8 +246,8 @@ void ModelDisplay::setToolBar()
     connect(btnSave, &QPushButton::clicked, this, &ModelDisplay::onSaveMarkers);
     connect(btnDelete, &QPushButton::clicked, this, &ModelDisplay::onDeleteSelected);
     connect(btnClearAll, &QPushButton::clicked, this, &ModelDisplay::onClearAllMarkers);
-
-
+    connect(btnSceneMapping, &QPushButton::clicked, this,  &ModelDisplay::onSceneMapping);
+           
     // ---------------------------------------  流程演示按钮逻辑，后续删除
     connect(btnPlayLocations, &QPushButton::clicked, this, [this, btnPlayLocations]()
             {
@@ -283,6 +291,12 @@ void ModelDisplay::setToolBar()
     // ---------------------------------------
 
 
+    // 设置浮动信息标签
+    m_tooltipLabel = new QLabel(this);
+    m_tooltipLabel->setWindowFlags(Qt::ToolTip);
+    m_tooltipLabel->setStyleSheet("background-color: rgba(240,248,255,1); border: 1px solid #888; padding: 4px; font-size: 11px;");
+    m_tooltipLabel->hide();
+    m_tooltipLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
 
     // 初始布局（位置和高度）
     int th = btnMap->sizeHint().height() + 8;
@@ -388,17 +402,30 @@ void ModelDisplay::paintGL()
         SimpleMesh traj = m_robot->buildTrajectoryMesh();
         if (!traj.vertices.empty())
         {
-            // 关闭纹理，设置线宽与颜色
+            // 使用顶点颜色绘制轨迹，启用混合以支持 alpha
             glDisable(GL_TEXTURE_2D);
             glLineWidth(2.0f);
-            glColor3f(0.0f, 1.0f, 0.0f); // 绿色
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
             glBegin(GL_LINE_STRIP);
-            for (size_t vi = 0; vi + 2 < traj.vertices.size(); vi += 3)
+            size_t vcount = traj.vertices.size() / 3;
+            bool hasColor = (traj.colors.size() / 4) >= vcount;
+            for (size_t vi = 0; vi < vcount; ++vi)
             {
-                glVertex3f(traj.vertices[vi + 0], traj.vertices[vi + 1], traj.vertices[vi + 2]);
+                if (hasColor) {
+                    float r = traj.colors[4 * vi + 0];
+                    float g = traj.colors[4 * vi + 1];
+                    float b = traj.colors[4 * vi + 2];
+                    float a = traj.colors[4 * vi + 3];
+                    glColor4f(r, g, b, a);
+                } else {
+                    glColor4f(0.0f, 1.0f, 0.0f, 1.0f);
+                }
+                glVertex3f(traj.vertices[3 * vi + 0], traj.vertices[3 * vi + 1], traj.vertices[3 * vi + 2]);
             }
             glEnd();
-            // 恢复默认颜色（白色），线宽和纹理状态由后续绘制自行调整
+            // 恢复状态
+            glDisable(GL_BLEND);
             glColor3f(1.0f, 1.0f, 1.0f);
         }
     }
@@ -421,7 +448,7 @@ void ModelDisplay::mousePressEvent(QMouseEvent *e)
 void ModelDisplay::mouseMoveEvent(QMouseEvent *e)
 {
     QPoint delta = e->pos() - m_lastPos;
-    // 左键按住：旋转视角（保留原先行为）
+    // 左键按住：旋转视角
     if (e->buttons() & Qt::LeftButton)
     {
         m_rotX += delta.y() * 0.5f;
@@ -481,22 +508,38 @@ void ModelDisplay::mouseReleaseEvent(QMouseEvent *event)
     // 右键点击标记点显示标记信息提示框
     if (event->button() == Qt::RightButton)
     {
-        QPoint delta = event->pos() - m_pressPos; // m_pressPos set on press only for left button; allow small movement anyway
-        if (delta.manhattanLength() < 12)
+        QPoint delta = event->pos() - m_pressPos; 
+        if (delta.manhattanLength() < 6)
         {
             QVector3D origin, dir, hitMarkerPt;
-            if (screenPosToRay(event->pos(), origin, dir) && m_scene)
+            if (screenPosToRay(event->pos(), origin, dir))
             {
-                int mid = m_scene->pickMarkerByRay(origin, dir, hitMarkerPt);
-                if (mid >= 0)
+                if (m_scene)
                 {
-                    QString txt = QString("id=%1\nx=%2\ny=%3\nz=%4")
-                                      .arg(mid)
-                                      .arg(hitMarkerPt.x(), 0, 'f', 3)
-                                      .arg(hitMarkerPt.y(), 0, 'f', 3)
-                                      .arg(hitMarkerPt.z(), 0, 'f', 3);
-                    QToolTip::showText(mapToGlobal(event->pos()), txt, this);
-                    qDebug() << "Right-click marker id=" << mid << " at " << hitMarkerPt;
+                    int mid = m_scene->pickMarkerByRay(origin, dir, hitMarkerPt);
+                    if (mid >= 0)
+                    {
+                        QString txt = QString("id=%1\nx=%2\ny=%3\nz=%4")
+                                          .arg(mid)
+                                          .arg(hitMarkerPt.x(), 0, 'f', 3)
+                                          .arg(hitMarkerPt.y(), 0, 'f', 3)
+                                          .arg(hitMarkerPt.z(), 0, 'f', 3);
+                        // 显示浮动标签
+                        QPoint pos = event->pos();
+                        m_tooltipLabel->setText(txt);
+                        m_tooltipLabel->adjustSize();
+                        m_tooltipLabel->move(mapToGlobal(pos) + QPoint(10, -m_tooltipLabel->height() - 10));
+                        m_tooltipLabel->show();
+
+                        // 3秒后隐藏
+                        QTimer::singleShot(3000, m_tooltipLabel, &QLabel::hide);
+
+                        qDebug() << "Right-click marker id=" << mid << " at " << hitMarkerPt;
+                    }
+                }
+                else
+                {
+                    qDebug() << "RightClick: m_scene is null, cannot pick marker.";
                 }
             }
         }
@@ -514,6 +557,7 @@ void ModelDisplay::wheelEvent(QWheelEvent *event)
     // qDebug() << "Mouse wheel: cameraDistance=" << m_cameraDistance;
     update();
 }
+
 // 运行时解析纹理路径
 QString ModelDisplay::resolveTexturePathRuntime(const QString &path)
 {
@@ -820,4 +864,13 @@ void ModelDisplay::onClearAllMarkers()
     createMeshes(m_scene->meshes());
     doneCurrent();
     update();
+}
+
+// 场景映射按钮回调
+void ModelDisplay::onSceneMapping()
+{
+    if (m_scene)
+    {
+        m_scene->SceneMapping();
+    }
 }

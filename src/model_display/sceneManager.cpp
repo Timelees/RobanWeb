@@ -4,14 +4,38 @@
 #include <QJsonArray>
 #include <QJsonObject>
 
-SceneManager::SceneManager(const QString &modelPath, QObject *parent)
-    : QObject(parent), m_modelPath(modelPath)
+SceneManager::SceneManager(WebSocketWorker *webSocketWorker, const QString &modelPath, QObject *parent)
+    : QObject(parent), m_modelPath(modelPath), m_worker(webSocketWorker)
 {
-    loadSucceeded = loadModel(modelPath.toStdString());
+    init();
+}
+
+// compatibility constructor when no WebSocketWorker is available (e.g. unit tests)
+SceneManager::SceneManager(const QString &modelPath, QObject *parent)
+    : QObject(parent), m_modelPath(modelPath), m_worker(nullptr)
+{
+    init();
 }
 
 // non-inline destructor to ensure vtable is emitted in this TU
 SceneManager::~SceneManager() {}
+
+void SceneManager::init(){
+    loadSucceeded = loadModel(m_modelPath.toStdString());   // 加载模型
+
+    poseMonitor = new PoseMonitor(m_worker);
+    // connect websocket raw messages to pose parser if we have a worker
+    if (m_worker) {
+        connect(m_worker, &WebSocketWorker::messageReceived, poseMonitor, &PoseMonitor::onMessageReceived);
+    }
+    // when poseMonitor has a new pose, update our robotPose (safe regardless of m_worker)
+    connect(poseMonitor, &PoseMonitor::poseUpdated, this, [this](const QVector3D &p) {
+        this->robotPose = p;
+        // qDebug() << "SceneManager: robotPose updated" << p;
+    });
+
+}
+
 
 bool SceneManager::loadModel(const std::string &file)
 {
@@ -431,6 +455,8 @@ int SceneManager::addCalibrationMarker(MarkerType type, const QVector3D &pos, fl
     mk.radius = radius;
     mk.meshIndex = meshIdx;
     mk.color = color;
+    // capture current robot pose (may be default if not available)
+    mk.robotPoseAtCapture = robotPose;
     m_markers.push_back(mk);
     return mk.id;
 }
@@ -557,6 +583,7 @@ int SceneManager::pickMarkerByRay(const QVector3D &rayOrigin, const QVector3D &r
 {
     int bestId = -1;
     float bestT = 1e30f;
+    // qDebug() << "pickMarkerByRay: markers.count=" << m_markers.size() << " rayOrigin=" << rayOrigin << " rayDir=" << rayDir;
     for (const Marker &m : m_markers)
     {
         // 项目：计算射线到点的最近点参数 t
@@ -565,6 +592,7 @@ int SceneManager::pickMarkerByRay(const QVector3D &rayOrigin, const QVector3D &r
         if (t <= 0) continue; // 在射线后方
         QVector3D closest = rayOrigin + rayDir * t;
         float dist2 = (closest - m.pos).lengthSquared();
+        qDebug() << "  marker id=" << m.id << " pos=" << m.pos << " radius=" << m.radius << " t=" << t << " dist2=" << dist2;
         if (dist2 <= m.radius * m.radius)
         {
             if (t < bestT)
@@ -575,6 +603,7 @@ int SceneManager::pickMarkerByRay(const QVector3D &rayOrigin, const QVector3D &r
             }
         }
     }
+    // qDebug() << "  pick result bestId=" << bestId << " bestT=" << bestT << " outHit=" << outHit;
     return bestId;
 }
 
@@ -600,5 +629,157 @@ void SceneManager::clearAllMarkers()
     // 同步保存到磁盘：将标记文件更新为当前（空）状态，确保 JSON 中不再包含已删除的标定点
     bool ok = saveMarkers();
     qDebug() << "SceneManager::clearAllMarkers: saved empty markers ->" << ok;
+}
+
+
+// 待测试：使用场景中的地图标记点计算从场景坐标到机器人坐标的仿射映射
+void SceneManager::SceneMapping(){
+    // 收集地图标记点（应该是点击场景按钮后新添加的标记点）
+    std::vector<Marker> mapMarkers;
+    for (const Marker &m : m_markers){
+        if (m.type == Marker_Map)
+            mapMarkers.push_back(m);
+    }
+    if (mapMarkers.size() < 4){
+        qDebug() << "SceneManager::SceneMapping: need at least 4 map markers (have)" << mapMarkers.size();
+        return;
+    }
+
+    // 使用前四个标记点（可以扩展为选择最佳四个）
+    std::vector<Marker> sel(mapMarkers.begin(), mapMarkers.begin() + 4);
+
+    // 构建从场景 (sx, sy) 到机器人 (rx, ry) 的最小二乘仿射映射
+    // 模型: [rx]   [a b tx] [sx]
+    //        [ry] = [c d ty] [sy]
+    // For rx and ry separately solve p = argmin ||M * p - r||, where M = [sx sy 1]
+
+    int N = 4;
+    // compute M^T * M (3x3) and M^T * r for rx and ry
+    double MtM[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
+    double Mtrx[3] = {0,0,0};
+    double Mtry[3] = {0,0,0};
+    for (int i=0;i<N;++i){
+        double sx = sel[i].pos.x();
+        double sy = sel[i].pos.y();
+        double rx = sel[i].robotPoseAtCapture.x();
+        double ry = sel[i].robotPoseAtCapture.y();
+        double row[3] = {sx, sy, 1.0};
+        for (int r=0;r<3;++r){
+            for (int c=0;c<3;++c){
+                MtM[r][c] += row[r] * row[c];
+            }
+            Mtrx[r] += row[r] * rx;
+            Mtry[r] += row[r] * ry;
+        }
+    }
+
+    // invert 3x3 MtM
+    auto invert3 = [&](double in[3][3], double out[3][3]) -> bool {
+        // compute determinant and adjugate
+        double a = in[0][0], b = in[0][1], c = in[0][2];
+        double d = in[1][0], e = in[1][1], f = in[1][2];
+        double g = in[2][0], h = in[2][1], i = in[2][2];
+        double det = a*(e*i - f*h) - b*(d*i - f*g) + c*(d*h - e*g);
+        if (fabs(det) < 1e-12) return false;
+        double invdet = 1.0 / det;
+        out[0][0] =  (e*i - f*h) * invdet;
+        out[0][1] = -(b*i - c*h) * invdet;
+        out[0][2] =  (b*f - c*e) * invdet;
+        out[1][0] = -(d*i - f*g) * invdet;
+        out[1][1] =  (a*i - c*g) * invdet;
+        out[1][2] = -(a*f - c*d) * invdet;
+        out[2][0] =  (d*h - e*g) * invdet;
+        out[2][1] = -(a*h - b*g) * invdet;
+        out[2][2] =  (a*e - b*d) * invdet;
+        return true;
+    };
+
+    double inv[3][3];
+    if (!invert3(MtM, inv)){
+        qDebug() << "SceneManager::SceneMapping: failed to invert MtM matrix (degenerate points)";
+        return;
+    }
+
+    // compute params p = inv * M^T * r for rx and ry
+    double px[3] = {0,0,0};
+    double py[3] = {0,0,0};
+    for (int r=0;r<3;++r){
+        for (int c=0;c<3;++c){
+            px[r] += inv[r][c] * Mtrx[c];
+            py[r] += inv[r][c] * Mtry[c];
+        }
+    }
+    double a = px[0], b = px[1], tx = px[2];
+    double c_ = py[0], d = py[1], ty = py[2];
+
+    // compute bounding rectangle in scene coordinates
+    double minx = sel[0].pos.x(), maxx = sel[0].pos.x();
+    double miny = sel[0].pos.y(), maxy = sel[0].pos.y();
+    for (int i=1;i<N;++i){
+        double sx = sel[i].pos.x();
+        double sy = sel[i].pos.y();
+        minx = std::min(minx, sx); maxx = std::max(maxx, sx);
+        miny = std::min(miny, sy); maxy = std::max(maxy, sy);
+    }
+
+    // grid step (meters) — 可根据需要调整或暴露为参数
+    const double step = 0.05; // 5cm resolution
+
+    // normalize start/end to step grid boundaries
+    int ix0 = int(floor(minx / step));
+    int ix1 = int(ceil(maxx / step));
+    int iy0 = int(floor(miny / step));
+    int iy1 = int(ceil(maxy / step));
+
+    QJsonArray arr;
+    for (int ix = ix0; ix <= ix1; ++ix){
+        for (int iy = iy0; iy <= iy1; ++iy){
+            double sx = ix * step;
+            double sy = iy * step;
+            double rx = a * sx + b * sy + tx;
+            double ry = c_ * sx + d * sy + ty;
+            QJsonObject o;
+            o["scene_x"] = sx;
+            o["scene_y"] = sy;
+            o["robot_x"] = rx;
+            o["robot_y"] = ry;
+            arr.append(o);
+        }
+    }
+
+    QJsonObject root;
+    root["mapping"] = arr;
+    QJsonArray corners;
+    for (int i=0;i<N;++i){
+        QJsonObject c;
+        c["scene_x"] = sel[i].pos.x();
+        c["scene_y"] = sel[i].pos.y();
+        c["robot_x"] = sel[i].robotPoseAtCapture.x();
+        c["robot_y"] = sel[i].robotPoseAtCapture.y();
+        corners.append(c);
+    }
+    root["corners"] = corners;
+
+    QJsonDocument doc(root);
+
+    // write to config/SceneMapping.json next to application config
+    QString outPath;
+    QDir appdir(QCoreApplication::applicationDirPath());
+    QString cand = QDir::cleanPath(appdir.filePath(QString("../config/SceneMapping.json")));
+    QDir cfgdir = QFileInfo(cand).absoluteDir();
+    if (!cfgdir.exists()){
+        if (!cfgdir.mkpath(".")){
+            qDebug() << "SceneManager::SceneMapping: failed to create config dir" << cfgdir.absolutePath();
+            return;
+        }
+    }
+    QFile f(cand);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)){
+        qDebug() << "SceneManager::SceneMapping: failed to open file for write" << cand << f.errorString();
+        return;
+    }
+    qint64 written = f.write(doc.toJson(QJsonDocument::Indented));
+    f.close();
+    qDebug() << "SceneManager::SceneMapping: wrote" << written << "bytes to" << cand << "grid points=" << arr.size();
 }
 

@@ -26,6 +26,8 @@ struct SimpleMesh
     std::vector<float> normals;   // x,y,z
     std::vector<float> texcoords; // u,v
     std::vector<unsigned int> indices;
+    // optional per-vertex colors (r,g,b,a) matching vertices count (4 floats per vertex)
+    std::vector<float> colors;    // r,g,b,a
     QString diffuseTexPath;
     QImage diffuseImage;
     unsigned int texId = 0;
