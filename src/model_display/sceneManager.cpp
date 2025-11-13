@@ -1,8 +1,5 @@
 #include "model_display/sceneManager.h"
-#include <QCoreApplication>
-#include <QJsonDocument>
-#include <QJsonArray>
-#include <QJsonObject>
+#include "util/load_csv.hpp"
 
 SceneManager::SceneManager(WebSocketWorker *webSocketWorker, const QString &modelPath, QObject *parent)
     : QObject(parent), m_modelPath(modelPath), m_worker(webSocketWorker)
@@ -23,18 +20,78 @@ SceneManager::~SceneManager() {}
 void SceneManager::init(){
     loadSucceeded = loadModel(m_modelPath.toStdString());   // 加载模型
 
-    poseMonitor = new PoseMonitor(m_worker);
-    // connect websocket raw messages to pose parser if we have a worker
-    if (m_worker) {
-        connect(m_worker, &WebSocketWorker::messageReceived, poseMonitor, &PoseMonitor::onMessageReceived);
-    }
-    // when poseMonitor has a new pose, update our robotPose (safe regardless of m_worker)
-    connect(poseMonitor, &PoseMonitor::poseUpdated, this, [this](const QVector3D &p) {
-        this->robotPose = p;
-        // qDebug() << "SceneManager: robotPose updated" << p;
-    });
+    // // ----------------暂时注释---------------------
+    // poseMonitor = new PoseMonitor(m_worker);
+    // // connect websocket raw messages to pose parser if we have a worker
+    // if (m_worker) {
+    //     connect(m_worker, &WebSocketWorker::messageReceived, poseMonitor, &PoseMonitor::onMessageReceived);
+    // }
+    // // 从poseMonitor获取更新的机器人位姿更新到robotPose
+    // connect(poseMonitor, &PoseMonitor::poseUpdated, this, [this](const QVector3D &p) {
+    //     this->robotPose = p;
+    //     // qDebug() << "SceneManager: robotPose updated" << p;
+    // });
+    // // ----------------暂时注释---------------------
 
+
+    // 场景映射测试
+    // 从test_sceneCornerMapping函数获取四个角点的位姿数据
+    // 右上、左上、左下、右下
+    cornerPoints = test_sceneCornerMapping();
 }
+
+// 场景映射测试 (成员函数)
+QVector<QVector3D> SceneManager::test_sceneCornerMapping(){
+    QString poseCsvPath = resolveConfigPath("test_robot_cornerPose.csv");
+    // 解析文件
+    QFile f(poseCsvPath);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        qDebug() << "SceneManager: fail open location csv" << poseCsvPath;
+        return QVector<QVector3D>();
+    }
+    QTextStream ts(&f);
+    // 临时容器用于保存解析到的角点/位姿
+    QVector<QVector3D> corners;
+    corners.clear();
+    QString firstLine = ts.readLine(); // 读取并忽略标题行
+    // 解析每一行位姿数据
+    auto tryParseLine = [&](const QString &line){
+        QString s = line.trimmed(); 
+        if (s.isEmpty())
+            return;
+        QStringList parts = s.split(',');
+        if(parts.size() < 3)    return;
+        bool okx, oky, okyaw;
+        double x = parts[0].trimmed().toDouble(&okx);
+        double y = parts[1].trimmed().toDouble(&oky);
+        double yaw = parts[2].trimmed().toDouble(&okyaw);
+        if (okx && oky && okyaw){
+            qDebug() << "Parsed pose:" << x << y << yaw;
+            // 在这里可以使用解析出的 x, y, yaw 值
+            corners.append(QVector3D(float(x), float(y), float(yaw)));
+        
+        }
+    };
+
+    // 如果第一行看起来像数据则解析
+    if (!firstLine.isEmpty() && (firstLine.at(0).isDigit() || firstLine.at(0) == QChar('-') || firstLine.startsWith("0")))  
+        tryParseLine(firstLine);
+
+    while (!ts.atEnd())
+    {
+        QString line = ts.readLine();
+        tryParseLine(line);
+    }
+    f.close();
+
+    if(corners.size() !=4 ){
+        qDebug() << "SceneManager: corner pose count !=4 , actual count:" << corners.size();
+        return QVector<QVector3D>();
+    }
+    return corners;
+}
+
 
 
 bool SceneManager::loadModel(const std::string &file)
@@ -592,7 +649,7 @@ int SceneManager::pickMarkerByRay(const QVector3D &rayOrigin, const QVector3D &r
         if (t <= 0) continue; // 在射线后方
         QVector3D closest = rayOrigin + rayDir * t;
         float dist2 = (closest - m.pos).lengthSquared();
-        qDebug() << "  marker id=" << m.id << " pos=" << m.pos << " radius=" << m.radius << " t=" << t << " dist2=" << dist2;
+        // qDebug() << "  marker id=" << m.id << " pos=" << m.pos << " radius=" << m.radius << " t=" << t << " dist2=" << dist2;
         if (dist2 <= m.radius * m.radius)
         {
             if (t < bestT)
@@ -659,10 +716,20 @@ void SceneManager::SceneMapping(){
     double Mtrx[3] = {0,0,0};
     double Mtry[3] = {0,0,0};
     for (int i=0;i<N;++i){
+    
+        // 场景坐标系使用射线模型捕获的X和Z作为x和y坐标
         double sx = sel[i].pos.x();
-        double sy = sel[i].pos.y();
-        double rx = sel[i].robotPoseAtCapture.x();
-        double ry = sel[i].robotPoseAtCapture.y();
+        double sy = sel[i].pos.z();
+        // double rx = sel[i].robotPoseAtCapture.x();
+        // double ry = sel[i].robotPoseAtCapture.y();
+
+        // ------- 测试 -------------
+        // 用test_robot_cornerPose.csv中读取的四个点作为标定时收到的机器人位置
+        double rx = cornerPoints[i].x();
+        double ry = cornerPoints[i].y();
+        // ------- 测试 -------------
+
+
         double row[3] = {sx, sy, 1.0};
         for (int r=0;r<3;++r){
             for (int c=0;c<3;++c){
@@ -713,11 +780,12 @@ void SceneManager::SceneMapping(){
     double c_ = py[0], d = py[1], ty = py[2];
 
     // compute bounding rectangle in scene coordinates
+    // compute bounding rectangle in scene XZ plane
     double minx = sel[0].pos.x(), maxx = sel[0].pos.x();
-    double miny = sel[0].pos.y(), maxy = sel[0].pos.y();
+    double miny = sel[0].pos.z(), maxy = sel[0].pos.z();
     for (int i=1;i<N;++i){
         double sx = sel[i].pos.x();
-        double sy = sel[i].pos.y();
+        double sy = sel[i].pos.z();         // 场景的平面y对应模型空间的Z坐标
         minx = std::min(minx, sx); maxx = std::max(maxx, sx);
         miny = std::min(miny, sy); maxy = std::max(maxy, sy);
     }
@@ -735,11 +803,12 @@ void SceneManager::SceneMapping(){
     for (int ix = ix0; ix <= ix1; ++ix){
         for (int iy = iy0; iy <= iy1; ++iy){
             double sx = ix * step;
-            double sy = iy * step;
+            double sy = iy * step;                  // 场景的平面y对应模型空间的Z坐标
             double rx = a * sx + b * sy + tx;
             double ry = c_ * sx + d * sy + ty;
             QJsonObject o;
             o["scene_x"] = sx;
+            // scene_y field stores the second scene-plane coordinate (Z in model space)
             o["scene_y"] = sy;
             o["robot_x"] = rx;
             o["robot_y"] = ry;
@@ -753,7 +822,7 @@ void SceneManager::SceneMapping(){
     for (int i=0;i<N;++i){
         QJsonObject c;
         c["scene_x"] = sel[i].pos.x();
-        c["scene_y"] = sel[i].pos.y();
+        c["scene_y"] = sel[i].pos.z();                      // 场景的平面y对应模型空间的Z坐标
         c["robot_x"] = sel[i].robotPoseAtCapture.x();
         c["robot_y"] = sel[i].robotPoseAtCapture.y();
         corners.append(c);

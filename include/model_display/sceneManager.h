@@ -14,12 +14,17 @@
 #include <QImage>
 #include <QDebug>
 #include <QMatrix4x4>
+#include <QVector>
 #include <QVector3D>
 #include <QColor>
 #include <QDir>
 #include <QByteArray>
 #include <QPainter>
 #include <QThread>
+#include <QCoreApplication>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -95,6 +100,10 @@ public:
     void SceneMapping(); // 场景映射函数
 
 
+    // 测试用：从 CSV 读取一组机器人位姿并解析（保留为成员以便测试）
+    QVector<QVector3D> test_sceneCornerMapping();
+
+
     const std::vector<Marker> &markers() const { return m_markers; }
 
 private:
@@ -114,6 +123,10 @@ private:
 
     PoseMonitor *poseMonitor;       // 位姿监视器
     QVector3D robotPose;            // 机器人当前位姿
+
+    // 场景映射测试代码
+    QVector<QVector3D>  cornerPoints;   // 场景的四个角点
+    QVector<QVector3D>  posePoints;     // 角点对应的机器人位姿
 
     
 };

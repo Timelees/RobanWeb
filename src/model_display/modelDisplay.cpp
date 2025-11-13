@@ -519,11 +519,12 @@ void ModelDisplay::mouseReleaseEvent(QMouseEvent *event)
                     int mid = m_scene->pickMarkerByRay(origin, dir, hitMarkerPt);
                     if (mid >= 0)
                     {
+                        // 场景平面的y对应空间坐标的z
                         QString txt = QString("id=%1\nx=%2\ny=%3\nz=%4")
                                           .arg(mid)
                                           .arg(hitMarkerPt.x(), 0, 'f', 3)
-                                          .arg(hitMarkerPt.y(), 0, 'f', 3)
-                                          .arg(hitMarkerPt.z(), 0, 'f', 3);
+                                          .arg(hitMarkerPt.z(), 0, 'f', 3)
+                                          .arg(hitMarkerPt.y(), 0, 'f', 3);
                         // 显示浮动标签
                         QPoint pos = event->pos();
                         m_tooltipLabel->setText(txt);
