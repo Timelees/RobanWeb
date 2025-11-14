@@ -49,6 +49,7 @@ public:
     ~ModelDisplay() override;
 
     void test_showAction();    // 测试显示动作
+    void test_showByRobotPoseToMove(); // 测试通过机器人位姿移动模型
 
 protected:
     // 窗口绘制

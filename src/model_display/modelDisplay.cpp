@@ -45,6 +45,9 @@ ModelDisplay::ModelDisplay(RobotManager *robot, SceneManager *scene, QWidget *pa
 
 ModelDisplay::~ModelDisplay() = default;
 
+
+// ---------------测试函数--------------------------
+// test_showAction: 测试演示机器人拿取和放置动作的完整
 void ModelDisplay::test_showAction()
 {
 
@@ -204,6 +207,45 @@ void ModelDisplay::test_showAction()
     }
 }
 
+void ModelDisplay::test_showByRobotPoseToMove()
+{
+    if(m_robot){
+        // 从 CSV（或测试函数）取得机器人位姿序列，逐条映射到场景坐标，再交由 RobotManager 进行播放
+        QVector<QVector3D> robotPos = m_scene->test_sceneCornerMapping();
+        if (robotPos.isEmpty()) {
+            qDebug() << "test_showByRobotPoseToMove: no robot positions from test_sceneCornerMapping";
+            return;
+        }
+
+        QVector<QVector3D> scenePoints;
+        scenePoints.reserve(robotPos.size());
+        for (int i = 0; i < robotPos.size(); ++i) {
+            // robotPos: (x, y, yaw)
+            QVector2D robotXY(robotPos[i].x(), robotPos[i].y()); // x,y from CSV
+            QVector3D scenePt;
+            if (m_scene->mapRobotToScene(robotXY, scenePt)) {
+                scenePoints.append(scenePt);
+            } else {
+                qDebug() << "mapRobotToScene failed for robot pos" << robotXY;
+            }
+        }
+
+        if (!scenePoints.isEmpty()) {
+            // 把整条轨迹加载到 RobotManager，然后按固定间隔播放（模拟逐条接收并应用）
+            m_robot->loadLocationRowsFromVector(scenePoints);
+            // 200ms 间隔、不循环
+            m_robot->startLocationPlayback(200, false);
+        }
+
+    }
+
+}
+
+
+
+// ---------------测试函数--------------------------
+
+
 // 设置工具栏
 void ModelDisplay::setDisplayWindow()
 {
@@ -255,7 +297,9 @@ void ModelDisplay::setDisplayWindow()
         if (!m_locationPlaying) {
             if (m_robot) {
                 // start the demo sequence implemented in test_showAction
-                this->test_showAction();
+                // this->test_showAction();
+                this->test_showByRobotPoseToMove();
+
                 // 若 test_showAction 启动了 location playback separately, we may need to start it here.
                 // 保持标志位以表示正在演示
                 m_locationPlaying = true;
@@ -294,7 +338,7 @@ void ModelDisplay::setDisplayWindow()
     // 设置浮动信息标签
     m_tooltipLabel = new QLabel(this);
     m_tooltipLabel->setWindowFlags(Qt::ToolTip);
-    m_tooltipLabel->setStyleSheet("background-color: rgba(240,248,255,1); border: 1px solid #888; padding: 4px; font-size: 11px;");
+    m_tooltipLabel->setStyleSheet("background-color: rgba(240,248,255,1); border: 1px solid #888; border-radius:15px; padding: 4px; font-size: 11px;");
     m_tooltipLabel->hide();
     m_tooltipLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
 
@@ -511,13 +555,53 @@ void ModelDisplay::mouseReleaseEvent(QMouseEvent *event)
         QPoint delta = event->pos() - m_pressPos; 
         if (delta.manhattanLength() < 6)
         {
-            QVector3D origin, dir, hitMarkerPt;
+            QVector3D origin, dir;
             if (screenPosToRay(event->pos(), origin, dir))
             {
-                if (m_scene)
-                {
+                if (!m_scene) {
+                    qDebug() << "RightClick: m_scene is null, cannot pick.";
+                } else {
+                    // First try to intersect with scene geometry to get a scene-space point
+                    QVector3D hit; // model-space coordinate
+                    bool hitScene = m_scene->pickIntersect(origin, dir, hit);
+
+                    // Also check if we hit a marker (for id)
+                    QVector3D hitMarkerPt;
                     int mid = m_scene->pickMarkerByRay(origin, dir, hitMarkerPt);
-                    if (mid >= 0)
+
+                    if (hitScene)
+                    {
+                        // build tooltip text with scene-space coordinates and mapped robot coords (if available)
+                        QString txt = QString("场景坐标:[x=%1,y=%2,z=%3]")
+                                          .arg(hit.x(), 0, 'f', 4)
+                                          .arg(hit.z(), 0, 'f', 4)
+                                          .arg(hit.y(), 0, 'f', 4);
+
+                        // map scene point to robot coords using SceneManager mapping (if available)
+                        QVector2D robot;
+                        if (m_scene->mapSceneToRobot(hit, robot)) {
+                            txt += QString("\nrobot位置:[x=%1,y=%2]")
+                                       .arg(robot.x(), 0, 'f', 4)
+                                       .arg(robot.y(), 0, 'f', 4);
+                        } else {
+                            txt += "\nmapping: unavailable";
+                        }
+
+                        if (mid >= 0) {
+                            txt = QString("id=%1\n").arg(mid) + txt;
+                        }
+
+                        QPoint pos = event->pos();
+                        m_tooltipLabel->setText(txt);
+                        m_tooltipLabel->adjustSize();
+                        m_tooltipLabel->move(mapToGlobal(pos) + QPoint(10, -m_tooltipLabel->height() - 10));
+                        m_tooltipLabel->show();
+                        QTimer::singleShot(3000, m_tooltipLabel, &QLabel::hide);
+
+                        qDebug() << "Right-click scene hit at" << hit << "markerId=" << mid;
+                        // qDebug() << "Right-click robot loc at " <<  robot;
+                    }
+                    else if (mid >= 0)
                     {
                         // 场景平面的y对应空间坐标的z
                         QString txt = QString("id=%1\nx=%2\ny=%3\nz=%4")
@@ -537,10 +621,6 @@ void ModelDisplay::mouseReleaseEvent(QMouseEvent *event)
 
                         qDebug() << "Right-click marker id=" << mid << " at " << hitMarkerPt;
                     }
-                }
-                else
-                {
-                    qDebug() << "RightClick: m_scene is null, cannot pick marker.";
                 }
             }
         }

@@ -832,7 +832,8 @@ void RobotManager::computeBounds()
     }
 }
 
-// loadLocationCsv: 从 CSV 加载位置点 (x,y,z)。
+// ---------------测试函数--------------------------
+// loadLocationCsv: 从 CSV 加载场景下的位置点 (x,y,z)。
 // 实现原则：不重新生成 mesh 或贴图，而是直接在已加载的 mesh 顶点上应用平移（基于加载时计算的模型中心 m_modelCenterX/Y/Z），
 // 从而把整个机器人模型移动到目标世界位置。若 intervalMs>0，则以定时器循环播放每一行位置并发出 frameAdvanced() 以触发视图刷新。
 bool RobotManager::loadLocationCsv(const QString &csvPath)
@@ -887,6 +888,24 @@ bool RobotManager::loadLocationCsv(const QString &csvPath)
     return true;
 }
 
+// 从外部传入的场景坐标数组加载位置行（替代 CSV 加载），用于播放或立即应用
+void RobotManager::loadLocationRowsFromVector(const QVector<QVector3D> &rows)
+{
+    m_locationRows.clear();
+    m_locationTimes.clear();
+    for (const QVector3D &p : rows)
+    {
+        m_locationRows.push_back(p);
+        m_locationTimes.push_back(0.0);
+    }
+    // reset playback state (caller should start playback with startLocationPlayback)
+    m_currentLocationRow = 0;
+    m_playedLocationCount = 0;
+}
+// ---------------测试函数--------------------------
+
+
+
 // 将模型移动到给定的世界位置（直接修改 mesh 顶点为原始顶点 + delta）
 void RobotManager::applyLocation(const QVector3D &target)
 {
@@ -903,6 +922,10 @@ void RobotManager::applyLocation(const QVector3D &target)
     applyJointAngles(m_currentJointAngles);
 }
 
+
+
+
+// -----------------测试函数：应用csv位置行数据来移动模型--------------------
 // 应用已解析的第 row 行位置
 void RobotManager::applyLocationRow(int row)
 {
@@ -970,6 +993,29 @@ bool RobotManager::startLocationPlayback(int intervalMs, bool loop)
     });
     m_locationTimer->start(intervalMs);
     // qDebug() << "RobotManager::startLocationPlayback: 开始更新位置started rows=" << m_locationRows.size() << " intervalMs=" << intervalMs << " loop=" << m_locationLooping;
+    return true;
+}
+// -----------------测试函数--------------------
+
+// 使用从机器人位置转换来的场景坐标，启动定时器执行模型移动
+bool RobotManager::startLocationPlayback(QVector3D &target_pos, int intervalMs)
+{
+    stopLocationPlayback();
+
+    m_locationTimer = new QTimer(this);
+    connect(m_locationTimer, &QTimer::timeout, this, [this, &target_pos](){
+        applyLocation(target_pos);
+
+        if(m_locationTimer){
+            m_locationTimer->stop();
+            delete m_locationTimer;
+            m_locationTimer = nullptr;
+        }
+        emit locationPlaybackFinished();        // 发送位置更新结束的信号
+    });
+
+    m_locationTimer->start(intervalMs);
+
     return true;
 }
 

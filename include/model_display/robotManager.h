@@ -48,6 +48,10 @@ public:
     // csvPath: CSV 路径，格式示例见 src/test/test_config/location_test.csv
     bool loadLocationCsv(const QString &csvPath);
 
+    // 直接从一组场景坐标（scene-space）加载位置点，用于把外部计算出的场景坐标序列交由
+    // RobotManager 播放/应用（例如由 SceneManager 的 mapRobotToScene 得到的一系列点）
+    void loadLocationRowsFromVector(const QVector<QVector3D> &rows);
+
 
     // 根据已解析的 location rows，应用第 row 行位置（等效于 applyLocation(m_locationRows[row])）
     void applyLocationRow(int row);
@@ -72,6 +76,9 @@ public:
     // 启动按间隔播放已加载位置的计时器（intervalMs 毫秒），返回是否成功启动
     // 若 loop=false 则播放到最后一帧后停止并发出 locationPlaybackFinished()
     bool startLocationPlayback(int intervalMs, bool loop = true);
+    // 启动按间隔播放由机器人位置转换来的场景位置target_pos的计时器（intervalMs 毫秒），返回是否成功启动
+    bool startLocationPlayback(QVector3D &target_pos, int intervalMs);
+
 
     // 停止位置播放计时器（若存在）
     void stopLocationPlayback();

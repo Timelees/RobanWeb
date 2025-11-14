@@ -38,9 +38,12 @@ void SceneManager::init(){
     // 从test_sceneCornerMapping函数获取四个角点的位姿数据
     // 右上、左上、左下、右下
     cornerPoints = test_sceneCornerMapping();
+
+    // 加载场景映射参数
+    loadSceneMappingParameters();
 }
 
-// 场景映射测试 (成员函数)
+// 场景映射测试 (成员函数)，从csv解析数据
 QVector<QVector3D> SceneManager::test_sceneCornerMapping(){
     QString poseCsvPath = resolveConfigPath("test_robot_cornerPose.csv");
     // 解析文件
@@ -67,7 +70,7 @@ QVector<QVector3D> SceneManager::test_sceneCornerMapping(){
         double y = parts[1].trimmed().toDouble(&oky);
         double yaw = parts[2].trimmed().toDouble(&okyaw);
         if (okx && oky && okyaw){
-            qDebug() << "Parsed pose:" << x << y << yaw;
+            // qDebug() << "Parsed pose:" << x << y << yaw;
             // 在这里可以使用解析出的 x, y, yaw 值
             corners.append(QVector3D(float(x), float(y), float(yaw)));
         
@@ -85,13 +88,64 @@ QVector<QVector3D> SceneManager::test_sceneCornerMapping(){
     }
     f.close();
 
-    if(corners.size() !=4 ){
-        qDebug() << "SceneManager: corner pose count !=4 , actual count:" << corners.size();
-        return QVector<QVector3D>();
-    }
+    // if(corners.size() !=4 ){
+    //     qDebug() << "SceneManager: corner pose count !=4 , actual count:" << corners.size();
+    //     return QVector<QVector3D>();
+    // }
     return corners;
 }
 
+
+void SceneManager::loadSceneMappingParameters(){
+    // 尝试从 config/SceneMapping.json 恢复已保存的仿射映射参数
+    QDir appdir(QCoreApplication::applicationDirPath());
+    QString cand = QDir::cleanPath(appdir.filePath(QString("../config/SceneMapping.json")));
+    if (QFile::exists(cand)) {
+        QFile f(cand);
+        if (f.open(QIODevice::ReadOnly)) {
+            QByteArray data = f.readAll();
+            f.close();
+            QJsonDocument doc = QJsonDocument::fromJson(data);
+            if (doc.isObject()) {
+                QJsonObject root = doc.object();
+                // 支持两种格式：root.params.{a,b,tx,c,d,ty} 或 root.{a,b,tx,c,d,ty}
+                QJsonObject params;
+                if (root.contains("params") && root["params"].isObject()) {
+                    params = root["params"].toObject();
+                } else {
+                    // try top-level keys
+                    params = QJsonObject();
+                    QString keys[] = {"a","b","tx","c","d","ty"};
+                    bool hasAny = false;
+                    for (const QString &k : keys) {
+                        if (root.contains(k)) { params[k] = root[k]; hasAny = true; }
+                    }
+                    if (!hasAny) params = QJsonObject();
+                }
+                if (!params.isEmpty()) {
+                    // Ensure all required keys exist
+                    QString keys[] = {"a","b","tx","c","d","ty"};
+                    bool hasAll = true;
+                    for (const QString &k : keys) {
+                        if (!params.contains(k)) { hasAll = false; break; }
+                    }
+                    if (hasAll) {
+                        double a = params.value("a").toDouble();
+                        double b = params.value("b").toDouble();
+                        double tx = params.value("tx").toDouble();
+                        double c = params.value("c").toDouble();
+                        double d = params.value("d").toDouble();
+                        double ty = params.value("ty").toDouble();
+                        m_map_a = a; m_map_b = b; m_map_tx = tx;
+                        m_map_c = c; m_map_d = d; m_map_ty = ty;
+                        m_hasMapping = true;
+                        qDebug() << "SceneManager::init: loaded mapping params from" << cand;
+                    }
+                }
+            }
+        }
+    }
+}
 
 
 bool SceneManager::loadModel(const std::string &file)
@@ -689,9 +743,9 @@ void SceneManager::clearAllMarkers()
 }
 
 
-// 待测试：使用场景中的地图标记点计算从场景坐标到机器人坐标的仿射映射
+// 使用场景中的地图标记点计算从场景坐标到机器人坐标的仿射映射
 void SceneManager::SceneMapping(){
-    // 收集地图标记点（应该是点击场景按钮后新添加的标记点）
+    // 收集地图标记点
     std::vector<Marker> mapMarkers;
     for (const Marker &m : m_markers){
         if (m.type == Marker_Map)
@@ -779,6 +833,15 @@ void SceneManager::SceneMapping(){
     double a = px[0], b = px[1], tx = px[2];
     double c_ = py[0], d = py[1], ty = py[2];
 
+    // store mapping parameters in member fields so other code can map arbitrary scene points
+    this->m_map_a = a;
+    this->m_map_b = b;
+    this->m_map_tx = tx;
+    this->m_map_c = c_;
+    this->m_map_d = d;
+    this->m_map_ty = ty;
+    this->m_hasMapping = true;
+
     // compute bounding rectangle in scene coordinates
     // compute bounding rectangle in scene XZ plane
     double minx = sel[0].pos.x(), maxx = sel[0].pos.x();
@@ -829,6 +892,22 @@ void SceneManager::SceneMapping(){
     }
     root["corners"] = corners;
 
+    // 保存用于从 scene (X,Z) 到 robot (x,y) 的仿射参数，方便程序重启后恢复映射
+    QJsonObject params;
+    params["a"] = a;
+    params["b"] = b;
+    params["tx"] = tx;
+    params["c"] = c_;
+    params["d"] = d;
+    params["ty"] = ty;
+    // 还保存使用的网格步长与边界，便于外部工具参考
+    params["grid_step"] = step;
+    params["min_scene_x"] = minx;
+    params["max_scene_x"] = maxx;
+    params["min_scene_y"] = miny; // 注意: scene_y 对应模型空间的 Z
+    params["max_scene_y"] = maxy;
+    root["params"] = params;
+
     QJsonDocument doc(root);
 
     // write to config/SceneMapping.json next to application config
@@ -850,5 +929,54 @@ void SceneManager::SceneMapping(){
     qint64 written = f.write(doc.toJson(QJsonDocument::Indented));
     f.close();
     qDebug() << "SceneManager::SceneMapping: wrote" << written << "bytes to" << cand << "grid points=" << arr.size();
+}
+
+// 通过SceneMapping计算的参数将场景坐标映射到机器人坐标系
+bool SceneManager::mapSceneToRobot(const QVector3D &scenePt, QVector2D &outRobot) const
+{
+    if (!m_hasMapping)
+        return false;
+    double sx = scenePt.x();
+    double sz = scenePt.z();                            // 场景的平面y对应模型空间的Z坐标
+    double rx = m_map_a * sx + m_map_b * sz + m_map_tx;
+    double ry = m_map_c * sx + m_map_d * sz + m_map_ty;
+    outRobot = QVector2D(float(rx), float(ry));
+    return true;
+}
+
+
+// 将机器人坐标 (x,y) 映射回场景坐标 (模型空间)。
+// 使用 SceneMapping 中保存的仿射参数的逆，返回场景平面上的 (X,Z)。
+bool SceneManager::mapRobotToScene(const QVector2D &robotPt, QVector3D &outScene) const
+{
+    if (!m_hasMapping)
+        return false;
+
+    // A = [a b; c d], s = [sx; sz], r = [rx; ry] = A * s + t
+    // => s = A^{-1} * (r - t)
+    double a = m_map_a, b = m_map_b, c = m_map_c, d = m_map_d;
+    double tx = m_map_tx, ty = m_map_ty;
+
+    double det = a * d - b * c;
+    if (fabs(det) < 1e-12)
+        return false; // singular mapping
+
+    double inv00 =  d / det;
+    double inv01 = -b / det;
+    double inv10 = -c / det;
+    double inv11 =  a / det;
+
+    double rx = robotPt.x();
+    double ry = robotPt.y();
+
+    double dx = rx - tx;
+    double dy = ry - ty;
+
+    double sx = inv00 * dx + inv01 * dy;
+    double sz = inv10 * dx + inv11 * dy;
+
+    // 将映射点放在场景平面上，y 分量（高度）设为 0.0f（可根据需要改为平均地面高度）
+    outScene = QVector3D(float(sx), 0.0f, float(sz));
+    return true;
 }
 

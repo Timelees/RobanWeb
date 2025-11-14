@@ -16,6 +16,7 @@
 #include <QMatrix4x4>
 #include <QVector>
 #include <QVector3D>
+#include <QVector2D>
 #include <QColor>
 #include <QDir>
 #include <QByteArray>
@@ -103,12 +104,22 @@ public:
     // 测试用：从 CSV 读取一组机器人位姿并解析（保留为成员以便测试）
     QVector<QVector3D> test_sceneCornerMapping();
 
+    // 将场景空间坐标（模型空间）映射到机器人坐标（x,y）。
+    // 返回 true 表示已有映射并成功计算 outRobot。
+    bool mapSceneToRobot(const QVector3D &scenePt, QVector2D &outRobot) const;
+
+    // 将机器人坐标 (x,y) 映射回场景坐标 (模型空间)。
+    // 返回 true 表示已有映射且计算成功。outScene 的 y 分量为场景高度（目前设置为 0，场景为平面，不用适配）。
+    bool mapRobotToScene(const QVector2D &robotPt, QVector3D &outScene) const;
+
 
     const std::vector<Marker> &markers() const { return m_markers; }
 
 private:
     // 内部函数：创建球体 mesh 并返回 mesh 索引（仅 SceneManager 内部使用）
     int addMarkerSphere(const QVector3D &pos, float radius = 0.05f, const QColor &color = QColor(0, 255, 0));
+    // 加载场景与机器人坐标仿射参数
+    void loadSceneMappingParameters();
 
 private:
     QString m_modelPath;
@@ -127,6 +138,11 @@ private:
     // 场景映射测试代码
     QVector<QVector3D>  cornerPoints;   // 场景的四个角点
     QVector<QVector3D>  posePoints;     // 角点对应的机器人位姿
+
+    // 由 SceneMapping 计算并保留的仿射映射参数: scene (X,Z) -> robot (x,y)
+    bool m_hasMapping = false;
+    double m_map_a = 1.0, m_map_b = 0.0, m_map_tx = 0.0;
+    double m_map_c = 0.0, m_map_d = 1.0, m_map_ty = 0.0;
 
     
 };
