@@ -580,7 +580,7 @@ void ModelDisplay::mouseReleaseEvent(QMouseEvent *event)
                         // map scene point to robot coords using SceneManager mapping (if available)
                         QVector2D robot;
                         if (m_scene->mapSceneToRobot(hit, robot)) {
-                            txt += QString("\nrobot位置:[x=%1,y=%2]")
+                            txt += QString("\n机器人位置:[x=%1,y=%2]")
                                        .arg(robot.x(), 0, 'f', 4)
                                        .arg(robot.y(), 0, 'f', 4);
                         } else {
