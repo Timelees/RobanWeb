@@ -31,9 +31,17 @@ private slots:
     void onDeleteButtonClicked();
     void onConnectButtonClicked();
     void onCancelButtonClicked();
+
+    void onRobot1ToggleButtonClicked();
+    void onRobot2ToggleButtonClicked();
+    void onRobot2AddButtonClicked();
+    void onRobot2DeleteButtonClicked();
+    void onRobot2ConnectButtonClicked();
+    void onRobot2CancelButtonClicked();
     
 private:
     void setTableWidget();  // 设置tableWidget
+    void setRobot2TableWidget();
     void updateTableSelection();    // 更新table选项
     // 数据库函数
     void setupDatabase();
@@ -41,6 +49,9 @@ private:
     void saveConnectionToDatabase(const QString &protocol, const QString &host, const QString &port);
     void deleteConnectionFromDatabase(const QString &host, const QString &port);
     QString getDatabasePath();
+    void loadRobot2ConnectionsFromDatabase();
+    void saveRobot2ConnectionToDatabase(const QString &protocol, const QString &host, const QString &port);
+    void deleteRobot2ConnectionFromDatabase(const QString &host, const QString &port);
 
 
 private:

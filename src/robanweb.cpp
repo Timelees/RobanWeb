@@ -49,6 +49,15 @@ robanweb::~robanweb()
         imageThread = nullptr;
         cameraImageMonitor = nullptr;
     }
+
+    if(servoThread){
+        servoThread->quit();
+        servoThread->wait();
+        delete servoThread;
+        servoThread = nullptr;
+        servoPositionsMonitor = nullptr;
+    }
+
     // 清理任务管理器
     if(taskManager) {
         delete taskManager;
@@ -126,11 +135,19 @@ void robanweb::init(){
         });
     }
 
+    // 伺服位置订阅对象（放到 webSocketThread 中以在 worker 线程解析 JSON，降低主线程延迟）
+    servoPositionsMonitor = new ServoPositionsMonitor(webSocketWorker, nullptr); // 无 parent，后面移动到 worker 线程
+    servoThread = new QThread(this);
+    servoPositionsMonitor->moveToThread(servoThread);
+    servoThread->start();
+    connect(servoThread, &QThread::finished, servoPositionsMonitor, &QObject::deleteLater);
+
+
     // 3D模型显示初始化
     QString modelRobot = QString::fromUtf8("..\\assets\\Roban.fbx"); // 默认机器人模型路径
     QString modelScene = QString::fromUtf8("..\\assets\\scene.obj"); // 默认场景模型路径
     
-    robotManager = new RobotManager(modelRobot, this);    // 机器人管理器
+    robotManager = new RobotManager(modelRobot, servoPositionsMonitor, this);    // 机器人管理器
     sceneManager = new SceneManager(webSocketWorker, modelScene, this);    // 场景管理器
     
     if (ui->modelDisplay) {
@@ -234,6 +251,13 @@ void robanweb::bindSlots(){
     // 从ros话题获取IMU信息
     connect(webSocketWorker, &WebSocketWorker::messageReceived, imuMonitor, &ImuMonitor::onMessageReceived, Qt::QueuedConnection);
     
+    // 从ros话题获取伺服位置消息
+    if (servoPositionsMonitor) {
+        // 当 monitor 已被移动到 webSocketThread 时，使用 DirectConnection 让解析尽快在 worker 线程执行，减少延迟
+        connect(webSocketWorker, &WebSocketWorker::messageReceived, servoPositionsMonitor, &ServoPositionsMonitor::onMessageReceived, Qt::QueuedConnection);
+    }
+
+
     // 从ros话题获取图像信息
     connect(webSocketWorker, &WebSocketWorker::messageReceived, cameraImageMonitor, &CameraImageMonitor::onMessageReceived, Qt::QueuedConnection);
     connect(cameraImageMonitor, &CameraImageMonitor::imageReceived, this, [this](const QImage &img){
@@ -410,6 +434,11 @@ void robanweb::startSubscriptions(){
     // 启动图像订阅
     if(cameraImageMonitor){
         QMetaObject::invokeMethod(cameraImageMonitor, "start", Qt::QueuedConnection);
+    }
+
+    // 启动伺服位置订阅
+    if (servoPositionsMonitor) {
+        QMetaObject::invokeMethod(servoPositionsMonitor, "start", Qt::QueuedConnection);
     }
 }
 

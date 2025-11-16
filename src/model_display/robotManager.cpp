@@ -1,14 +1,32 @@
 #include "model_display/robotManager.h"
 #include "util/load_csv.hpp"
 #include <QDateTime>
-RobotManager::RobotManager(const QString &modelPath, QObject *parent)
-    : QObject(parent), m_modelPath(modelPath)
+RobotManager::RobotManager(const QString &modelPath, ServoPositionsMonitor *servoPositionsMonitor, QObject *parent)
+    : QObject(parent), m_modelPath(modelPath), m_servoPositionsMonitor(servoPositionsMonitor)
+{
+    initialize();
+    // 如果有 ServoPositionsMonitor，则连接更新信号（queued connection），使用信号驱动直接应用角度，避免轮询
+    if (m_servoPositionsMonitor) {
+        // 连接伺服位置更新信号
+        connect(m_servoPositionsMonitor, &ServoPositionsMonitor::servoPositionsUpdated,
+                this, &RobotManager::onServoPositionsUpdated, Qt::QueuedConnection);
+        // 连接行走状态更新信号
+        connect(m_servoPositionsMonitor, &ServoPositionsMonitor::walkingStatusUpdated,
+                this, &RobotManager::onWalkingStatusUpdated, Qt::QueuedConnection);
+    // 连接行走停止信号，停止行走动画播放
+    connect(m_servoPositionsMonitor, &ServoPositionsMonitor::walkingStatusStopped,
+        this, &RobotManager::stopWalkingPlayback, Qt::QueuedConnection);
+        
+    }
+}
+
+void RobotManager::initialize()
 {
     // 初始化整体旋转矩阵与欧拉角（默认无旋转）
     m_worldRotation = Mat4::identity();
     m_modelRotationDeg = QVector3D(0.0f, 0.0f, 0.0f);
 
-    loadSucceeded = loadModel(modelPath.toStdString());
+    loadSucceeded = loadModel(m_modelPath.toStdString());
 
     // 默认在模型加载成功后将模型整体绕 Y 轴旋转 90 度，便于视图初始展示。
     if (loadSucceeded)
@@ -19,6 +37,61 @@ RobotManager::RobotManager(const QString &modelPath, QObject *parent)
     // 设置关节映射
     jointConfigPath = resolveConfigPath("boneToJoint.csv");
     loadBoneJointMapping(jointConfigPath);
+
+    // ------------- 预处理：加载 walking 动作 CSV（仅提取前12列用于行走时的角度融合） -------------
+    // 说明：按要求使用 loadActionCsv 加载文件内容，但我们不想让该函数启动默认的播放定时器
+    // 因此这里的策略是：调用 loadActionCsv 把数据解析到 m_placeRows（该函数会可能创建并启动 m_animTimer），
+    // 然后立即把需要的前12列数据拷贝到 m_walkFirst12Rows，再把 m_placeRows 恢复为调用前的内容，
+    // 并清理由 loadActionCsv 新建的定时器（避免干扰正常的 place 播放逻辑）。
+    QString walkCsv = resolveConfigPath("walk.csv");
+    if (!walkCsv.isEmpty() && QFile::exists(walkCsv)) {
+        // 备份当前 place 数据与计时器指针
+        auto backupPlaceRows = m_placeRows;
+        QTimer *backupAnimTimer = m_animTimer;
+        bool backupPlaceLooping = m_placeLooping;
+
+        // 使用 loadActionCsv 解析 walk.csv（按要求使用此函数），采用较慢的间隔以便随即停止
+        bool parsed = loadActionCsv(walkCsv, m_walkIntervalMs, m_walkLooping);
+        if (parsed) {
+            // 从解析出的 m_placeRows 中提取每行的前12列到 m_walkFirst12Rows
+            m_walkFirst12Rows.clear();
+            for (const QVector<double> &r : m_placeRows) {
+                QVector<double> small;
+                int take = qMin(12, r.size());
+                for (int i = 0; i < take; ++i)
+                    small.append(r[i]);
+                // 若某行不足12列，用 0 填充以保证长度一致性
+                for (int i = take; i < 12; ++i)
+                    small.append(0.0);
+                m_walkFirst12Rows.append(small);
+            }
+        }
+
+        // 停止并清理 loadActionCsv 可能创建的定时器，恢复之前的 m_placeRows/m_animTimer 状态
+        stopPlacePlayback();
+        // 如果之前没有计时器（backupAnimTimer==nullptr）但 loadActionCsv 创建了一个新的 m_animTimer，删除它
+        if (backupAnimTimer == nullptr && m_animTimer != nullptr) {
+            delete m_animTimer;
+            m_animTimer = nullptr;
+        }
+        // 恢复之前的 placeRows 和 placeLooping
+        m_placeRows = backupPlaceRows;
+        m_placeLooping = backupPlaceLooping;
+        // 如果之前存在计时器指针则恢复
+        if (backupAnimTimer != nullptr)
+            m_animTimer = backupAnimTimer;
+    }
+    // ------------- 预处理结束 -------------
+
+    //  // ServoPositionsMonitor连接更新信号，使 RobotManager 可以读取最新消息
+    // if (m_servoPositionsMonitor) {
+    //     qDebug() << "RobotManager: connecting to ServoPositionsMonitor signals";
+    //     connect(m_servoPositionsMonitor->m_worker, &WebSocketWorker::messageReceived,
+    //             m_servoPositionsMonitor, &ServoPositionsMonitor::onMessageReceived);
+    // }
+
+
+
 }
 
 // 设定模型整体旋转：传入度为单位的欧拉角 (x_deg, y_deg, z_deg)
@@ -80,7 +153,7 @@ bool RobotManager::loadBoneJointMapping(const QString &csvPath)
     return true;
 }
 
-bool RobotManager::loadPlaceCsv(const QString &csvPath, int intervalMs, bool loop)
+bool RobotManager::loadActionCsv(const QString &csvPath, int intervalMs, bool loop)
 {
     QFile f(csvPath);
     if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
@@ -134,13 +207,7 @@ bool RobotManager::loadPlaceCsv(const QString &csvPath, int intervalMs, bool loo
 void RobotManager::applyJointAngles(const std::map<int, double> &jointAngles)
 {
     m_currentJointAngles = jointAngles;
-    // diagnostic: print some nodeInfos (helpful to see root transforms)
-    // qDebug() << "RobotManager: nodeInfos count=" << m_nodeInfos.size();
-    // for (int i = 0; i < (int)m_nodeInfos.size() && i < 12; ++i) {
-    //     const NodeInfo &ni = m_nodeInfos[i];
-    //     qDebug() << " node[" << i << "] name=" << ni.name << " parent=" << ni.parent
-    //              << " trans=(" << ni.local.m[0][3] << "," << ni.local.m[1][3] << "," << ni.local.m[2][3] << ")";
-    // }
+
 
     // reset local to original
     for (auto &n : m_nodeInfos)
@@ -153,11 +220,6 @@ void RobotManager::applyJointAngles(const std::map<int, double> &jointAngles)
             return;
         const Mat4 &orig = m_nodeInfos[nodeIdx].originalLocal;
 
-    // diagnostic checks removed; do NOT emit placePlaybackFinished() here —
-    // placePlaybackFinished is emitted when the place playback sequence completes
-    // (handled in advancePlaceFrame) to avoid premature notifications during
-    // per-node transform application.
-
         // extract translation
         float tx = orig.m[0][3];
         float ty = orig.m[1][3];
@@ -167,20 +229,6 @@ void RobotManager::applyJointAngles(const std::map<int, double> &jointAngles)
         for (int r = 0; r < 3; ++r)
             for (int c = 0; c < 3; ++c)
                 Rorig.m[r][c] = orig.m[r][c];
-
-        // {
-        // float detR = Rorig.det3();
-        // float detAdd = Radd.det3();
-        // float maxR = Rorig.maxRowNorm3();
-        // float maxAdd = Radd.maxRowNorm3();
-        // if (fabs(detR - 1.0f) > 1e-3f || fabs(maxR - 1.0f) > 1e-3f) {
-        //     QString nodeName = (nodeIdx >=0 && nodeIdx < (int)nodeInfos.size()) ? nodeInfos[nodeIdx].name : QString("<unknown>");
-        //     // qDebug() << "applyRotationToNodeLocal: Rorig non-orthonormal for node" << nodeIdx << nodeName << "DET=" << detR << " maxRow=" << maxR;
-        // }
-        // if (fabs(detAdd - 1.0f) > 1e-3f || fabs(maxAdd - 1.0f) > 1e-3f) {
-        //     // qDebug() << "applyRotationToNodeLocal: Radd unusual DET=" << detAdd << " maxRow=" << maxAdd;
-        // }
-        // }
 
         Mat4 Rnew = Radd * Rorig;
         Mat4 local = Mat4::identity();
@@ -276,17 +324,6 @@ void RobotManager::applyJointAngles(const std::map<int, double> &jointAngles)
         flat[off + 11] = F.m[2][3];
     }
 
-    // diagnostic: print bone final transforms for first few bones
-    // for (size_t bi = 0; bi < nbones && bi < 12; ++bi)
-    // {
-    //     const BoneInfo &b = m_bones[bi];
-    //     Mat4 F = Mat4::identity();
-    //     if (b.nodeIndex >= 0 && b.nodeIndex < (int)globalT.size())
-    //         F = globalT[b.nodeIndex] * b.offset;
-    //     qDebug() << "Bone" << (int)bi << "name=" << b.name << " nodeIndex=" << b.nodeIndex
-    //              << " trans=(" << F.m[0][3] << "," << F.m[1][3] << "," << F.m[2][3] << ") det3=" << F.det3()
-    //              << " maxRowNorm3=" << F.maxRowNorm3();
-    // }
 
     // CPU skinning using compactInfluences
     for (size_t mi = 0; mi < m_meshes.size(); ++mi)
@@ -359,15 +396,6 @@ void RobotManager::applyJointAngles(const std::map<int, double> &jointAngles)
         }
     }
 
-    // // diagnostic: sample original vs skinned vertex for mesh 0
-    // if (!m_originalMeshVertices.empty() && !m_meshes.empty()) {
-    //     const auto &orig = m_originalMeshVertices[0];
-    //     const auto &cur = m_meshes[0].vertices;
-    //     if (orig.size() >= 3 && cur.size() >= 3) {
-    //         qDebug() << "Sample vertex[0] orig=(" << orig[0] << "," << orig[1] << "," << orig[2] << ")"
-    //                  << " skinned=(" << cur[0] << "," << cur[1] << "," << cur[2] << ")";
-    //     }
-    // }
 
     emit frameAdvanced();
 }
@@ -1087,4 +1115,161 @@ void RobotManager::stopPlacePlayback()
     // Unlock camera distance when stopping playback
     m_cameraDistanceLockedDuringPlayback = false;
     qDebug() << "RobotManager::stopPlacePlayback: stopped place animation";
+}
+
+// 停止行走动画播放：停止并删除行走播放定时器，重置播放索引
+void RobotManager::stopWalkingPlayback()
+{
+    if (m_walkTimer)
+    {
+        m_walkTimer->stop();
+        delete m_walkTimer;
+        m_walkTimer = nullptr;
+    }
+    m_walkCurrentRow = 0;
+    qDebug() << "RobotManager::stopWalkingPlayback: stopped walk animation";
+}
+
+void RobotManager::onServoPositionsUpdated()
+{
+    if (!m_servoPositionsMonitor)
+        return;
+    // 直接读取解析好的角度数组并应用到模型，避免轮询延迟
+    QVector<double> angles = m_servoPositionsMonitor->lastAngles();
+    if (angles.isEmpty()) {
+        // nothing to apply
+        return;
+    }
+    applyServoAnglesRow(angles);
+}
+
+void RobotManager::applyServoAnglesRow(const QVector<double> &row)
+{
+    // row 中的每一项对应 angle1..angleN，映射到 jointId = index+1
+    std::map<int, double> ja;
+    for (int i = 0; i < row.size(); ++i)
+    {
+        int jointId = i + 1;
+        double val = row[i];
+        // 使用与 advancePlaceFrame 相同的坐标系/符号调整规则
+        if (jointId == 2 || jointId == 3 || jointId == 4 || jointId == 6 || jointId == 11 || jointId == 12 || jointId == 13 || jointId == 16 || jointId == 22)
+        {
+            ja[jointId] = -val;
+        }
+        else if (jointId == 14)
+        {
+            ja[jointId] = val + 90.0;
+        }
+        else if (jointId == 17)
+        {
+            ja[jointId] = val - 90.0;
+        }
+        else
+        {
+            ja[jointId] = val;
+        }
+    }
+    // 直接应用到模型（会触发 frameAdvanced）
+    applyJointAngles(ja);
+}
+
+void RobotManager::onWalkingStatusUpdated(){
+    if (!m_servoPositionsMonitor)
+        return;
+    // 当收到行走状态更新信号时，启动行走动画融合：
+    // - 使用初始化阶段预处理得到的 m_walkFirst12Rows（每行前12列），周期性地把这些列覆盖到
+    //   来自机器人实时伺服数据的角度数组的前12项，得到融合后的完整角度向量，调用 applyServoAnglesRow
+    // - 如果 m_walkFirst12Rows 为空，则尝试在此处再次按需加载（容错）
+
+    if (m_walkFirst12Rows.isEmpty()) {
+        // 容错：尝试动态解析 config/walk.csv（与 initialize 中相同的解析策略，但不破坏现有 placeRows）
+        QString walkCsv = resolveConfigPath("walk.csv");
+        if (!walkCsv.isEmpty() && QFile::exists(walkCsv)) {
+            auto backupPlaceRows = m_placeRows;
+            QTimer *backupAnimTimer = m_animTimer;
+            bool backupPlaceLooping = m_placeLooping;
+            bool parsed = loadActionCsv(walkCsv, m_walkIntervalMs, m_walkLooping);
+            if (parsed) {
+                m_walkFirst12Rows.clear();
+                for (const QVector<double> &r : m_placeRows) {
+                    QVector<double> small;
+                    int take = qMin(12, r.size());
+                    for (int i = 0; i < take; ++i)
+                        small.append(r[i]);
+                    for (int i = take; i < 12; ++i)
+                        small.append(0.0);
+                    m_walkFirst12Rows.append(small);
+                }
+            }
+            stopPlacePlayback();
+            if (backupAnimTimer == nullptr && m_animTimer != nullptr) {
+                delete m_animTimer;
+                m_animTimer = nullptr;
+            }
+            m_placeRows = backupPlaceRows;
+            m_placeLooping = backupPlaceLooping;
+            if (backupAnimTimer != nullptr)
+                m_animTimer = backupAnimTimer;
+        }
+    }
+
+    // 如果没有解析到有效的行走帧数据，直接返回（此时仍然可以由 applyServoAnglesRow 持续使用实时伺服数据）
+    if (m_walkFirst12Rows.isEmpty()) {
+        qDebug() << "RobotManager::onWalkingStatusUpdated: no walk csv first-12 rows loaded, skip fused playback.";
+        return;
+    }
+
+    // 如果已经在播放中，则重置到开头（避免多次重复创建定时器）
+    if (m_walkTimer && m_walkTimer->isActive()) {
+        m_walkCurrentRow = 0;
+        return;
+    }
+
+    // 创建并启动行走播放定时器（周期性把 CSV 的前12列和实时伺服角度融合后应用）
+    if (!m_walkTimer) {
+        m_walkTimer = new QTimer(this);
+        connect(m_walkTimer, &QTimer::timeout, this, [this]() {
+            // 读取当前的实时伺服角度数组
+            QVector<double> servo = m_servoPositionsMonitor ? m_servoPositionsMonitor->lastAngles() : QVector<double>();
+            // 目标尺寸：优先使用 servo 的长度以保留实时数据；若 servo 不足，则按 22 个关节长度扩展
+            int targetSize = qMax<int>(servo.size(), 22);
+            QVector<double> fused;
+            fused.resize(targetSize);
+            // 先用 servo 的数据填充（若存在），否则填 0
+            for (int i = 0; i < targetSize; ++i) {
+                if (i < servo.size()) fused[i] = servo[i];
+                else fused[i] = 0.0;
+            }
+
+            // 用 walk CSV 的前12列覆盖 fused 的前12项（m_walkCurrentRow 对应当前帧）
+            if (m_walkCurrentRow >= 0 && m_walkCurrentRow < m_walkFirst12Rows.size()) {
+                const QVector<double> &small = m_walkFirst12Rows[m_walkCurrentRow];
+                int take = qMin(12, small.size());
+                for (int i = 0; i < take; ++i) {
+                    fused[i] = small[i];
+                }
+            }
+
+            // 将融合结果应用到模型（applyServoAnglesRow 会做坐标/符号调整并触发渲染）
+            applyServoAnglesRow(fused);
+
+            // advance
+            if (m_walkLooping) {
+                m_walkCurrentRow = (m_walkCurrentRow + 1) % m_walkFirst12Rows.size();
+            } else {
+                if (m_walkCurrentRow + 1 < m_walkFirst12Rows.size())
+                    m_walkCurrentRow += 1;
+                else {
+                    // 非循环：到结尾后停止播放
+                    if (m_walkTimer) {
+                        m_walkTimer->stop();
+                        delete m_walkTimer;
+                        m_walkTimer = nullptr;
+                    }
+                }
+            }
+        });
+    }
+    m_walkCurrentRow = 0;
+    m_walkTimer->start(m_walkIntervalMs);
 }

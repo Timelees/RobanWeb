@@ -10,6 +10,7 @@
 #include <QFile>
 #include <QTextStream>
 #include <QTimer>
+#include <QPointer>
 #include <QFileInfo>
 #include <QImage>
 #include <QDebug>
@@ -17,6 +18,7 @@
 #include <QDir>
 #include <QByteArray>
 #include <QPainter>
+#include <QVector3D>
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -28,7 +30,10 @@
 #include <cstring>
 
 #include "model_display/meshes.h"
-#include <QVector3D>
+#include "ros_process/servoPositions.h"
+#include "socket_process/webSocketWorker.h"
+
+class WebSocketWorker;
 
 // ---------- RobotManager ----------
 // 负责加载机器人模型（带骨骼动画），提供 meshes 给视图
@@ -36,12 +41,12 @@ class RobotManager : public QObject
 {
     Q_OBJECT
 public:
-    explicit RobotManager(const QString &modelPath, QObject *parent = nullptr);
+    explicit RobotManager(const QString &modelPath, ServoPositionsMonitor *servoPositionsMonitor, QObject *parent = nullptr);
     ~RobotManager() override = default;
 
 
     bool loadBoneJointMapping(const QString &csvPath);
-    bool loadPlaceCsv(const QString &csvPath, int intervalMs = 100, bool loop = true);
+    bool loadActionCsv(const QString &csvPath, int intervalMs = 100, bool loop = true);
     
 
     // 从 CSV 加载位置数据（每行 x,y,z），该函数仅负责解析并把数据保存到内部缓存
@@ -106,12 +111,22 @@ signals:
     void locationPlaybackFinished();
 
 public slots:
+    // 应用关节角度到模型
     void applyJointAngles(const std::map<int, double> &jointAngles);
+    // 响应 ServoPositionsMonitor 的更新通知，允许 RobotManager 读取最新伺服消息
+    void onServoPositionsUpdated();
+    // 响应 ServoPositionsMonitor 的行走状态更新通知
+    void onWalkingStatusUpdated();
+    // 停止行走动画的播放（由 ServoPositionsMonitor 发出停止信号触发）
+    void stopWalkingPlayback();
+    // 把一行角度值（与 CSV 同样的 22 个角度）应用到模型（复用 advancePlaceFrame 的映射规则）
+    void applyServoAnglesRow(const QVector<double> &row);
 
 private:
     bool loadModel(const std::string &file);
     void advancePlaceFrame();
     void computeBounds();
+    void initialize();
 
 
 private:
@@ -161,6 +176,14 @@ private:
     // 是否在播放 place CSV 时循环（true）或在到最后一行保持不再循环（false）
     bool m_placeLooping = true;
 
+    QPointer<ServoPositionsMonitor> m_servoPositionsMonitor = nullptr;
+    // --- 行走动画融合相关 ---
+    // walk.csv 仅用于提供前 12 列的动画帧数据（预处理在 initialize() 中完成）
+    QVector<QVector<double>> m_walkFirst12Rows; // 只保存每行的前12列，用于walking状态的骨骼融合
+    QTimer *m_walkTimer = nullptr;              // 行走时播放该CSV的定时器
+    int m_walkCurrentRow = 0;
+    int m_walkIntervalMs = 100;                 // 默认行走动画帧率（ms），可调整
+    bool m_walkLooping = true;
 };
 
 #endif // MODEL_DISPLAY_ROBOTMANAGER_H

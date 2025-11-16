@@ -27,6 +27,7 @@ void ImuMonitor::start(){
     subscribeMsg["type"] = "sensor_msgs/Imu";
     QJsonDocument doc(subscribeMsg);
     QString payload = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+    // qDebug() << "ImuMonitor subscribing to IMU topic:" << payload;
     QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload));
 
     // send subscribe request for IMU pose

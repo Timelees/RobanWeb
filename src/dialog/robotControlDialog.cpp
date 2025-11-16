@@ -81,6 +81,7 @@ void RobotControlDialog::onStartControlButtonClicked()
 
         QJsonDocument doc(pub);
         QString jsonString = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+        qDebug() << "Prepared exec command JSON:" << jsonString;
         QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, jsonString));
         qDebug() << "Sent exec command to robot:" << cmd;
     }else{

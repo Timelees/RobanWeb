@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1000</width>
-    <height>600</height>
+    <height>710</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -61,7 +61,9 @@ border-radius:15px</string>
             </size>
            </property>
            <property name="styleSheet">
-            <string notr="true">background-color: rgb(245, 245, 245);
+            <string notr="true">background-color: rgb(47, 86, 135);
+color: rgb(255, 255, 255);
+font: 11pt &quot;微软雅黑&quot;;
 border:2px solid rgb(255, 255, 255);
 border-radius:15px</string>
            </property>
@@ -79,7 +81,9 @@ border-radius:15px</string>
             </size>
            </property>
            <property name="styleSheet">
-            <string notr="true">background-color: rgb(245, 245, 245);
+            <string notr="true">background-color: rgb(47, 86, 135);
+color: rgb(255, 255, 255);
+font: 11pt &quot;微软雅黑&quot;;
 border:2px solid rgb(255, 255, 255);
 border-radius:15px</string>
            </property>
@@ -97,7 +101,9 @@ border-radius:15px</string>
             </size>
            </property>
            <property name="styleSheet">
-            <string notr="true">background-color: rgb(245, 245, 245);
+            <string notr="true">background-color: rgb(47, 86, 135);
+color: rgb(255, 255, 255);
+font: 11pt &quot;微软雅黑&quot;;
 border:2px solid rgb(255, 255, 255);
 border-radius:15px</string>
            </property>
@@ -115,7 +121,9 @@ border-radius:15px</string>
             </size>
            </property>
            <property name="styleSheet">
-            <string notr="true">background-color: rgb(245, 245, 245);
+            <string notr="true">background-color: rgb(47, 86, 135);
+color: rgb(255, 255, 255);
+font: 11pt &quot;微软雅黑&quot;;
 border:2px solid rgb(255, 255, 255);
 border-radius:15px</string>
            </property>
@@ -177,213 +185,166 @@ border-radius:15px</string>
         <property name="title">
          <string/>
         </property>
-        <layout class="QVBoxLayout" name="verticalLayout_3" stretch="1,3,3">
-         <property name="spacing">
-          <number>2</number>
+        <widget class="QGroupBox" name="groupBox">
+         <property name="geometry">
+          <rect>
+           <x>0</x>
+           <y>30</y>
+           <width>321</width>
+           <height>180</height>
+          </rect>
          </property>
-         <property name="leftMargin">
-          <number>2</number>
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
          </property>
-         <property name="topMargin">
-          <number>2</number>
+         <property name="font">
+          <font>
+           <bold>true</bold>
+          </font>
          </property>
-         <property name="rightMargin">
-          <number>2</number>
-         </property>
-         <property name="bottomMargin">
-          <number>2</number>
-         </property>
-         <item>
-          <widget class="QGroupBox" name="groupBox">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-           <property name="font">
-            <font>
-             <bold>true</bold>
-            </font>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">background-color: rgb(245, 245, 245);
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(245, 245, 245);
 border:2px solid rgb(255, 255, 255);
 border-radius:15px</string>
-           </property>
-           <property name="title">
-            <string>机器人信息</string>
-           </property>
-           <layout class="QGridLayout" name="gridLayout">
-            <property name="leftMargin">
-             <number>5</number>
+         </property>
+         <property name="title">
+          <string/>
+         </property>
+         <layout class="QGridLayout" name="gridLayout">
+          <property name="leftMargin">
+           <number>5</number>
+          </property>
+          <item row="0" column="0">
+           <layout class="QVBoxLayout" name="verticalLayout">
+            <property name="topMargin">
+             <number>4</number>
             </property>
-            <item row="0" column="0">
-             <layout class="QVBoxLayout" name="verticalLayout">
-              <property name="topMargin">
-               <number>4</number>
+            <item>
+             <widget class="QLabel" name="label">
+              <property name="text">
+               <string>orientation[x  y  z  w]</string>
               </property>
+             </widget>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout">
               <item>
-               <widget class="QLabel" name="label">
+               <widget class="QLabel" name="ori_x">
+                <property name="frameShape">
+                 <enum>QFrame::Shape::Box</enum>
+                </property>
                 <property name="text">
-                 <string>orientation[x  y  z  w]</string>
+                 <string/>
                 </property>
                </widget>
               </item>
               <item>
-               <layout class="QHBoxLayout" name="horizontalLayout">
-                <item>
-                 <widget class="QLabel" name="ori_x">
-                  <property name="frameShape">
-                   <enum>QFrame::Shape::Box</enum>
-                  </property>
-                  <property name="text">
-                   <string/>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QLabel" name="ori_y">
-                  <property name="frameShape">
-                   <enum>QFrame::Shape::Box</enum>
-                  </property>
-                  <property name="text">
-                   <string/>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QLabel" name="ori_z">
-                  <property name="frameShape">
-                   <enum>QFrame::Shape::Box</enum>
-                  </property>
-                  <property name="text">
-                   <string/>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QLabel" name="ori_w">
-                  <property name="frameShape">
-                   <enum>QFrame::Shape::Box</enum>
-                  </property>
-                  <property name="text">
-                   <string/>
-                  </property>
-                 </widget>
-                </item>
-               </layout>
-              </item>
-              <item>
-               <widget class="QLabel" name="label_2">
+               <widget class="QLabel" name="ori_y">
+                <property name="frameShape">
+                 <enum>QFrame::Shape::Box</enum>
+                </property>
                 <property name="text">
-                 <string>角速度</string>
+                 <string/>
                 </property>
                </widget>
               </item>
               <item>
-               <layout class="QHBoxLayout" name="horizontalLayout_2">
-                <item>
-                 <widget class="QLabel" name="ang_x">
-                  <property name="frameShape">
-                   <enum>QFrame::Shape::Box</enum>
-                  </property>
-                  <property name="text">
-                   <string/>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QLabel" name="ang_y">
-                  <property name="frameShape">
-                   <enum>QFrame::Shape::Box</enum>
-                  </property>
-                  <property name="text">
-                   <string/>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QLabel" name="ang_z">
-                  <property name="frameShape">
-                   <enum>QFrame::Shape::Box</enum>
-                  </property>
-                  <property name="text">
-                   <string/>
-                  </property>
-                 </widget>
-                </item>
-               </layout>
-              </item>
-              <item>
-               <widget class="QLabel" name="label_3">
+               <widget class="QLabel" name="ori_z">
+                <property name="frameShape">
+                 <enum>QFrame::Shape::Box</enum>
+                </property>
                 <property name="text">
-                 <string>线速度</string>
+                 <string/>
                 </property>
                </widget>
               </item>
               <item>
-               <layout class="QHBoxLayout" name="horizontalLayout_3">
-                <item>
-                 <widget class="QLabel" name="lin_x">
-                  <property name="frameShape">
-                   <enum>QFrame::Shape::Box</enum>
-                  </property>
-                  <property name="text">
-                   <string/>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QLabel" name="lin_y">
-                  <property name="frameShape">
-                   <enum>QFrame::Shape::Box</enum>
-                  </property>
-                  <property name="text">
-                   <string/>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QLabel" name="lin_z">
-                  <property name="frameShape">
-                   <enum>QFrame::Shape::Box</enum>
-                  </property>
-                  <property name="text">
-                   <string/>
-                  </property>
-                 </widget>
-                </item>
-               </layout>
+               <widget class="QLabel" name="ori_w">
+                <property name="frameShape">
+                 <enum>QFrame::Shape::Box</enum>
+                </property>
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
               </item>
              </layout>
             </item>
-           </layout>
-          </widget>
-         </item>
-         <item>
-          <widget class="QGroupBox" name="groupBox_2">
-           <property name="font">
-            <font>
-             <bold>true</bold>
-            </font>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">background-color: rgb(245, 245, 245);
-border:2px solid rgb(255, 255, 255);
-border-radius:15px</string>
-           </property>
-           <property name="title">
-            <string>机器人视角</string>
-           </property>
-           <layout class="QVBoxLayout" name="verticalLayout_6">
             <item>
-             <layout class="QVBoxLayout" name="verticalLayout_2" stretch="1">
-              <property name="topMargin">
-               <number>4</number>
+             <widget class="QLabel" name="label_2">
+              <property name="text">
+               <string>角速度</string>
               </property>
+             </widget>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_2">
               <item>
-               <widget class="QLabel" name="imageRawDisplay">
+               <widget class="QLabel" name="ang_x">
+                <property name="frameShape">
+                 <enum>QFrame::Shape::Box</enum>
+                </property>
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="ang_y">
+                <property name="frameShape">
+                 <enum>QFrame::Shape::Box</enum>
+                </property>
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="ang_z">
+                <property name="frameShape">
+                 <enum>QFrame::Shape::Box</enum>
+                </property>
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item>
+             <widget class="QLabel" name="label_3">
+              <property name="text">
+               <string>线速度</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <layout class="QHBoxLayout" name="horizontalLayout_3">
+              <item>
+               <widget class="QLabel" name="lin_x">
+                <property name="frameShape">
+                 <enum>QFrame::Shape::Box</enum>
+                </property>
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="lin_y">
+                <property name="frameShape">
+                 <enum>QFrame::Shape::Box</enum>
+                </property>
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="lin_z">
                 <property name="frameShape">
                  <enum>QFrame::Shape::Box</enum>
                 </property>
@@ -395,96 +356,240 @@ border-radius:15px</string>
              </layout>
             </item>
            </layout>
-          </widget>
-         </item>
-         <item>
-          <widget class="QGroupBox" name="groupBox_6">
-           <property name="font">
-            <font>
-             <bold>true</bold>
-            </font>
-           </property>
-           <property name="styleSheet">
-            <string notr="true">background-color: rgb(245, 245, 245);
+          </item>
+         </layout>
+        </widget>
+        <widget class="QGroupBox" name="groupBox_2">
+         <property name="geometry">
+          <rect>
+           <x>0</x>
+           <y>240</y>
+           <width>321</width>
+           <height>181</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <bold>true</bold>
+          </font>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(245, 245, 245);
 border:2px solid rgb(255, 255, 255);
 border-radius:15px</string>
-           </property>
-           <property name="title">
-            <string>任务列表</string>
-           </property>
-           <layout class="QVBoxLayout" name="verticalLayout_5">
+         </property>
+         <property name="title">
+          <string/>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_6">
+          <item>
+           <layout class="QVBoxLayout" name="verticalLayout_2" stretch="1">
             <property name="topMargin">
-             <number>12</number>
+             <number>4</number>
             </property>
             <item>
-             <widget class="QListWidget" name="taskListWidget">
-              <property name="styleSheet">
-               <string notr="true">background-color: rgb(250, 250, 250);</string>
+             <widget class="QLabel" name="imageRawDisplay">
+              <property name="frameShape">
+               <enum>QFrame::Shape::Box</enum>
+              </property>
+              <property name="text">
+               <string/>
               </property>
              </widget>
             </item>
-            <item>
-             <layout class="QHBoxLayout" name="taskButtonLayout">
-              <item>
-               <widget class="QPushButton" name="addTaskButton">
-                <property name="minimumSize">
-                 <size>
-                  <width>80</width>
-                  <height>25</height>
-                 </size>
-                </property>
-                <property name="styleSheet">
-                 <string notr="true">background-color: rgb(245, 245, 245);
-border:2px solid rgb(255, 255, 255);
-border-radius:10px</string>
-                </property>
-                <property name="text">
-                 <string>添加任务</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QPushButton" name="importTaskButton">
-                <property name="minimumSize">
-                 <size>
-                  <width>80</width>
-                  <height>25</height>
-                 </size>
-                </property>
-                <property name="styleSheet">
-                 <string notr="true">background-color: rgb(245, 245, 245);
-border:2px solid rgb(255, 255, 255);
-border-radius:10px</string>
-                </property>
-                <property name="text">
-                 <string>导入代码</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QPushButton" name="runTaskButton">
-                <property name="minimumSize">
-                 <size>
-                  <width>80</width>
-                  <height>25</height>
-                 </size>
-                </property>
-                <property name="styleSheet">
-                 <string notr="true">background-color: rgb(245, 245, 245);
-border:2px solid rgb(255, 255, 255);
-border-radius:10px</string>
-                </property>
-                <property name="text">
-                 <string>执行任务</string>
-                </property>
-               </widget>
-              </item>
-             </layout>
-            </item>
            </layout>
-          </widget>
-         </item>
-        </layout>
+          </item>
+         </layout>
+        </widget>
+        <widget class="QGroupBox" name="groupBox_6">
+         <property name="geometry">
+          <rect>
+           <x>0</x>
+           <y>450</y>
+           <width>317</width>
+           <height>151</height>
+          </rect>
+         </property>
+         <property name="font">
+          <font>
+           <bold>true</bold>
+          </font>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color:  rgb(255, 255, 255);
+
+border-radius:15px</string>
+         </property>
+         <property name="title">
+          <string/>
+         </property>
+         <widget class="QListWidget" name="taskListWidget">
+          <property name="geometry">
+           <rect>
+            <x>5</x>
+            <y>6</y>
+            <width>301</width>
+            <height>101</height>
+           </rect>
+          </property>
+          <property name="styleSheet">
+           <string notr="true">background-color: rgb(250, 250, 250);</string>
+          </property>
+         </widget>
+         <widget class="QWidget" name="">
+          <property name="geometry">
+           <rect>
+            <x>12</x>
+            <y>114</y>
+            <width>291</width>
+            <height>27</height>
+           </rect>
+          </property>
+          <layout class="QHBoxLayout" name="horizontalLayout_8">
+           <item>
+            <widget class="QPushButton" name="addTaskButton">
+             <property name="minimumSize">
+              <size>
+               <width>80</width>
+               <height>25</height>
+              </size>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">background-color: rgb(47, 86, 135);
+color: rgb(255, 255, 255);
+font: 9pt &quot;微软雅黑&quot;;
+border:2px solid rgb(255, 255, 255);
+border-radius:8px</string>
+             </property>
+             <property name="text">
+              <string>添加任务</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="importTaskButton">
+             <property name="minimumSize">
+              <size>
+               <width>80</width>
+               <height>25</height>
+              </size>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">background-color: rgb(47, 86, 135);
+color: rgb(255, 255, 255);
+font: 9pt &quot;微软雅黑&quot;;
+border:2px solid rgb(255, 255, 255);
+border-radius:8px</string>
+             </property>
+             <property name="text">
+              <string>导入代码</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="runTaskButton">
+             <property name="minimumSize">
+              <size>
+               <width>80</width>
+               <height>25</height>
+              </size>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">background-color: rgb(47, 86, 135);
+color: rgb(255, 255, 255);
+font: 9pt &quot;微软雅黑&quot;;
+border:2px solid rgb(255, 255, 255);
+border-radius:8px</string>
+             </property>
+             <property name="text">
+              <string>执行任务</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </widget>
+        <widget class="QTextEdit" name="textEdit">
+         <property name="geometry">
+          <rect>
+           <x>0</x>
+           <y>0</y>
+           <width>321</width>
+           <height>31</height>
+          </rect>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(47, 86, 135);
+color: rgb(255, 255, 255);
+font: 9pt &quot;微软雅黑&quot;;
+border:2px solid rgb(255, 255, 255);
+border-radius:8px</string>
+         </property>
+         <property name="html">
+          <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;meta charset=&quot;utf-8&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+hr { height: 1px; border-width: 0; }
+li.unchecked::marker { content: &quot;\2610&quot;; }
+li.checked::marker { content: &quot;\2612&quot;; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'微软雅黑'; font-size:9pt; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt; 机器人状态信息&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+         </property>
+        </widget>
+        <widget class="QTextEdit" name="textEdit_2">
+         <property name="geometry">
+          <rect>
+           <x>0</x>
+           <y>210</y>
+           <width>321</width>
+           <height>31</height>
+          </rect>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(47, 86, 135);
+color: rgb(255, 255, 255);
+font: 9pt &quot;微软雅黑&quot;;
+border:2px solid rgb(255, 255, 255);
+border-radius:8px</string>
+         </property>
+         <property name="html">
+          <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;meta charset=&quot;utf-8&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+hr { height: 1px; border-width: 0; }
+li.unchecked::marker { content: &quot;\2610&quot;; }
+li.checked::marker { content: &quot;\2612&quot;; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'微软雅黑'; font-size:9pt; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt; 机器人视角&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+         </property>
+        </widget>
+        <widget class="QTextEdit" name="textEdit_3">
+         <property name="geometry">
+          <rect>
+           <x>0</x>
+           <y>420</y>
+           <width>321</width>
+           <height>31</height>
+          </rect>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background-color: rgb(47, 86, 135);
+color: rgb(255, 255, 255);
+font: 9pt &quot;微软雅黑&quot;;
+border:2px solid rgb(255, 255, 255);
+border-radius:8px</string>
+         </property>
+         <property name="html">
+          <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;meta charset=&quot;utf-8&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+hr { height: 1px; border-width: 0; }
+li.unchecked::marker { content: &quot;\2610&quot;; }
+li.checked::marker { content: &quot;\2612&quot;; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'微软雅黑'; font-size:9pt; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt; 任务列表&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+         </property>
+        </widget>
        </widget>
       </item>
      </layout>

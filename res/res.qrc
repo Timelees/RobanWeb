@@ -1,0 +1,8 @@
+<RCC>
+    <qresource prefix="/icon">
+        <file>../icon/you.bmp</file>
+        <file>../icon/zuo.bmp</file>
+        <file>../icon/hou.bmp</file>
+        <file>../icon/qian.bmp</file>
+    </qresource>
+</RCC>

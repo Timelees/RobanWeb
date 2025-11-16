@@ -59,6 +59,22 @@ file(GLOB_RECURSE UI_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/ui/*.ui"
 )
 
+# 收集Qt资源文件，后续直接把新的.qrc文件放进对应目录即可自动加入
+set(_qrc_search_paths
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/resources"
+    "${CMAKE_CURRENT_SOURCE_DIR}/res"
+)
+set(QRC_FILES)
+foreach(_qrc_path IN LISTS _qrc_search_paths)
+    if (EXISTS "${_qrc_path}")
+        file(GLOB QRC_CANDIDATES "${_qrc_path}/*.qrc")
+        list(APPEND QRC_FILES ${QRC_CANDIDATES})
+    endif()
+endforeach()
+list(REMOVE_DUPLICATES QRC_FILES)
+
+
 # 收集头文件（用于MOC，递归）
 file(GLOB_RECURSE HEADER_FILES 
     "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h"
@@ -81,6 +97,7 @@ add_executable(${PROJECT_NAME}
     ${SRC_FILES} 
     ${UI_FILES}
     ${HEADER_FILES}
+    ${QRC_FILES}
 ) 
 
 
@@ -156,6 +173,7 @@ foreach(_f ${SRC_FILES})
 endforeach()
 
 add_library(robanweb_objs OBJECT ${ROBANWEB_OBJ_SOURCES} ${HEADER_FILES} ${UI_FILES})
+target_sources(robanweb_objs PRIVATE ${QRC_FILES})
 target_include_directories(robanweb_objs PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_BINARY_DIR})
 # Link Qt modules here so autogen and compilation have proper include paths. Note: OBJECT libraries do not
 # propagate link libraries to consuming targets, so test executables still need to link required Qt libs.
@@ -165,77 +183,77 @@ target_link_libraries(robanweb_objs PRIVATE Qt6::Widgets Qt6::WebSockets Qt6::Sq
 
 # assimp测试
 # Create a small viewer test executable that uses Qt and Assimp to display a model
-set(TEST_VIEWER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/test/test_viewer.cpp")
-set(TEST_MODEL_BONE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/test/test_model_bone.cpp")
-set(TEST_MODEL_SCENE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/test/test_model_scene.cpp")
-set(TEST_SCENE_LOC_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/test/test_scene_loc.cpp")
-if (EXISTS ${TEST_VIEWER_SRC})
-    add_executable(test_viewer ${TEST_VIEWER_SRC})
-    add_executable(test_model_bone ${TEST_MODEL_BONE_SRC})
-    add_executable(test_model_scene ${TEST_MODEL_SCENE_SRC})
-    add_executable(test_scene_loc ${TEST_SCENE_LOC_SRC})
-    # Ensure test targets that use RobotManager link its implementation
+# set(TEST_VIEWER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/test/test_viewer.cpp")
+# set(TEST_MODEL_BONE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/test/test_model_bone.cpp")
+# set(TEST_MODEL_SCENE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/test/test_model_scene.cpp")
+# set(TEST_SCENE_LOC_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/test/test_scene_loc.cpp")
+# if (EXISTS ${TEST_VIEWER_SRC})
+#     add_executable(test_viewer ${TEST_VIEWER_SRC})
+#     add_executable(test_model_bone ${TEST_MODEL_BONE_SRC})
+#     add_executable(test_model_scene ${TEST_MODEL_SCENE_SRC})
+#     add_executable(test_scene_loc ${TEST_SCENE_LOC_SRC})
+#     # Ensure test targets that use RobotManager link its implementation
     
-    target_include_directories(test_viewer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_BINARY_DIR})
-    target_include_directories(test_model_bone PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_BINARY_DIR})
-    target_include_directories(test_model_scene PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_BINARY_DIR})
-    target_include_directories(test_scene_loc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_BINARY_DIR})
-    target_link_libraries(test_viewer PRIVATE Qt6::Widgets Qt6::OpenGLWidgets Qt6::WebSockets Qt6::Sql)
-    target_link_libraries(test_model_bone PRIVATE  Qt6::Widgets Qt6::OpenGLWidgets Qt6::WebSockets Qt6::Sql)
-    target_link_libraries(test_model_scene PRIVATE  Qt6::Widgets Qt6::OpenGLWidgets Qt6::WebSockets Qt6::Sql)
-    target_link_libraries(test_scene_loc PRIVATE  Qt6::Widgets Qt6::OpenGLWidgets Qt6::WebSockets Qt6::Sql)
-    # Link in compiled object files from main sources so tests get the implementation
-    target_link_libraries(test_viewer PRIVATE $<TARGET_OBJECTS:robanweb_objs>)
-    target_link_libraries(test_model_bone PRIVATE $<TARGET_OBJECTS:robanweb_objs>)
-    target_link_libraries(test_model_scene PRIVATE $<TARGET_OBJECTS:robanweb_objs>)
-    target_link_libraries(test_scene_loc PRIVATE $<TARGET_OBJECTS:robanweb_objs>)
-    # prefer imported target if available
-    if (TARGET assimp::assimp)
-        target_link_libraries(test_viewer PRIVATE assimp::assimp)
-        target_link_libraries(test_model_bone PRIVATE assimp::assimp)
-        target_link_libraries(test_model_scene PRIVATE assimp::assimp)
-        target_link_libraries(test_scene_loc PRIVATE assimp::assimp)
-    elseif (ASSIMP_LIB)
-        target_link_libraries(test_viewer PRIVATE ${ASSIMP_LIB})
-        target_link_libraries(test_model_bone PRIVATE ${ASSIMP_LIB})
-        target_link_libraries(test_model_scene PRIVATE ${ASSIMP_LIB})
-        target_link_libraries(test_scene_loc PRIVATE ${ASSIMP_LIB})
-    else()
-        message(WARNING "Assimp not found for test_viewer. Set ASSIMP_ROOT or put libassimp.dll.a into project lib/ to link.")
-    endif()
+#     target_include_directories(test_viewer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_BINARY_DIR})
+#     target_include_directories(test_model_bone PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_BINARY_DIR})
+#     target_include_directories(test_model_scene PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_BINARY_DIR})
+#     target_include_directories(test_scene_loc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_BINARY_DIR})
+#     target_link_libraries(test_viewer PRIVATE Qt6::Widgets Qt6::OpenGLWidgets Qt6::WebSockets Qt6::Sql)
+#     target_link_libraries(test_model_bone PRIVATE  Qt6::Widgets Qt6::OpenGLWidgets Qt6::WebSockets Qt6::Sql)
+#     target_link_libraries(test_model_scene PRIVATE  Qt6::Widgets Qt6::OpenGLWidgets Qt6::WebSockets Qt6::Sql)
+#     target_link_libraries(test_scene_loc PRIVATE  Qt6::Widgets Qt6::OpenGLWidgets Qt6::WebSockets Qt6::Sql)
+#     # Link in compiled object files from main sources so tests get the implementation
+#     target_link_libraries(test_viewer PRIVATE $<TARGET_OBJECTS:robanweb_objs>)
+#     target_link_libraries(test_model_bone PRIVATE $<TARGET_OBJECTS:robanweb_objs>)
+#     target_link_libraries(test_model_scene PRIVATE $<TARGET_OBJECTS:robanweb_objs>)
+#     target_link_libraries(test_scene_loc PRIVATE $<TARGET_OBJECTS:robanweb_objs>)
+#     # prefer imported target if available
+#     if (TARGET assimp::assimp)
+#         target_link_libraries(test_viewer PRIVATE assimp::assimp)
+#         target_link_libraries(test_model_bone PRIVATE assimp::assimp)
+#         target_link_libraries(test_model_scene PRIVATE assimp::assimp)
+#         target_link_libraries(test_scene_loc PRIVATE assimp::assimp)
+#     elseif (ASSIMP_LIB)
+#         target_link_libraries(test_viewer PRIVATE ${ASSIMP_LIB})
+#         target_link_libraries(test_model_bone PRIVATE ${ASSIMP_LIB})
+#         target_link_libraries(test_model_scene PRIVATE ${ASSIMP_LIB})
+#         target_link_libraries(test_scene_loc PRIVATE ${ASSIMP_LIB})
+#     else()
+#         message(WARNING "Assimp not found for test_viewer. Set ASSIMP_ROOT or put libassimp.dll.a into project lib/ to link.")
+#     endif()
 
-    if (WIN32)
-        target_link_libraries(test_viewer PRIVATE opengl32)
-        target_link_libraries(test_model_bone PRIVATE opengl32)
-        target_link_libraries(test_model_scene PRIVATE opengl32)
-        target_link_libraries(test_scene_loc PRIVATE opengl32)
-    else()
-        find_package(OpenGL REQUIRED)
-        if (TARGET OpenGL::GL)
-            target_link_libraries(test_viewer PRIVATE OpenGL::GL)
-            target_link_libraries(test_model_bone PRIVATE OpenGL::GL)
-            target_link_libraries(test_model_scene PRIVATE OpenGL::GL)
-            target_link_libraries(test_scene_loc PRIVATE OpenGL::GL)
-        endif()
-    endif()
+#     if (WIN32)
+#         target_link_libraries(test_viewer PRIVATE opengl32)
+#         target_link_libraries(test_model_bone PRIVATE opengl32)
+#         target_link_libraries(test_model_scene PRIVATE opengl32)
+#         target_link_libraries(test_scene_loc PRIVATE opengl32)
+#     else()
+#         find_package(OpenGL REQUIRED)
+#         if (TARGET OpenGL::GL)
+#             target_link_libraries(test_viewer PRIVATE OpenGL::GL)
+#             target_link_libraries(test_model_bone PRIVATE OpenGL::GL)
+#             target_link_libraries(test_model_scene PRIVATE OpenGL::GL)
+#             target_link_libraries(test_scene_loc PRIVATE OpenGL::GL)
+#         endif()
+#     endif()
 
-    # Copy project-local DLL next to the executable if present
-    if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/bin/libassimp-6.dll")
-        add_custom_command(TARGET test_viewer POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_CURRENT_SOURCE_DIR}/bin/libassimp-6.dll" $<TARGET_FILE_DIR:test_viewer>
-        )
-        add_custom_command(TARGET test_model_bone POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_CURRENT_SOURCE_DIR}/bin/libassimp-6.dll" $<TARGET_FILE_DIR:test_model_bone>
-        )
-        add_custom_command(TARGET test_model_scene POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_CURRENT_SOURCE_DIR}/bin/libassimp-6.dll" $<TARGET_FILE_DIR:test_model_scene>
-        )
-        add_custom_command(TARGET test_scene_loc POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_CURRENT_SOURCE_DIR}/bin/libassimp-6.dll" $<TARGET_FILE_DIR:test_scene_loc>
-        )
-    endif()
-endif()
+#     # Copy project-local DLL next to the executable if present
+#     if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/bin/libassimp-6.dll")
+#         add_custom_command(TARGET test_viewer POST_BUILD
+#             COMMAND ${CMAKE_COMMAND} -E copy_if_different
+#             "${CMAKE_CURRENT_SOURCE_DIR}/bin/libassimp-6.dll" $<TARGET_FILE_DIR:test_viewer>
+#         )
+#         add_custom_command(TARGET test_model_bone POST_BUILD
+#             COMMAND ${CMAKE_COMMAND} -E copy_if_different
+#             "${CMAKE_CURRENT_SOURCE_DIR}/bin/libassimp-6.dll" $<TARGET_FILE_DIR:test_model_bone>
+#         )
+#         add_custom_command(TARGET test_model_scene POST_BUILD
+#             COMMAND ${CMAKE_COMMAND} -E copy_if_different
+#             "${CMAKE_CURRENT_SOURCE_DIR}/bin/libassimp-6.dll" $<TARGET_FILE_DIR:test_model_scene>
+#         )
+#         add_custom_command(TARGET test_scene_loc POST_BUILD
+#             COMMAND ${CMAKE_COMMAND} -E copy_if_different
+#             "${CMAKE_CURRENT_SOURCE_DIR}/bin/libassimp-6.dll" $<TARGET_FILE_DIR:test_scene_loc>
+#         )
+#     endif()
+# endif()

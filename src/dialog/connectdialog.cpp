@@ -8,17 +8,40 @@ ConnectDialog::ConnectDialog(QWidget *parent) :
 {
     ui->setupUi(this);
     setWindowTitle("连接设置");
+    
+     // 初始化设置区域的动态显示
+    if (ui->settingsContainer) {
+        ui->settingsContainer->setVisible(true);
+    }
+    if (ui->robot1GroupBox) {
+        ui->robot1GroupBox->setVisible(true);
+    }
+    if (ui->robot2GroupBox) {
+        ui->robot2GroupBox->setVisible(false);
+    }
+
+
     setTableWidget();
+    setRobot2TableWidget();
+
+
 
     // 连接按钮信号槽
     connect(ui->connectButton, &QPushButton::clicked, this, &ConnectDialog::onConnectButtonClicked);
     connect(ui->cancelButton, &QPushButton::clicked, this, &ConnectDialog::onCancelButtonClicked);
     connect(ui->addPB, &QPushButton::clicked, this, &ConnectDialog::onAddButtonClicked);
     connect(ui->delPB, &QPushButton::clicked, this, &ConnectDialog::onDeleteButtonClicked);
+    connect(ui->robot1ToggleButton, &QPushButton::clicked, this, &ConnectDialog::onRobot1ToggleButtonClicked);
+    connect(ui->robot2ToggleButton, &QPushButton::clicked, this, &ConnectDialog::onRobot2ToggleButtonClicked);
+    connect(ui->robot2AddPB, &QPushButton::clicked, this, &ConnectDialog::onRobot2AddButtonClicked);
+    connect(ui->robot2DelPB, &QPushButton::clicked, this, &ConnectDialog::onRobot2DeleteButtonClicked);
+    connect(ui->robot2ConnectButton, &QPushButton::clicked, this, &ConnectDialog::onRobot2ConnectButtonClicked);
+    connect(ui->robot2CancelButton, &QPushButton::clicked, this, &ConnectDialog::onRobot2CancelButtonClicked);
 
     // 设置数据库
     setupDatabase();
     loadConnectionsFromDatabase();
+    loadRobot2ConnectionsFromDatabase();
 }
 
 ConnectDialog::~ConnectDialog()
@@ -45,6 +68,21 @@ void ConnectDialog::setTableWidget(){
     ui->tableWidget->setColumnWidth(0, 50); // 复选框列宽度设为50像素
 }
 
+void ConnectDialog::setRobot2TableWidget(){
+    ui->robot2TableWidget->setColumnCount(3);
+    QStringList headers;
+    headers << "选择" << "主机IP" << "端口";
+    ui->robot2TableWidget->setHorizontalHeaderLabels(headers);
+
+    ui->robot2TableWidget->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    ui->robot2TableWidget->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Fixed);
+    ui->robot2TableWidget->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    ui->robot2TableWidget->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    ui->robot2TableWidget->setColumnWidth(0, 50);
+}
+
+
+
 // 添加数据库
 void ConnectDialog::setupDatabase(){
     db = QSqlDatabase::addDatabase("QSQLITE");
@@ -62,6 +100,11 @@ void ConnectDialog::setupDatabase(){
                     "id INTEGER PRIMARY KEY AUTOINCREMENT, "
                     "protocol TEXT, host TEXT, port TEXT)")) {
         qDebug() << "创建表失败:" << query.lastError().text();
+    }
+    if (!query.exec("CREATE TABLE IF NOT EXISTS connections_robot2 ("
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                    "protocol TEXT, host TEXT, port TEXT)")) {
+        qDebug() << "创建机器人2配置表失败:" << query.lastError().text();
     }
 }
 
@@ -119,6 +162,34 @@ void ConnectDialog::loadConnectionsFromDatabase()
     }
 }
 
+void ConnectDialog::loadRobot2ConnectionsFromDatabase()
+{
+    if (!db.isOpen()) {
+        qDebug() << "数据库未打开，无法加载机器人2连接";
+        return;
+    }
+
+    ui->robot2TableWidget->setRowCount(0);
+    QSqlQuery query("SELECT protocol, host, port FROM connections_robot2");
+    while (query.next()) {
+        int row = ui->robot2TableWidget->rowCount();
+        ui->robot2TableWidget->insertRow(row);
+
+        QTableWidgetItem *checkItem = new QTableWidgetItem();
+        checkItem->setCheckState(Qt::Unchecked);
+        checkItem->setFlags(checkItem->flags() | Qt::ItemIsUserCheckable);
+        ui->robot2TableWidget->setItem(row, 0, checkItem);
+
+        QTableWidgetItem *hostItem = new QTableWidgetItem(query.value("host").toString());
+        ui->robot2TableWidget->setItem(row, 1, hostItem);
+
+        QTableWidgetItem *portItem = new QTableWidgetItem(query.value("port").toString());
+        ui->robot2TableWidget->setItem(row, 2, portItem);
+    }
+}
+
+
+
 void ConnectDialog::saveConnectionToDatabase(const QString &protocol, const QString &host, const QString &port)
 {
     if (!db.isOpen()) {
@@ -138,6 +209,25 @@ void ConnectDialog::saveConnectionToDatabase(const QString &protocol, const QStr
     //     loadConnectionsFromDatabase(); // 刷新表格
     // }
 }
+
+void ConnectDialog::saveRobot2ConnectionToDatabase(const QString &protocol, const QString &host, const QString &port)
+{
+    if (!db.isOpen()) {
+        qDebug() << "数据库未打开，无法保存机器人2连接";
+        return;
+    }
+
+    QSqlQuery query;
+    query.prepare("INSERT INTO connections_robot2 (protocol, host, port) VALUES (:protocol, :host, :port)");
+    query.bindValue(":protocol", protocol);
+    query.bindValue(":host", host);
+    query.bindValue(":port", port);
+    if (!query.exec()) {
+        qDebug() << "保存机器人2连接失败:" << query.lastError().text();
+    }
+}
+
+
 // 从数据库删除配置
 void ConnectDialog::deleteConnectionFromDatabase(const QString &host, const QString &port)
 {
@@ -159,6 +249,30 @@ void ConnectDialog::deleteConnectionFromDatabase(const QString &host, const QStr
         qDebug() << "删除连接失败:" << query.lastError().text();
     }
 }
+
+void ConnectDialog::deleteRobot2ConnectionFromDatabase(const QString &host, const QString &port)
+{
+    if (!db.isOpen()) {
+        qDebug() << "数据库未打开，无法删除机器人2连接";
+        return;
+    }
+
+    if (host.isEmpty() || port.isEmpty()) {
+        qDebug() << "机器人2主机或端口为空，跳过数据库删除";
+        return;
+    }
+
+    QSqlQuery query;
+    query.prepare("DELETE FROM connections_robot2 WHERE host = :host AND port = :port");
+    query.bindValue(":host", host);
+    query.bindValue(":port", port);
+    if (!query.exec()) {
+        qDebug() << "删除机器人2连接失败:" << query.lastError().text();
+    }
+}
+
+
+
 
 // 添加按钮
 void ConnectDialog::onAddButtonClicked()
@@ -261,6 +375,117 @@ void ConnectDialog::onConnectButtonClicked()
 }
 // 断开连接按钮cancelButton  槽函数
 void ConnectDialog::onCancelButtonClicked()
+{
+    reject();
+}
+
+
+void ConnectDialog::onRobot1ToggleButtonClicked()
+{
+    if (ui->settingsContainer && !ui->settingsContainer->isVisible()) {
+        ui->settingsContainer->setVisible(true);
+    }
+    if (ui->robot1GroupBox && !ui->robot1GroupBox->isVisible()) {
+        ui->robot1GroupBox->setVisible(true);
+    }
+}
+
+void ConnectDialog::onRobot2ToggleButtonClicked()
+{
+    if (ui->robot1GroupBox && !ui->robot1GroupBox->isVisible()) {
+        onRobot1ToggleButtonClicked();
+    } else if (ui->settingsContainer && !ui->settingsContainer->isVisible()) {
+        ui->settingsContainer->setVisible(true);
+    }
+
+    if (ui->robot2GroupBox && !ui->robot2GroupBox->isVisible()) {
+        ui->robot2GroupBox->setVisible(true);
+    }
+}
+
+void ConnectDialog::onRobot2AddButtonClicked()
+{
+    QString protocol = "ws://";
+    QString host = ui->robot2HostEdit->text().trimmed();
+    QString port = ui->robot2PortEdit->text().trimmed();
+    bool ok;
+    int portNum = port.toInt(&ok);
+    if (host.isEmpty() || !ok || portNum < 0 || portNum > 65535) {
+        qDebug() << "机器人2无效的输入: 主机或端口无效";
+        return;
+    }
+
+    int rowCount = ui->robot2TableWidget->rowCount();
+    int curRow = ui->robot2TableWidget->currentRow();
+    int row = (curRow >= 0) ? curRow + 1 : rowCount;
+    ui->robot2TableWidget->insertRow(row);
+
+    QTableWidgetItem *checkItem = new QTableWidgetItem();
+    checkItem->setCheckState(Qt::Unchecked);
+    checkItem->setFlags(checkItem->flags() | Qt::ItemIsUserCheckable);
+    ui->robot2TableWidget->setItem(row, 0, checkItem);
+
+    QTableWidgetItem *hostItem = new QTableWidgetItem(host);
+    ui->robot2TableWidget->setItem(row, 1, hostItem);
+
+    QTableWidgetItem *portItem = new QTableWidgetItem(port);
+    ui->robot2TableWidget->setItem(row, 2, portItem);
+
+    saveRobot2ConnectionToDatabase(protocol, host, port);
+
+    qDebug() << "机器人2已添加:" << protocol << host << ":" << port;
+}
+
+void ConnectDialog::onRobot2DeleteButtonClicked()
+{
+    QList<QTableWidgetItem*> selectedItems = ui->robot2TableWidget->selectedItems();
+
+    if (selectedItems.isEmpty()) {
+        qDebug() << "机器人2未选择要删除的行";
+        return;
+    }
+
+    QList<int> rowsToDelete;
+    for (QTableWidgetItem *item : selectedItems) {
+        int row = item->row();
+        if (!rowsToDelete.contains(row)) {
+            rowsToDelete.append(row);
+        }
+    }
+    std::sort(rowsToDelete.begin(), rowsToDelete.end(), std::greater<int>());
+
+    for (int row : rowsToDelete) {
+        QTableWidgetItem *hostItem = ui->robot2TableWidget->item(row, 1);
+        QTableWidgetItem *portItem = ui->robot2TableWidget->item(row, 2);
+        QString host = hostItem ? hostItem->text() : QString();
+        QString port = portItem ? portItem->text() : QString();
+
+        deleteRobot2ConnectionFromDatabase(host, port);
+
+        ui->robot2TableWidget->removeRow(row);
+        qDebug() << "机器人2已删除选中的行: " << row << " (" << host << ":" << port << ")";
+    }
+}
+
+void ConnectDialog::onRobot2ConnectButtonClicked()
+{
+    for (int row = 0; row < ui->robot2TableWidget->rowCount(); ++row) {
+        QTableWidgetItem *checkItem = ui->robot2TableWidget->item(row, 0);
+        if (checkItem && checkItem->checkState() == Qt::Checked) {
+            QString host = ui->robot2TableWidget->item(row, 1)->text();
+            QString port = ui->robot2TableWidget->item(row, 2)->text();
+            QString protocol = "ws://";
+            QString url = protocol + host + ":" + port;
+            qDebug() << "请求连接机器人2:" << url;
+            emit connectRequested(url);
+            accept();
+            return;
+        }
+    }
+    qDebug() << "机器人2未选择任何连接";
+}
+
+void ConnectDialog::onRobot2CancelButtonClicked()
 {
     reject();
 }

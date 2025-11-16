@@ -22,6 +22,8 @@
 #include "task_manager/taskmanager.h"
 #include "model_display/robotManager.h"
 #include "model_display/sceneManager.h"
+#include "ros_process/servoPositions.h"
+
 
 class robanweb : public QMainWindow {
     Q_OBJECT
@@ -63,6 +65,7 @@ private:
     WebSocketWorker *webSocketWorker;
     QThread *webSocketThread;       // webSocket 线程
     QThread *imageThread;           // 图像处理线程
+    QThread *servoThread;          // 伺服处理线程
     QTimer *reconnectTimer;
     QString wsHost;
     QString wsPort;
@@ -75,7 +78,9 @@ private:
     QProgressBar *batteryProgressBar;           // 电量进度条
     BatteryMonitor *batteryMonitor = nullptr;   // 电量获取对象
     ImuMonitor *imuMonitor = nullptr;           // IMU获取对象
-    
+    ServoPositionsMonitor *servoPositionsMonitor = nullptr; // 伺服位置获取对象
+
+
     CameraImageMonitor *cameraImageMonitor = nullptr;
     QTimer *imagePullTimer = nullptr;           // 定时器，用于从相机监视器中获取最新帧
 

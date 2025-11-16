@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>600</width>
-    <height>480</height>
+    <width>427</width>
+    <height>413</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -16,17 +16,35 @@
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
     <widget class="QGroupBox" name="controlGroupBox">
+     <property name="maximumSize">
+      <size>
+       <width>420</width>
+       <height>16777215</height>
+      </size>
+     </property>
      <property name="styleSheet">
       <string notr="true">background-color: rgb(255, 255, 255);
 border:2px solid rgb(255, 255, 255);
 border-radius:15px</string>
      </property>
      <property name="title">
-      <string>控制</string>
+      <string/>
      </property>
      <layout class="QVBoxLayout" name="verticalLayout_2">
       <item>
        <widget class="QGroupBox" name="buttonGroupBox">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>400</width>
+          <height>100</height>
+         </size>
+        </property>
         <property name="styleSheet">
          <string notr="true">background-color: rgb(245, 245, 245);
 border:2px solid rgb(255, 255, 255);
@@ -44,6 +62,21 @@ border-radius:15px</string>
              <height>30</height>
             </size>
            </property>
+           <property name="styleSheet">
+            <string notr="true">QPushButton {
+   background-color: rgb(47, 86, 135);
+   color: rgb(255, 255, 255);
+   font: 11pt &quot;微软雅黑&quot;;
+    border: 2px solid rgb(255, 255, 255);
+    border-radius: 10px;
+}
+QPushButton:hover {
+    background-color: rgb(0, 126, 185);
+}
+QPushButton:pressed {
+    background-color: rgb(0, 126, 185);
+}</string>
+           </property>
            <property name="text">
             <string>启动控制</string>
            </property>
@@ -57,230 +90,104 @@ border-radius:15px</string>
              <height>30</height>
             </size>
            </property>
+           <property name="styleSheet">
+            <string notr="true">QPushButton {
+   background-color: rgb(47, 86, 135);
+   color: rgb(255, 255, 255);
+   font: 11pt &quot;微软雅黑&quot;;
+    border: 2px solid rgb(255, 255, 255);
+    border-radius: 10px;
+}
+QPushButton:hover {
+    background-color: rgb(0, 126, 185);
+}
+QPushButton:pressed {
+    background-color: rgb(0, 126, 185);
+}</string>
+           </property>
            <property name="text">
             <string>取消控制</string>
            </property>
           </widget>
-         </item>
-         <item>
-          <spacer name="horizontalSpacer">
-           <property name="orientation">
-            <enum>Qt::Orientation::Horizontal</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>40</width>
-             <height>20</height>
-            </size>
-           </property>
-          </spacer>
          </item>
         </layout>
        </widget>
       </item>
       <item>
        <widget class="QFrame" name="circleControlFrame">
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>400</width>
+          <height>16777215</height>
+         </size>
+        </property>
         <property name="styleSheet">
          <string notr="true">background-color: rgb(245, 245, 245);
 border:2px solid rgb(255, 255, 255);
 border-radius:15px</string>
         </property>
         <property name="frameShape">
-         <enum>QFrame::Shape::StyledPanel</enum>
+         <enum>QFrame::StyledPanel</enum>
         </property>
         <property name="frameShadow">
-         <enum>QFrame::Shadow::Raised</enum>
+         <enum>QFrame::Raised</enum>
         </property>
         <layout class="QGridLayout" name="gridLayout">
+         <item row="0" column="0">
+          <widget class="QPushButton" name="z_Button">
+           <property name="minimumSize">
+            <size>
+             <width>60</width>
+             <height>60</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>60</width>
+             <height>60</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">QPushButton {
+    background-color:rgba(85, 170, 0, 150);
+    color: white;
+    border-radius: 30px;
+}
+QPushButton:hover {
+    background-color: rgb(0, 186, 0);
+}
+QPushButton:pressed {
+    background-color: rgb(0, 170, 0);
+}</string>
+           </property>
+           <property name="text">
+            <string>左转</string>
+           </property>
+          </widget>
+         </item>
          <item row="0" column="1">
-          <widget class="QWidget" name="widget_1" native="true">
-           <layout class="QHBoxLayout" name="horizontalLayout_2">
-            <item>
-             <spacer name="horizontalSpacer_2">
-              <property name="orientation">
-               <enum>Qt::Orientation::Horizontal</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>40</width>
-                <height>20</height>
-               </size>
-              </property>
-             </spacer>
-            </item>
-            <item>
-             <widget class="QPushButton" name="w_Button">
-              <property name="minimumSize">
-               <size>
-                <width>60</width>
-                <height>60</height>
-               </size>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>60</width>
-                <height>60</height>
-               </size>
-              </property>
-              <property name="styleSheet">
-               <string notr="true">QPushButton {
-    background-color: rgb(0, 120, 215);
-    color: white;
-    border-radius: 30px;
-}
-QPushButton:hover {
-    background-color: rgb(30, 150, 245);
-}
-QPushButton:pressed {
-    background-color: rgb(0, 90, 185);
-}</string>
-              </property>
-              <property name="text">
-               <string>前
-(W)</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <spacer name="horizontalSpacer_3">
-              <property name="orientation">
-               <enum>Qt::Orientation::Horizontal</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>40</width>
-                <height>20</height>
-               </size>
-              </property>
-             </spacer>
-            </item>
-           </layout>
-          </widget>
-         </item>
-         <item row="1" column="0">
-          <widget class="QWidget" name="widget_2" native="true">
-           <layout class="QHBoxLayout" name="horizontalLayout_3">
-            <item>
-             <widget class="QPushButton" name="a_Button">
-              <property name="minimumSize">
-               <size>
-                <width>60</width>
-                <height>60</height>
-               </size>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>60</width>
-                <height>60</height>
-               </size>
-              </property>
-              <property name="styleSheet">
-               <string notr="true">QPushButton {
-    background-color: rgb(0, 120, 215);
-    color: white;
-    border-radius: 30px;
-}
-QPushButton:hover {
-    background-color: rgb(30, 150, 245);
-}
-QPushButton:pressed {
-    background-color: rgb(0, 90, 185);
-}</string>
-              </property>
-              <property name="text">
-               <string>左
-(A)</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </widget>
-         </item>
-         <item row="1" column="1">
-          <widget class="QWidget" name="widget_3" native="true">
-           <layout class="QHBoxLayout" name="horizontalLayout_4">
-            <item>
-             <spacer name="horizontalSpacer_4">
-              <property name="orientation">
-               <enum>Qt::Orientation::Horizontal</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>40</width>
-                <height>20</height>
-               </size>
-              </property>
-             </spacer>
-            </item>
-            <item>
-             <widget class="QPushButton" name="s_Button">
-              <property name="minimumSize">
-               <size>
-                <width>60</width>
-                <height>60</height>
-               </size>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>60</width>
-                <height>60</height>
-               </size>
-              </property>
-              <property name="styleSheet">
-               <string notr="true">QPushButton {
-    background-color: rgb(210, 30, 30);
-    color: white;
-    border-radius: 30px;
-}
-QPushButton:hover {
-    background-color: rgb(240, 60, 60);
-}
-QPushButton:pressed {
-    background-color: rgb(180, 0, 0);
-}</string>
-              </property>
-              <property name="text">
-               <string>停
-(S)</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <spacer name="horizontalSpacer_5">
-              <property name="orientation">
-               <enum>Qt::Orientation::Horizontal</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>40</width>
-                <height>20</height>
-               </size>
-              </property>
-             </spacer>
-            </item>
-           </layout>
-          </widget>
-         </item>
-         <item row="1" column="2">
-          <widget class="QWidget" name="widget_4" native="true">
-           <layout class="QHBoxLayout" name="horizontalLayout_5">
-            <item>
-             <widget class="QPushButton" name="d_Button">
-              <property name="minimumSize">
-               <size>
-                <width>60</width>
-                <height>60</height>
-               </size>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>60</width>
-                <height>60</height>
-               </size>
-              </property>
-              <property name="styleSheet">
-               <string notr="true">QPushButton {
-    background-color: rgb(0, 120, 215);
+          <widget class="QPushButton" name="w_Button">
+           <property name="minimumSize">
+            <size>
+             <width>60</width>
+             <height>60</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>60</width>
+             <height>60</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">QPushButton {
+    background-color:rgba(0, 121, 177, 100) ;
     color: white;
     border-radius: 30px;
 }
@@ -291,203 +198,174 @@ QPushButton:pressed {
     background-color: rgb(0, 90, 185);
 }
 </string>
-              </property>
-              <property name="text">
-               <string>右
-(D)</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <spacer name="horizontalSpacer_6">
-              <property name="orientation">
-               <enum>Qt::Orientation::Horizontal</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>40</width>
-                <height>20</height>
-               </size>
-              </property>
-             </spacer>
-            </item>
-           </layout>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset resource="../res/res.qrc">
+             <normaloff>:/icon/icon/qian.bmp</normaloff>
+             <normalon>:/icon/icon/qian.bmp</normalon>:/icon/icon/qian.bmp</iconset>
+           </property>
+           <property name="iconSize">
+            <size>
+             <width>30</width>
+             <height>30</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="2">
+          <widget class="QPushButton" name="c_Button">
+           <property name="minimumSize">
+            <size>
+             <width>60</width>
+             <height>60</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>60</width>
+             <height>60</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">QPushButton {
+    background-color:rgba(85, 170, 0, 150);
+    color: white;
+    border-radius: 30px;
+}
+QPushButton:hover {
+    background-color: rgb(26, 235, 85);
+}
+QPushButton:pressed {
+    background-color: rgb(6, 223, 42);
+}</string>
+           </property>
+           <property name="text">
+            <string>右转</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QPushButton" name="a_Button">
+           <property name="minimumSize">
+            <size>
+             <width>60</width>
+             <height>60</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>60</width>
+             <height>60</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">QPushButton {
+    background-color:rgba(0, 121, 177, 100) ;
+    color: white;
+    border-radius: 30px;
+}
+QPushButton:hover {
+    background-color: rgb(30, 150, 245);
+}
+QPushButton:pressed {
+    background-color: rgb(0, 90, 185);
+}</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset resource="../res/res.qrc">
+             <normaloff>:/icon/icon/zuo.bmp</normaloff>
+             <normalon>:/icon/icon/zuo.bmp</normalon>:/icon/icon/zuo.bmp</iconset>
+           </property>
+           <property name="iconSize">
+            <size>
+             <width>30</width>
+             <height>30</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QPushButton" name="s_Button">
+           <property name="minimumSize">
+            <size>
+             <width>60</width>
+             <height>60</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>60</width>
+             <height>60</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">QPushButton {
+    background-color:rgba(85, 170, 0, 150);
+    color: white;
+    border-radius: 30px;
+}
+QPushButton:hover {
+    background-color: rgb(0, 186, 0);
+}
+QPushButton:pressed {
+    background-color: rgb(0, 170, 0);
+}</string>
+           </property>
+           <property name="text">
+            <string>停</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="2">
+          <widget class="QPushButton" name="d_Button">
+           <property name="minimumSize">
+            <size>
+             <width>60</width>
+             <height>60</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>60</width>
+             <height>60</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">QPushButton {
+    background-color:rgba(0, 121, 177, 100) ;
+    color: white;
+    border-radius: 30px;
+}
+QPushButton:hover {
+    background-color: rgb(30, 150, 245);
+}
+QPushButton:pressed {
+    background-color: rgb(0, 90, 185);
+}</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset resource="../res/res.qrc">
+             <normaloff>:/icon/icon/you.bmp</normaloff>
+             <normalon>:/icon/icon/you.bmp</normalon>:/icon/icon/you.bmp</iconset>
+           </property>
+           <property name="iconSize">
+            <size>
+             <width>30</width>
+             <height>30</height>
+            </size>
+           </property>
           </widget>
          </item>
          <item row="2" column="0">
-          <widget class="QWidget" name="widget_5" native="true">
-           <layout class="QHBoxLayout" name="horizontalLayout_6">
-            <item>
-             <widget class="QPushButton" name="z_Button">
-              <property name="minimumSize">
-               <size>
-                <width>60</width>
-                <height>60</height>
-               </size>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>60</width>
-                <height>60</height>
-               </size>
-              </property>
-              <property name="styleSheet">
-               <string notr="true">QPushButton {
-    background-color: rgb(0, 170, 0);
-    color: white;
-    border-radius: 30px;
-}
-QPushButton:hover {
-    background-color: rgb(30, 150, 245);
-}
-QPushButton:pressed {
-    background-color: rgb(0, 90, 185);
-}</string>
-              </property>
-              <property name="text">
-               <string>左转
-(Z)</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </widget>
-         </item>
-         <item row="2" column="1">
-          <widget class="QWidget" name="widget_6" native="true">
-           <layout class="QHBoxLayout" name="horizontalLayout_7">
-            <item>
-             <spacer name="horizontalSpacer_7">
-              <property name="orientation">
-               <enum>Qt::Orientation::Horizontal</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>40</width>
-                <height>20</height>
-               </size>
-              </property>
-             </spacer>
-            </item>
-            <item>
-             <widget class="QPushButton" name="x_Button">
-              <property name="minimumSize">
-               <size>
-                <width>60</width>
-                <height>60</height>
-               </size>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>60</width>
-                <height>60</height>
-               </size>
-              </property>
-              <property name="styleSheet">
-               <string notr="true">QPushButton {
-    background-color: rgb(0, 120, 215);
-    color: white;
-    border-radius: 30px;
-}
-QPushButton:hover {
-    background-color: rgb(30, 150, 245);
-}
-QPushButton:pressed {
-    background-color: rgb(0, 90, 185);
-}</string>
-              </property>
-              <property name="text">
-               <string>后
-(X)</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <spacer name="horizontalSpacer_8">
-              <property name="orientation">
-               <enum>Qt::Orientation::Horizontal</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>40</width>
-                <height>20</height>
-               </size>
-              </property>
-             </spacer>
-            </item>
-           </layout>
-          </widget>
-         </item>
-         <item row="2" column="2">
-          <widget class="QWidget" name="widget_7" native="true">
-           <layout class="QHBoxLayout" name="horizontalLayout_8">
-            <item>
-             <widget class="QPushButton" name="c_Button">
-              <property name="minimumSize">
-               <size>
-                <width>60</width>
-                <height>60</height>
-               </size>
-              </property>
-              <property name="maximumSize">
-               <size>
-                <width>60</width>
-                <height>60</height>
-               </size>
-              </property>
-              <property name="styleSheet">
-               <string notr="true">QPushButton {
-    background-color: rgb(0, 170, 0);
-    color: white;
-    border-radius: 30px;
-}
-QPushButton:hover {
-    background-color: rgb(30, 150, 245);
-}
-QPushButton:pressed {
-    background-color: rgb(0, 90, 185);
-}</string>
-              </property>
-              <property name="text">
-               <string>右转
-(C)</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <spacer name="horizontalSpacer_9">
-              <property name="orientation">
-               <enum>Qt::Orientation::Horizontal</enum>
-              </property>
-              <property name="sizeHint" stdset="0">
-               <size>
-                <width>40</width>
-                <height>20</height>
-               </size>
-              </property>
-             </spacer>
-            </item>
-           </layout>
-          </widget>
-         </item>
-        </layout>
-       </widget>
-      </item>
-      <item>
-       <widget class="QFrame" name="specialControlFrame">
-        <property name="styleSheet">
-         <string notr="true">background-color: rgb(245, 245, 245);
-border:2px solid rgb(255, 255, 255);
-border-radius:15px</string>
-        </property>
-        <property name="frameShape">
-         <enum>QFrame::Shape::StyledPanel</enum>
-        </property>
-        <property name="frameShadow">
-         <enum>QFrame::Shadow::Raised</enum>
-        </property>
-        <layout class="QHBoxLayout" name="horizontalLayout_9">
-         <item>
           <widget class="QPushButton" name="r_Button">
            <property name="minimumSize">
             <size>
@@ -497,8 +375,8 @@ border-radius:15px</string>
            </property>
            <property name="maximumSize">
             <size>
-             <width>80</width>
-             <height>60</height>
+             <width>30</width>
+             <height>30</height>
             </size>
            </property>
            <property name="styleSheet">
@@ -515,36 +393,65 @@ QPushButton:pressed {
 }</string>
            </property>
            <property name="text">
-            <string>扫描
-(R)</string>
+            <string>扫描</string>
            </property>
           </widget>
          </item>
-         <item>
-          <spacer name="horizontalSpacer_10">
-           <property name="orientation">
-            <enum>Qt::Orientation::Horizontal</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>40</width>
-             <height>20</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-         <item>
-          <widget class="QPushButton" name="e_Button">
+         <item row="2" column="1">
+          <widget class="QPushButton" name="x_Button">
            <property name="minimumSize">
             <size>
-             <width>80</width>
+             <width>60</width>
              <height>60</height>
             </size>
            </property>
            <property name="maximumSize">
             <size>
-             <width>100</width>
+             <width>60</width>
              <height>60</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">QPushButton {
+    background-color:rgba(0, 121, 177, 100) ;
+    color: white;
+    border-radius: 30px;
+}
+QPushButton:hover {
+    background-color: rgb(30, 150, 245);
+}
+QPushButton:pressed {
+    background-color: rgb(0, 90, 185);
+}</string>
+           </property>
+           <property name="text">
+            <string/>
+           </property>
+           <property name="icon">
+            <iconset resource="../res/res.qrc">
+             <normaloff>:/icon/icon/hou.bmp</normaloff>
+             <normalon>:/icon/icon/hou.bmp</normalon>:/icon/icon/hou.bmp</iconset>
+           </property>
+           <property name="iconSize">
+            <size>
+             <width>30</width>
+             <height>30</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="2">
+          <widget class="QPushButton" name="e_Button">
+           <property name="minimumSize">
+            <size>
+             <width>60</width>
+             <height>60</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>30</width>
+             <height>30</height>
             </size>
            </property>
            <property name="styleSheet">
@@ -561,8 +468,7 @@ QPushButton:pressed {
 }</string>
            </property>
            <property name="text">
-            <string>持续扫描
-(E)</string>
+            <string>持续扫描</string>
            </property>
           </widget>
          </item>
@@ -574,6 +480,8 @@ QPushButton:pressed {
    </item>
   </layout>
  </widget>
- <resources/>
+ <resources>
+  <include location="../res/res.qrc"/>
+ </resources>
  <connections/>
 </ui>

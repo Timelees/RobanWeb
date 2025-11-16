@@ -52,157 +52,162 @@ void ModelDisplay::test_showAction()
 {
 
     QString takeActionPath = resolveConfigPath("take.csv");
+    QString walkActionPath = resolveConfigPath("walk.csv");
     QString placeActionPath = resolveConfigPath("place.csv");
     QString takeMovePath = resolveConfigPath("test_walk_take.csv");
     QString placeMovePath = resolveConfigPath("test_walk_place.csv");
     if (m_robot)
     {
-        // 加载移动轨迹 CSV（演示先移动到目标，再播放动作）
-        if (!m_robot->loadLocationCsv(takeMovePath))
-        {
-            qDebug() << "ModelDisplay::test_showAction: failed to load location csv" << takeMovePath;
-        }
-        else
-        {
-            // ------------------拿取货物流程----------------
-            // 当 location 播放完成（非循环）时再触发动作播放
-            // 先启动位置播放（非循环），当到达最后一帧会发出 locationPlaybackFinished()
-            // use shared_ptr to store the QMetaObject::Connection so the lambda can safely
-            // disconnect itself after the first invocation (avoid dangling reference)
-            // capture place paths so we can create local copies inside this lambda
-            m_demoConn = std::make_shared<QMetaObject::Connection>();
-            *m_demoConn = connect(m_robot, &RobotManager::locationPlaybackFinished, this, [this, m_robot = m_robot, takeActionPath, placeMovePath, placeActionPath]()
-                                  {
-                // single-invocation: disconnect our stored connection inside ModelDisplay
-                if (this->m_demoConn) {
-                    QObject::disconnect(*this->m_demoConn);
-                    this->m_demoConn.reset();
-                }
-                if (m_robot) {
-                        // 在调用 loadPlaceCsv 前先保存当前模型朝向（避免 load/播放流程中被意外修改）
-                        // 这样可以确保动作播放时模型保持原始朝向（用户期望的朝向1）
-                        QVector3D prevRot = m_robot->modelRotationDeg();    // (0, -90, 0)
-                        // qDebug() << "ModelDisplay::test_showAction: starting place action, preserving rotation" << prevRot;
+        // // 加载移动轨迹 CSV（演示先移动到目标，再播放动作）
+        // if (!m_robot->loadLocationCsv(takeMovePath))
+        // {
+        //     qDebug() << "ModelDisplay::test_showAction: failed to load location csv" << takeMovePath;
+        // }
+        // else
+        // {
+        //     // ------------------拿取货物流程----------------
+        //     // 当 location 播放完成（非循环）时再触发动作播放
+        //     // 先启动位置播放（非循环），当到达最后一帧会发出 locationPlaybackFinished()
+        //     // use shared_ptr to store the QMetaObject::Connection so the lambda can safely
+        //     // disconnect itself after the first invocation (avoid dangling reference)
+        //     // capture place paths so we can create local copies inside this lambda
+        //     m_demoConn = std::make_shared<QMetaObject::Connection>();
+        //     *m_demoConn = connect(m_robot, &RobotManager::locationPlaybackFinished, this, [this, m_robot = m_robot, takeActionPath, placeMovePath, placeActionPath]()
+        //                           {
+        //         // single-invocation: disconnect our stored connection inside ModelDisplay
+        //         if (this->m_demoConn) {
+        //             QObject::disconnect(*this->m_demoConn);
+        //             this->m_demoConn.reset();
+        //         }
+        //         if (m_robot) {
+        //                 // 在调用 loadActionCsv 前先保存当前模型朝向（避免 load/播放流程中被意外修改）
+        //                 // 这样可以确保动作播放时模型保持原始朝向（用户期望的朝向1）
+        //                 QVector3D prevRot = m_robot->modelRotationDeg();    // (0, -90, 0)
+        //                 // qDebug() << "ModelDisplay::test_showAction: starting place action, preserving rotation" << prevRot;
 
-                        // 加载动作 CSV 并播放（非循环，保持最后一帧）
-                        if (!m_robot->loadPlaceCsv(takeActionPath, 80, false)) {
-                            // qDebug() << "ModelDisplay::test_showAction: failed to load place csv" << takeActionPath;
-                        } else {
-                                // 有些操作（或定时器的第一次触发）可能会在加载/启动动画前临时改变模型状态
-                                // 为保险起见，立即把之前保存的朝向恢复回来，保证动作开始时保持朝向1
-                                m_robot->setModelRotation(prevRot);
+        //                 // 加载动作 CSV 并播放（非循环，保持最后一帧）
+        //                 if (!m_robot->loadActionCsv(takeActionPath, 80, false)) {
+        //                     // qDebug() << "ModelDisplay::test_showAction: failed to load place csv" << takeActionPath;
+        //                 } else {
+        //                         // 有些操作（或定时器的第一次触发）可能会在加载/启动动画前临时改变模型状态
+        //                         // 为保险起见，立即把之前保存的朝向恢复回来，保证动作开始时保持朝向1
+        //                         m_robot->setModelRotation(prevRot);
 
-                                // 动作开始后，我们不要立刻旋转（避免边播放边旋转）。
-                                // 目标：等待 place 动画完全播放结束后再做旋转。
-                                // 因此这里改为连接到 RobotManager::placePlaybackFinished 信号，
-                                // 在收到该信号后再启动平滑旋转定时器。
+        //                         // 动作开始后，我们不要立刻旋转（避免边播放边旋转）。
+        //                         // 目标：等待 place 动画完全播放结束后再做旋转。
+        //                         // 因此这里改为连接到 RobotManager::placePlaybackFinished 信号，
+        //                         // 在收到该信号后再启动平滑旋转定时器。
 
-                                // 可配置的旋转偏移量（以度为单位），为 0 表示不旋转
-                                float RotationOffset = 180.0f;    // 可调整
-                                float startY = prevRot.y();
-                                float endY = startY + RotationOffset;
-                                int steps = 18;                     // 平滑步数
-                                int intervalMs = 50;                // 每步间隔 ms
+        //                         // 可配置的旋转偏移量（以度为单位），为 0 表示不旋转
+        //                         float RotationOffset = 180.0f;    // 可调整
+        //                         float startY = prevRot.y();
+        //                         float endY = startY + RotationOffset;
+        //                         int steps = 18;                     // 平滑步数
+        //                         int intervalMs = 50;                // 每步间隔 ms
 
-                                // 安全断开可能存在的旧的 place->rotate 连接
-                                if (m_demoPlaceConn) {
-                                    QObject::disconnect(*m_demoPlaceConn);
-                                    m_demoPlaceConn.reset();
-                                }
+        //                         // 安全断开可能存在的旧的 place->rotate 连接
+        //                         if (m_demoPlaceConn) {
+        //                             QObject::disconnect(*m_demoPlaceConn);
+        //                             m_demoPlaceConn.reset();
+        //                         }
 
-                                // 创建新的单次连接：当 place 动画完全播放结束时触发旋转
-                                // 因为外层 lambda 捕获的是原始 path，我们在此复制为局部变量，便于内层 lambda 捕获
-                                QString pmove = placeMovePath;
-                                QString paction = placeActionPath;
+        //                         // 创建新的单次连接：当 place 动画完全播放结束时触发旋转
+        //                         // 因为外层 lambda 捕获的是原始 path，我们在此复制为局部变量，便于内层 lambda 捕获
+        //                         QString pmove = placeMovePath;
+        //                         QString paction = placeActionPath;
 
-                                m_demoPlaceConn = std::make_shared<QMetaObject::Connection>();
-                                *m_demoPlaceConn = connect(m_robot, &RobotManager::placePlaybackFinished, this, [this, m_robot = m_robot, startY, endY, steps, intervalMs, pmove, paction]() {
-                                    // disconnect ourselves so it's single-invocation
-                                    if (this->m_demoPlaceConn) {
-                                        QObject::disconnect(*this->m_demoPlaceConn);
-                                        this->m_demoPlaceConn.reset();
-                                    }
+        //                         m_demoPlaceConn = std::make_shared<QMetaObject::Connection>();
+        //                         *m_demoPlaceConn = connect(m_robot, &RobotManager::placePlaybackFinished, this, [this, m_robot = m_robot, startY, endY, steps, intervalMs, pmove, paction]() {
+        //                             // disconnect ourselves so it's single-invocation
+        //                             if (this->m_demoPlaceConn) {
+        //                                 QObject::disconnect(*this->m_demoPlaceConn);
+        //                                 this->m_demoPlaceConn.reset();
+        //                             }
 
-                                    // 如果旋转步数为0或 start==end 则无需动画
-                                    if (steps <= 0 || fabs(endY - startY) < 1e-6f) {
-                                        return;
-                                    }
+        //                             // 如果旋转步数为0或 start==end 则无需动画
+        //                             if (steps <= 0 || fabs(endY - startY) < 1e-6f) {
+        //                                 return;
+        //                             }
 
-                                    // ensure any previous rotate timer is stopped
-                                    if (m_demoRotateTimer) {
-                                        m_demoRotateTimer->stop();
-                                        delete m_demoRotateTimer;
-                                        m_demoRotateTimer = nullptr;
-                                    }
+        //                             // ensure any previous rotate timer is stopped
+        //                             if (m_demoRotateTimer) {
+        //                                 m_demoRotateTimer->stop();
+        //                                 delete m_demoRotateTimer;
+        //                                 m_demoRotateTimer = nullptr;
+        //                             }
 
-                                    m_demoRotateStartY = startY;
-                                    m_demoRotateEndY = endY;
-                                    m_demoRotateSteps = steps;
-                                    m_demoRotateCurrentStep = 0;
+        //                             m_demoRotateStartY = startY;
+        //                             m_demoRotateEndY = endY;
+        //                             m_demoRotateSteps = steps;
+        //                             m_demoRotateCurrentStep = 0;
                                     
-                                    // --------------------放置货物流程----------------------
-                                    m_demoRotateTimer = new QTimer(this);
-                                    connect(m_demoRotateTimer, &QTimer::timeout, this, [this, m_robot, pmove, paction]() {
-                                        if (!m_demoRotateTimer) return;
-                                        m_demoRotateCurrentStep++;
-                                        float t = float(m_demoRotateCurrentStep) / float(qMax(1, m_demoRotateSteps));
-                                        float y = m_demoRotateStartY + t * (m_demoRotateEndY - m_demoRotateStartY);
-                                        if (m_robot) {
-                                            m_robot->setModelRotation(QVector3D(0.0f, y, 0.0f));
-                                        }
-                                        if (m_demoRotateCurrentStep >= m_demoRotateSteps) {
-                                            m_demoRotateTimer->stop();
-                                            delete m_demoRotateTimer;
-                                            m_demoRotateTimer = nullptr;
-                                            // Rotation finished for the take-action sequence.
-                                            // Now start the place-move path and hook up a single-shot connection
-                                            // to play the place action when that location playback finishes.
-                                            if (m_robot) {
-                                                // load the place move CSV (path to move to place location)
-                                                if (!m_robot->loadLocationCsv(pmove)) {
-                                                    qDebug() << "ModelDisplay::test_showAction: failed to load place move csv" << pmove;
-                                                } else {
-                                                    // ensure any previous demo connection is disconnected
-                                                    if (m_demoConn) {
-                                                        QObject::disconnect(*m_demoConn);
-                                                        m_demoConn.reset();
-                                                    }
+        //                             // --------------------放置货物流程----------------------
+        //                             m_demoRotateTimer = new QTimer(this);
+        //                             connect(m_demoRotateTimer, &QTimer::timeout, this, [this, m_robot, pmove, paction]() {
+        //                                 if (!m_demoRotateTimer) return;
+        //                                 m_demoRotateCurrentStep++;
+        //                                 float t = float(m_demoRotateCurrentStep) / float(qMax(1, m_demoRotateSteps));
+        //                                 float y = m_demoRotateStartY + t * (m_demoRotateEndY - m_demoRotateStartY);
+        //                                 if (m_robot) {
+        //                                     m_robot->setModelRotation(QVector3D(0.0f, y, 0.0f));
+        //                                 }
+        //                                 if (m_demoRotateCurrentStep >= m_demoRotateSteps) {
+        //                                     m_demoRotateTimer->stop();
+        //                                     delete m_demoRotateTimer;
+        //                                     m_demoRotateTimer = nullptr;
+        //                                     // Rotation finished for the take-action sequence.
+        //                                     // Now start the place-move path and hook up a single-shot connection
+        //                                     // to play the place action when that location playback finishes.
+        //                                     if (m_robot) {
+        //                                         // load the place move CSV (path to move to place location)
+        //                                         if (!m_robot->loadLocationCsv(pmove)) {
+        //                                             qDebug() << "ModelDisplay::test_showAction: failed to load place move csv" << pmove;
+        //                                         } else {
+        //                                             // ensure any previous demo connection is disconnected
+        //                                             if (m_demoConn) {
+        //                                                 QObject::disconnect(*m_demoConn);
+        //                                                 m_demoConn.reset();
+        //                                             }
 
-                                                    // single-invocation connection: when place move playback finishes, play place action
-                                                    m_demoConn = std::make_shared<QMetaObject::Connection>();
-                                                    *m_demoConn = connect(m_robot, &RobotManager::locationPlaybackFinished, this, [this, m_robot = m_robot, paction]() {
-                                                        if (this->m_demoConn) {
-                                                            QObject::disconnect(*this->m_demoConn);
-                                                            this->m_demoConn.reset();
-                                                        }
-                                                        if (m_robot) {
-                                                            // preserve rotation
-                                                            QVector3D prevRot = m_robot->modelRotationDeg();
-                                                            if (!m_robot->loadPlaceCsv(paction, 80, false)) {
-                                                                qDebug() << "ModelDisplay::test_showAction: failed to load place csv" << paction;
-                                                            } else {
-                                                                m_robot->setModelRotation(prevRot);
-                                                            }
-                                                        }
-                                                    });
+        //                                             // single-invocation connection: when place move playback finishes, play place action
+        //                                             m_demoConn = std::make_shared<QMetaObject::Connection>();
+        //                                             *m_demoConn = connect(m_robot, &RobotManager::locationPlaybackFinished, this, [this, m_robot = m_robot, paction]() {
+        //                                                 if (this->m_demoConn) {
+        //                                                     QObject::disconnect(*this->m_demoConn);
+        //                                                     this->m_demoConn.reset();
+        //                                                 }
+        //                                                 if (m_robot) {
+        //                                                     // preserve rotation
+        //                                                     QVector3D prevRot = m_robot->modelRotationDeg();
+        //                                                     if (!m_robot->loadActionCsv(paction, 80, false)) {
+        //                                                         qDebug() << "ModelDisplay::test_showAction: failed to load place csv" << paction;
+        //                                                     } else {
+        //                                                         m_robot->setModelRotation(prevRot);
+        //                                                     }
+        //                                                 }
+        //                                             });
 
-                                                    // start playing the place-move locations once
-                                                    m_robot->startLocationPlayback(200, false);
-                                                }
-                                            }
-                                        }
-                                    });
-                                    m_demoRotateTimer->start(intervalMs);
-                                    // --------------------放置货物流程----------------------
-                                });
-                        }
-                    } });
+        //                                             // start playing the place-move locations once
+        //                                             m_robot->startLocationPlayback(200, false);
+        //                                         }
+        //                                     }
+        //                                 }
+        //                             });
+        //                             m_demoRotateTimer->start(intervalMs);
+        //                             // --------------------放置货物流程----------------------
+        //                         });
+        //                 }
+        //             } });
 
-            // start playing locations once
-            m_robot->startLocationPlayback(200, false);
-            // ------------------拿取货物流程----------------
-            // 放置流程由拿取流程完成并旋转结束后触发
-        }
+        //     // start playing locations once
+        //     m_robot->startLocationPlayback(200, false);
+        //     // ------------------拿取货物流程----------------
+        //     // 放置流程由拿取流程完成并旋转结束后触发
+        // }
+
+
+        // 测试walk的关节角度显示效果
+        m_robot->loadActionCsv(walkActionPath, 80, true);
 
     }
 }
@@ -253,17 +258,55 @@ void ModelDisplay::setDisplayWindow()
     m_topBar = new QWidget(this);
     m_topBar->setObjectName("calibTopBar");
     m_topBar->setAutoFillBackground(true);
+    m_topBar->setStyleSheet("background-color: rgb(255, 255, 255); border:2px solid rgb(255, 255, 255); border-radius:15px");
     QHBoxLayout *hb = new QHBoxLayout(m_topBar);
     hb->setContentsMargins(4, 4, 4, 4);
     hb->setSpacing(6);
+
+    // 定义按钮样式表，参考 robanweb.ui 中的按钮样式
+    QString buttonStyle = "QPushButton {"
+                          "    background-color: rgba(61, 112, 175, 100);"
+                          "    color: rgb(255, 255, 255);"
+                          "    font: 8pt \"微软雅黑\";"
+                          "    border: 2px solid rgb(255, 255, 255);"
+                          "    border-radius: 10px;"
+                          "}"
+                          "QPushButton:hover {"
+                          "    background-color: rgb(0, 126, 185);"
+                          "}"
+                          "QPushButton:pressed {"
+                          "    background-color: rgb(0, 126, 185);"
+                          "}";
+
+
     // 创建按钮，按需连接到已有槽
     QPushButton *btnMap = new QPushButton(QString::fromUtf8("地图标定"), m_topBar);
+    btnMap->setMinimumSize(75, 25);
+    btnMap->setStyleSheet(buttonStyle);
+    
     QPushButton *btnPickup = new QPushButton(QString::fromUtf8("取货点标定"), m_topBar);
+    btnPickup->setMinimumSize(75, 25);
+    btnPickup->setStyleSheet(buttonStyle);
+    
     QPushButton *btnPlace = new QPushButton(QString::fromUtf8("放置点标定"), m_topBar);
+    btnPlace->setMinimumSize(75, 25);
+    btnPlace->setStyleSheet(buttonStyle);
+    
     QPushButton *btnSave = new QPushButton(QString::fromUtf8("标定保存"), m_topBar);
+    btnSave->setMinimumSize(75, 25);
+    btnSave->setStyleSheet(buttonStyle);
+    
     QPushButton *btnDelete = new QPushButton(QString::fromUtf8("标定删除"), m_topBar);
+    btnDelete->setMinimumSize(75, 25);
+    btnDelete->setStyleSheet(buttonStyle);
+    
     QPushButton *btnClearAll = new QPushButton(QString::fromUtf8("全部删除"), m_topBar);
+    btnClearAll->setMinimumSize(75, 25);
+    btnClearAll->setStyleSheet(buttonStyle);
+    
     QPushButton *btnSceneMapping = new QPushButton(QString::fromUtf8("场景映射"), m_topBar);
+    btnSceneMapping->setMinimumSize(75, 25);
+    btnSceneMapping->setStyleSheet(buttonStyle);
 
     // 将按钮加入布局
     hb->addWidget(btnMap);
@@ -277,6 +320,8 @@ void ModelDisplay::setDisplayWindow()
     // ----------------------------------
     // 播放位置（路径）按钮
     QPushButton *btnPlayLocations = new QPushButton(QString::fromUtf8("流程演示"), m_topBar);
+    btnPlayLocations->setMinimumSize(75, 25);
+    btnPlayLocations->setStyleSheet(buttonStyle);
     hb->addWidget(btnPlayLocations);
     // ----------------------------------
 
@@ -297,8 +342,8 @@ void ModelDisplay::setDisplayWindow()
         if (!m_locationPlaying) {
             if (m_robot) {
                 // start the demo sequence implemented in test_showAction
-                // this->test_showAction();
-                this->test_showByRobotPoseToMove();
+                this->test_showAction();
+                // this->test_showByRobotPoseToMove();
 
                 // 若 test_showAction 启动了 location playback separately, we may need to start it here.
                 // 保持标志位以表示正在演示
