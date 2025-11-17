@@ -1,46 +1,119 @@
 #include "model_display/sceneManager.h"
 #include "util/load_csv.hpp"
+#include "ros_process/slamPose.h"
 
-SceneManager::SceneManager(WebSocketWorker *webSocketWorker, const QString &modelPath, QObject *parent)
-    : QObject(parent), m_modelPath(modelPath), m_worker(webSocketWorker)
+SceneManager::SceneManager(PoseMonitor *poseMonitor, const QString &modelPath, QObject *parent)
+    : QObject(parent), m_modelPath(modelPath), m_poseMonitor(poseMonitor)
 {
     init();
+
+    if(m_poseMonitor){
+        // 从ros话题获取位置消息
+        connect(m_poseMonitor, &PoseMonitor::poseUpdated, this, [this](const QVector3D &p) {
+            // 每次收到原始位姿时，先保存并立即发出动画专用信号，
+            // 以便动画子系统（例如步态/骨骼动画）可以保持与实机同步播放。
+            this->m_lastReceivedPose = p;
+            // 立即发出未节流的动画更新信号（用于驱动动画帧）
+            emit robotPoseAnimationUpdated(p);
+
+            // 节流处理：只在累计到一定次数时才更新 robotPose 并发出位置更新信号，减少渲染/模型更新频率引起的卡顿。
+            // 但如果当前 robotPose 尚未初始化（isNull），则首次收到时立即更新一次。
+            this->m_poseUpdateCounter += 1;
+            if (this->robotPose.isNull() || this->m_poseUpdateCounter >= this->m_poseUpdateThrottle) {
+                // 重置计数器并更新
+                this->m_poseUpdateCounter = 0;
+                this->robotPose = this->m_lastReceivedPose;
+                // 发出信号，通知其他模块（使用队列连接的调用者将在主线程安全地处理）
+                emit robotPoseUpdated(this->robotPose);
+            }
+        });
+    }
+
+    // 启动用于平滑显示的定时器：在每个 tick 中把 m_displayRobotPose 插值到最新的 robotPose 并发出显示信号
+    // 这样可以在不频繁修改 robotPose 的情况下，让渲染层获得连续的平滑位置变化。
+    m_displayTimer = new QTimer(this);
+    m_displayTimer->setInterval(m_displayIntervalMs);
+    connect(m_displayTimer, &QTimer::timeout, this, [this]() {
+        // 如果还没有任何有效目标位姿，则不发出信号
+        if (this->robotPose.isNull())
+            return;
+
+        // 初始化显示位姿为目标位姿（首次）
+        if (this->m_displayRobotPose.isNull()) {
+            this->m_displayRobotPose = this->robotPose;
+            emit robotPoseDisplayUpdated(this->m_displayRobotPose);
+            return;
+        }
+
+        // 线性插值到目标位姿（x,y,yaw）。对 yaw 做循环差值处理。
+        auto lerp = [](float a, float b, float t) { return a + (b - a) * t; };
+
+        // 基础插值因子（可在类中配置），但我们会根据目标与当前的差异动态放大该因子以减少延迟
+        float baseT = this->m_displayLerpFactor;
+        QVector3D cur = this->m_displayRobotPose;
+        // 为了降低显示延迟，使用最近收到的位姿作为插值目标（m_lastReceivedPose），
+        // 即使 robotPose 仍受节流限制，m_lastReceivedPose 会尽可能快地反映实机状态。
+        QVector3D tgt = this->m_lastReceivedPose.isNull() ? this->robotPose : this->m_lastReceivedPose;
+
+        // 计算平移差距（平面）与偏航差距
+        float dx = tgt.x() - cur.x();
+        float dy = tgt.y() - cur.y();
+        float dist = std::sqrt(dx * dx + dy * dy);
+
+        float cy = cur.z();
+        float ty = tgt.z();
+        float d = ty - cy;
+        // normalize del to [-180,180]
+        while (d > 180.0f) d -= 360.0f;
+        while (d < -180.0f) d += 360.0f;
+        float absYaw = std::fabs(d);
+
+        // 动态调整插值因子：当位移或偏航变化较大时快速跟随，减小时保持平滑
+        float t = baseT;
+        // 位移阈值（米） - 越大说明目标移动越多，越需要迅速跟随
+        if (dist > 0.25f) t = qMax(t, 0.95f);       // 大位移：几乎瞬间跳到目标
+        else if (dist > 0.08f) t = qMax(t, 0.75f);  // 中等位移：快速跟随
+        else if (dist > 0.02f) t = qMax(t, 0.45f);  // 小位移：适度加快
+
+        // 偏航也会促使更快的跟随
+        if (absYaw > 30.0f) t = qMax(t, 0.9f);
+        else if (absYaw > 8.0f) t = qMax(t, 0.6f);
+
+        // position x,y 线性插值
+        float nx = lerp(cur.x(), tgt.x(), t);
+        float ny = lerp(cur.y(), tgt.y(), t);
+
+        // yaw 插值（使用已归一化的 d）
+        float nyaw = cy + d * t;
+
+        this->m_displayRobotPose = QVector3D(nx, ny, nyaw);
+
+        // 如果与目标非常接近则直接置为目标，避免长尾误差
+        const float EPS = 1e-3f;
+        if (std::fabs(this->m_displayRobotPose.x() - tgt.x()) < EPS && std::fabs(this->m_displayRobotPose.y() - tgt.y()) < EPS && std::fabs(this->m_displayRobotPose.z() - tgt.z()) < 0.5f)
+            this->m_displayRobotPose = tgt;
+
+        emit robotPoseDisplayUpdated(this->m_displayRobotPose);
+    });
+    m_displayTimer->start();
+    
 }
 
-// compatibility constructor when no WebSocketWorker is available (e.g. unit tests)
-SceneManager::SceneManager(const QString &modelPath, QObject *parent)
-    : QObject(parent), m_modelPath(modelPath), m_worker(nullptr)
-{
-    init();
-}
 
-// non-inline destructor to ensure vtable is emitted in this TU
 SceneManager::~SceneManager() {}
 
 void SceneManager::init(){
     loadSucceeded = loadModel(m_modelPath.toStdString());   // 加载模型
 
-    // // ----------------暂时注释---------------------
-    // poseMonitor = new PoseMonitor(m_worker);
-    // // connect websocket raw messages to pose parser if we have a worker
-    // if (m_worker) {
-    //     connect(m_worker, &WebSocketWorker::messageReceived, poseMonitor, &PoseMonitor::onMessageReceived);
-    // }
-    // // 从poseMonitor获取更新的机器人位姿更新到robotPose
-    // connect(poseMonitor, &PoseMonitor::poseUpdated, this, [this](const QVector3D &p) {
-    //     this->robotPose = p;
-    //     // qDebug() << "SceneManager: robotPose updated" << p;
-    // });
-    // // ----------------暂时注释---------------------
-
-
     // 场景映射测试
     // 从test_sceneCornerMapping函数获取四个角点的位姿数据
     // 右上、左上、左下、右下
-    cornerPoints = test_sceneCornerMapping();
+    // cornerPoints = test_sceneCornerMapping();
 
     // 加载场景映射参数
     loadSceneMappingParameters();
+
+ 
 }
 
 // 场景映射测试 (成员函数)，从csv解析数据
@@ -566,7 +639,7 @@ int SceneManager::addCalibrationMarker(MarkerType type, const QVector3D &pos, fl
     mk.radius = radius;
     mk.meshIndex = meshIdx;
     mk.color = color;
-    // capture current robot pose (may be default if not available)
+    // 获取当前机器人位姿作为捕获时的位姿
     mk.robotPoseAtCapture = robotPose;
     m_markers.push_back(mk);
     return mk.id;
@@ -778,14 +851,14 @@ void SceneManager::SceneMapping(){
         // 场景坐标系使用射线模型捕获的X和Z作为x和y坐标
         double sx = sel[i].pos.x();
         double sy = sel[i].pos.z();
-        // double rx = sel[i].robotPoseAtCapture.x();
-        // double ry = sel[i].robotPoseAtCapture.y();
+        double rx = sel[i].robotPoseAtCapture.x();
+        double ry = sel[i].robotPoseAtCapture.y();
 
-        // ------- 测试 -------------
-        // 用test_robot_cornerPose.csv中读取的四个点作为标定时收到的机器人位置
-        double rx = cornerPoints[i].x();
-        double ry = cornerPoints[i].y();
-        // ------- 测试 -------------
+        // // ------- 测试 -------------
+        // // 用test_robot_cornerPose.csv中读取的四个点作为标定时收到的机器人位置
+        // double rx = cornerPoints[i].x();
+        // double ry = cornerPoints[i].y();
+        // // ------- 测试 -------------
 
 
         double row[3] = {sx, sy, 1.0};
@@ -982,5 +1055,15 @@ bool SceneManager::mapRobotToScene(const QVector2D &robotPt, QVector3D &outScene
     // 将映射点放在场景平面上，y 分量（高度）设为 0.0f（可根据需要改为平均地面高度）
     outScene = QVector3D(float(sx), 0.0f, float(sz));
     return true;
+}
+
+// Map the currently stored robot pose (robotPose: x,y,yaw) to scene coords.
+bool SceneManager::mapCurrentRobotPoseToScene(QVector3D &outScene) const
+{
+    // robotPose stores x,y,yaw; only x,y are used for planar mapping
+    if (robotPose.isNull())
+        return false;
+    QVector2D rxy(robotPose.x(), robotPose.y());
+    return mapRobotToScene(rxy, outScene);
 }
 

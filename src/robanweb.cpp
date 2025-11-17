@@ -1,12 +1,6 @@
 #include "robanweb.h"
-#include "dialog/connectdialog.h"
-#include "dialog/shDialog.h"
-#include "dialog/robotControlDialog.h"
-#include "socket_process/websocketworker.h"
-#include "util/load_param.hpp"
-// layout helper for replacing placeholder widget
-#include <QLayout>
-#include <QBoxLayout>
+
+
 
 
 robanweb::robanweb(QWidget* parent)
@@ -56,6 +50,14 @@ robanweb::~robanweb()
         delete servoThread;
         servoThread = nullptr;
         servoPositionsMonitor = nullptr;
+    }
+
+    if(poseThread){
+        poseThread->quit();
+        poseThread->wait();
+        delete poseThread;
+        poseThread = nullptr;
+        poseMonitor = nullptr;
     }
 
     // 清理任务管理器
@@ -136,19 +138,27 @@ void robanweb::init(){
     }
 
     // 伺服位置订阅对象（放到 webSocketThread 中以在 worker 线程解析 JSON，降低主线程延迟）
-    servoPositionsMonitor = new ServoPositionsMonitor(webSocketWorker, nullptr); // 无 parent，后面移动到 worker 线程
+    servoPositionsMonitor = new ServoPositionsMonitor(webSocketWorker, nullptr); 
     servoThread = new QThread(this);
     servoPositionsMonitor->moveToThread(servoThread);
     servoThread->start();
     connect(servoThread, &QThread::finished, servoPositionsMonitor, &QObject::deleteLater);
 
+    // 位置订阅对象
+    poseMonitor = new PoseMonitor(webSocketWorker, nullptr);
+    poseThread = new QThread(this);
+    poseMonitor->moveToThread(poseThread);
+    poseThread->start();
+    connect(poseThread, &QThread::finished, poseMonitor, &QObject::deleteLater);
 
     // 3D模型显示初始化
     QString modelRobot = QString::fromUtf8("..\\assets\\Roban.fbx"); // 默认机器人模型路径
     QString modelScene = QString::fromUtf8("..\\assets\\scene.obj"); // 默认场景模型路径
     
-    robotManager = new RobotManager(modelRobot, servoPositionsMonitor, this);    // 机器人管理器
-    sceneManager = new SceneManager(webSocketWorker, modelScene, this);    // 场景管理器
+    sceneManager = new SceneManager(poseMonitor, modelScene, this);    // 场景管理器
+    robotManager = new RobotManager(modelRobot, sceneManager, servoPositionsMonitor, this);    // 机器人管理器
+
+
     
     if (ui->modelDisplay) {
         QWidget *placeholder = ui->modelDisplay; // UI 中的占位 widget
@@ -253,11 +263,13 @@ void robanweb::bindSlots(){
     
     // 从ros话题获取伺服位置消息
     if (servoPositionsMonitor) {
-        // 当 monitor 已被移动到 webSocketThread 时，使用 DirectConnection 让解析尽快在 worker 线程执行，减少延迟
         connect(webSocketWorker, &WebSocketWorker::messageReceived, servoPositionsMonitor, &ServoPositionsMonitor::onMessageReceived, Qt::QueuedConnection);
     }
 
-
+    if(poseMonitor){
+        // 从ros话题获取位置消息
+        connect(webSocketWorker, &WebSocketWorker::messageReceived, poseMonitor, &PoseMonitor::onMessageReceived, Qt::QueuedConnection);
+    }
     // 从ros话题获取图像信息
     connect(webSocketWorker, &WebSocketWorker::messageReceived, cameraImageMonitor, &CameraImageMonitor::onMessageReceived, Qt::QueuedConnection);
     connect(cameraImageMonitor, &CameraImageMonitor::imageReceived, this, [this](const QImage &img){
@@ -306,9 +318,9 @@ void robanweb::onTaskExecuted(const QString& scriptPath)
 // SLAM控制按钮槽函数
 void robanweb::onSlamControlButtonClicked()
 {
-    ShDialog dialog(webSocketWorker, this);
+    slamDialog dialog(webSocketWorker, this);
     // connect dialog signal to main slot
-    // connect(&dialog, &ShDialog::runScriptRequested, this, &robanweb::onRunScriptRequested, Qt::QueuedConnection);
+    // connect(&dialog, &slamDialog::runScriptRequested, this, &robanweb::onRunScriptRequested, Qt::QueuedConnection);
     if(dialog.exec() == QDialog::Accepted){
         qDebug() << "脚本功能对话框开启";
     }
@@ -440,6 +452,11 @@ void robanweb::startSubscriptions(){
     if (servoPositionsMonitor) {
         QMetaObject::invokeMethod(servoPositionsMonitor, "start", Qt::QueuedConnection);
     }
+
+    // 启动位置订阅
+    if(poseMonitor){
+        QMetaObject::invokeMethod(poseMonitor, "start", Qt::QueuedConnection);
+    }
 }
 
 void robanweb::onWebSocketDisconnected()
@@ -493,6 +510,23 @@ void robanweb::closeEvent(QCloseEvent *event)
         delete imagePullTimer;
         imagePullTimer = nullptr;
     }
+
+    if (poseThread) {
+        poseThread->quit();
+        poseThread->wait();
+        delete poseThread;
+        poseThread = nullptr;
+        poseMonitor = nullptr;
+    }
+
+    if(servoThread){
+        servoThread->quit();
+        servoThread->wait();
+        delete servoThread;
+        servoThread = nullptr;
+        servoPositionsMonitor = nullptr;
+    }
+
     event->accept();
 }
 

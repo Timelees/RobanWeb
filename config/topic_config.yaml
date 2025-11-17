@@ -34,8 +34,8 @@ cameraPose_topic: "/SLAM/CameraPoint"
 cameraPose_topic_type: "geometry_msgs/PoseStamped"
 
 # robot Pose位姿话题
-pose_stamped_topic: "/MediumSize/BodyHub/ServoPositions"
-pose_stamped_topic_type: "bodyhub/ServoPositionAngle"
+pose_slam_topic: "/initialpose"
+pose_slam_topic_type: "geometry_msgs/PoseWithCovarianceStamped"
 
 # 伺服电机角度话题
 servo_positions_topic: "/MediumSize/BodyHub/ServoPositions"

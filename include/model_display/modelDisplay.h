@@ -80,7 +80,8 @@ public slots:
     void onDeleteSelected();     // 删除当前选中的标记
     void onClearAllMarkers();   // 删除所有标记
     void onSceneMapping();      // 场景映射函数
-
+    void onRefreshPositions();  // 刷新位置函数
+    void onResetPositions();    // 位置重置函数(重置到地图中心)
 private:
     RobotManager *m_robot = nullptr;
     SceneManager *m_scene = nullptr;

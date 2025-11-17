@@ -284,13 +284,13 @@ void ModelDisplay::setDisplayWindow()
     btnMap->setMinimumSize(75, 25);
     btnMap->setStyleSheet(buttonStyle);
     
-    QPushButton *btnPickup = new QPushButton(QString::fromUtf8("取货点标定"), m_topBar);
-    btnPickup->setMinimumSize(75, 25);
-    btnPickup->setStyleSheet(buttonStyle);
+    // QPushButton *btnPickup = new QPushButton(QString::fromUtf8("取货点标定"), m_topBar);
+    // btnPickup->setMinimumSize(75, 25);
+    // btnPickup->setStyleSheet(buttonStyle);
     
-    QPushButton *btnPlace = new QPushButton(QString::fromUtf8("放置点标定"), m_topBar);
-    btnPlace->setMinimumSize(75, 25);
-    btnPlace->setStyleSheet(buttonStyle);
+    // QPushButton *btnPlace = new QPushButton(QString::fromUtf8("放置点标定"), m_topBar);
+    // btnPlace->setMinimumSize(75, 25);
+    // btnPlace->setStyleSheet(buttonStyle);
     
     QPushButton *btnSave = new QPushButton(QString::fromUtf8("标定保存"), m_topBar);
     btnSave->setMinimumSize(75, 25);
@@ -308,14 +308,24 @@ void ModelDisplay::setDisplayWindow()
     btnSceneMapping->setMinimumSize(75, 25);
     btnSceneMapping->setStyleSheet(buttonStyle);
 
+    QPushButton *btnPositonRefresh = new QPushButton(QString::fromUtf8("位置刷新"), m_topBar);
+    btnPositonRefresh->setMinimumSize(75, 25);
+    btnPositonRefresh->setStyleSheet(buttonStyle);
+
+    QPushButton *btnPostionReset = new QPushButton(QString::fromUtf8("位置重置"), m_topBar);
+    btnPostionReset->setMinimumSize(75, 25);
+    btnPostionReset->setStyleSheet(buttonStyle);
+
     // 将按钮加入布局
     hb->addWidget(btnMap);
-    hb->addWidget(btnPickup);
-    hb->addWidget(btnPlace);
+    // hb->addWidget(btnPickup);
+    // hb->addWidget(btnPlace);
     hb->addWidget(btnSave);
     hb->addWidget(btnDelete);
     hb->addWidget(btnClearAll);
     hb->addWidget(btnSceneMapping);
+    hb->addWidget(btnPositonRefresh);
+    hb->addWidget(btnPostionReset);
 
     // ----------------------------------
     // 播放位置（路径）按钮
@@ -328,13 +338,14 @@ void ModelDisplay::setDisplayWindow()
     hb->addStretch();
     // 连接信号
     connect(btnMap, &QPushButton::clicked, this, &ModelDisplay::onAddMapMarker);
-    connect(btnPickup, &QPushButton::clicked, this, &ModelDisplay::onAddPickupMarker);
-    connect(btnPlace, &QPushButton::clicked, this, &ModelDisplay::onAddPlaceMarker);
+    // connect(btnPickup, &QPushButton::clicked, this, &ModelDisplay::onAddPickupMarker);
+    // connect(btnPlace, &QPushButton::clicked, this, &ModelDisplay::onAddPlaceMarker);
     connect(btnSave, &QPushButton::clicked, this, &ModelDisplay::onSaveMarkers);
     connect(btnDelete, &QPushButton::clicked, this, &ModelDisplay::onDeleteSelected);
     connect(btnClearAll, &QPushButton::clicked, this, &ModelDisplay::onClearAllMarkers);
     connect(btnSceneMapping, &QPushButton::clicked, this,  &ModelDisplay::onSceneMapping);
-           
+    connect(btnPositonRefresh, &QPushButton::clicked, this, &ModelDisplay::onRefreshPositions);
+    connect(btnPostionReset, &QPushButton::clicked, this, &ModelDisplay::onResetPositions);
     // ---------------------------------------  流程演示按钮逻辑，后续删除
     connect(btnPlayLocations, &QPushButton::clicked, this, [this, btnPlayLocations]()
             {
@@ -998,5 +1009,22 @@ void ModelDisplay::onSceneMapping()
     if (m_scene)
     {
         m_scene->SceneMapping();
+    }
+}
+
+// 位置刷新按钮回调
+void ModelDisplay::onRefreshPositions()
+{
+    if (m_robot)
+    {
+        m_robot->refreshRobotPositionsFromScene();
+    }
+}
+
+void ModelDisplay::onResetPositions()
+{
+    if (m_robot)
+    {
+        m_robot->resetRobotPositions();
     }
 }

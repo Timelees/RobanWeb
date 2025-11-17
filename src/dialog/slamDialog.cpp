@@ -1,13 +1,13 @@
-#include "dialog/shDialog.h"
-#include "ui_shDialog.h"
+#include "dialog/slamDialog.h"
+#include "ui_slamDialog.h"
 #include "socket_process/websocketworker.h"
 #include "util/load_param.hpp"
 
 
 
-ShDialog::ShDialog(WebSocketWorker *webSocketWorker, QWidget *parent)
+slamDialog::slamDialog(WebSocketWorker *webSocketWorker, QWidget *parent)
     : QDialog(parent)
-    , ui(new Ui::ShDialog)
+    , ui(new Ui::slamDialog)
     , m_worker(webSocketWorker)
 {
     ui->setupUi(this);
@@ -18,7 +18,7 @@ ShDialog::ShDialog(WebSocketWorker *webSocketWorker, QWidget *parent)
     bindSlots();
 }
 
-ShDialog::~ShDialog()
+slamDialog::~slamDialog()
 {
     // Stop pull timer
     if (featuredImagePullTimer) {
@@ -78,7 +78,7 @@ ShDialog::~ShDialog()
     delete ui;
 }
 
-void ShDialog::init()
+void slamDialog::init()
 {
     // 图像pull定时器
     featuredImagePullTimer = new QTimer(this);
@@ -155,13 +155,13 @@ void ShDialog::init()
 
 }
 
-void ShDialog::bindSlots(){
+void slamDialog::bindSlots(){
     // 按钮槽函数
-    connect(ui->startSlam_Button, &QPushButton::clicked, this, &ShDialog::onRunSLAMButtonClicked);
-    connect(ui->locationSlam_Button, &QPushButton::clicked, this, &ShDialog::onRunSLAMButtonClicked);
-    connect(ui->closeSlam_Button, &QPushButton::clicked, this, &ShDialog::onCloseSLAMButtonClicked);
-    connect(ui->cancelControl_Button, &QPushButton::clicked, this, &ShDialog::onCancelControlButtonClicked);
-    connect(ui->startControl_Button, &QPushButton::clicked, this, &ShDialog::onRunControlButtonClicked);
+    connect(ui->startSlam_Button, &QPushButton::clicked, this, &slamDialog::onRunSLAMButtonClicked);
+    connect(ui->locationSlam_Button, &QPushButton::clicked, this, &slamDialog::onRunSLAMButtonClicked);
+    connect(ui->closeSlam_Button, &QPushButton::clicked, this, &slamDialog::onCloseSLAMButtonClicked);
+    connect(ui->cancelControl_Button, &QPushButton::clicked, this, &slamDialog::onCancelControlButtonClicked);
+    connect(ui->startControl_Button, &QPushButton::clicked, this, &slamDialog::onRunControlButtonClicked);
 
     // 连接webSocket信号到特征点图像监视器槽函数
     connect(m_worker, &WebSocketWorker::messageReceived, featuredImageMonitor, &CameraImageMonitor::onMessageReceived, Qt::QueuedConnection);
@@ -183,65 +183,65 @@ void ShDialog::bindSlots(){
         ui->w_Button->setAutoRepeat(false);
         ui->w_Button->setCheckable(false);
         ui->w_Button->setShortcut(QKeySequence(Qt::Key_W));
-        connect(ui->w_Button, &QPushButton::clicked, this, &ShDialog::onControlButtonClicked);
+        connect(ui->w_Button, &QPushButton::clicked, this, &slamDialog::onControlButtonClicked);
     }
     if (ui->s_Button) {
         ui->s_Button->setAutoRepeat(false);
         ui->s_Button->setCheckable(false);
         ui->s_Button->setShortcut(QKeySequence(Qt::Key_S));
-        connect(ui->s_Button, &QPushButton::clicked, this, &ShDialog::onControlButtonClicked);
+        connect(ui->s_Button, &QPushButton::clicked, this, &slamDialog::onControlButtonClicked);
     }
     if (ui->a_Button) {
         ui->a_Button->setAutoRepeat(false);
         ui->a_Button->setCheckable(false);
         ui->a_Button->setShortcut(QKeySequence(Qt::Key_A));
-        connect(ui->a_Button, &QPushButton::clicked, this, &ShDialog::onControlButtonClicked);
+        connect(ui->a_Button, &QPushButton::clicked, this, &slamDialog::onControlButtonClicked);
     }
     if (ui->d_Button) {
         ui->d_Button->setAutoRepeat(false);
         ui->d_Button->setCheckable(false);
         ui->d_Button->setShortcut(QKeySequence(Qt::Key_D));
-        connect(ui->d_Button, &QPushButton::clicked, this, &ShDialog::onControlButtonClicked);
+        connect(ui->d_Button, &QPushButton::clicked, this, &slamDialog::onControlButtonClicked);
     }
     if (ui->z_Button) {
         ui->z_Button->setAutoRepeat(false);
         ui->z_Button->setCheckable(false);
         ui->z_Button->setShortcut(QKeySequence(Qt::Key_Z));
-        connect(ui->z_Button, &QPushButton::clicked, this, &ShDialog::onControlButtonClicked);
+        connect(ui->z_Button, &QPushButton::clicked, this, &slamDialog::onControlButtonClicked);
     }
     if (ui->c_Button) {
         ui->c_Button->setAutoRepeat(false);
         ui->c_Button->setCheckable(false);
         ui->c_Button->setShortcut(QKeySequence(Qt::Key_C));
-        connect(ui->c_Button, &QPushButton::clicked, this, &ShDialog::onControlButtonClicked);
+        connect(ui->c_Button, &QPushButton::clicked, this, &slamDialog::onControlButtonClicked);
     }
     if (ui->x_Button) {
         ui->x_Button->setAutoRepeat(false);
         ui->x_Button->setCheckable(false);
         ui->x_Button->setShortcut(QKeySequence(Qt::Key_X));
-        connect(ui->x_Button, &QPushButton::clicked, this, &ShDialog::onControlButtonClicked);
+        connect(ui->x_Button, &QPushButton::clicked, this, &slamDialog::onControlButtonClicked);
     }
     if (ui->r_Button) {
         ui->r_Button->setAutoRepeat(false);
         ui->r_Button->setCheckable(false);
         ui->r_Button->setShortcut(QKeySequence(Qt::Key_R));
-        connect(ui->r_Button, &QPushButton::clicked, this, &ShDialog::onControlButtonClicked);
+        connect(ui->r_Button, &QPushButton::clicked, this, &slamDialog::onControlButtonClicked);
     }
     if (ui->e_Button) {
         ui->e_Button->setAutoRepeat(false);
         ui->e_Button->setCheckable(false);
         ui->e_Button->setShortcut(QKeySequence(Qt::Key_E));
-        connect(ui->e_Button, &QPushButton::clicked, this, &ShDialog::onControlButtonClicked);
+        connect(ui->e_Button, &QPushButton::clicked, this, &slamDialog::onControlButtonClicked);
     }
 
     // 定位模式开关：发布模式变更到 rosbridge
     if (ui->localization_checkBox) {
-        connect(ui->localization_checkBox, &QCheckBox::toggled, this, &ShDialog::onLocalizationModeToggled);
+        connect(ui->localization_checkBox, &QCheckBox::toggled, this, &slamDialog::onLocalizationModeToggled);
     }
 
 }
 // 事件过滤器，适应组件大小
-bool ShDialog::eventFilter(QObject *watched, QEvent *event)
+bool slamDialog::eventFilter(QObject *watched, QEvent *event)
 {
     if (watched == ui->featurePoint_Display && event->type() == QEvent::Resize) {
         QSize newSize = ui->featurePoint_Display->size();
@@ -260,7 +260,7 @@ bool ShDialog::eventFilter(QObject *watched, QEvent *event)
     return QDialog::eventFilter(watched, event);
 }
 
-void ShDialog::onRunSLAMButtonClicked()
+void slamDialog::onRunSLAMButtonClicked()
 {
     QObject *s = sender();
     if (!s) return;
@@ -366,7 +366,7 @@ void ShDialog::onRunSLAMButtonClicked()
 
 
 // 关闭SLAM建图
-void ShDialog::onCloseSLAMButtonClicked()
+void slamDialog::onCloseSLAMButtonClicked()
 {
     // qDebug() << "Close script dialog requested";
 
@@ -448,7 +448,7 @@ void ShDialog::onCloseSLAMButtonClicked()
 }
 
 // 启动遥控
-void ShDialog::onRunControlButtonClicked()
+void slamDialog::onRunControlButtonClicked()
 {
     QObject *s = sender();
     if(!s){
@@ -481,7 +481,7 @@ void ShDialog::onRunControlButtonClicked()
 
 
 // 取消遥控
-void ShDialog::onCancelControlButtonClicked()
+void slamDialog::onCancelControlButtonClicked()
 {
     QObject *s = sender();
     if(!s){
@@ -510,7 +510,7 @@ void ShDialog::onCancelControlButtonClicked()
 }
 
 // 接收控制按钮点击事件
-void ShDialog::onControlButtonClicked()
+void slamDialog::onControlButtonClicked()
 {
     QObject *s = sender();
     if(!s){
@@ -558,7 +558,7 @@ void ShDialog::onControlButtonClicked()
 }
 
 // 当 localization_checkBox 状态变化时，通过 rosbridge 发布 /SLAM/localizationMode (std_msgs/Bool)
-void ShDialog::onLocalizationModeToggled(bool checked)
+void slamDialog::onLocalizationModeToggled(bool checked)
 {
     if (!m_worker) {
         qDebug() << "onLocalizationModeToggled: m_worker is null, cannot publish";

@@ -151,6 +151,15 @@ rosrun bodyhub cmd_executor.py
 
 ![alt text](image/control.png)
 
+**TODO:**
+
+待修复bug：
+
+1.使用持续扫描时，按两次E无法关闭持续扫描
+
+2.点击关闭控制时，会把slam的进程也关闭掉
+
+
 
 8.语音控制
 

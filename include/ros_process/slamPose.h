@@ -1,5 +1,5 @@
-#ifndef POSE_H
-#define POSE_H
+#ifndef SLAMPOSE_H
+#define SLAMPOSE_H
 
 #include <QObject>
 #include <QJsonDocument>
@@ -29,8 +29,11 @@ private:
     QString pose_stamped_topic_type; // 位姿话题类型
     double roll, pitch, yaw; // 欧拉角
     QVector3D x_y_yaw; // 存储x,y,yaw
+    // 平滑/去抖参数：在连续收到位姿时对 x,y,yaw 做指数平滑，值范围 (0,1], 越小越平滑
+    double m_poseSmoothingAlpha = 0.6;
+    bool m_haveLastPose = false;
 };
 
 
 
-#endif // POSE_H
+#endif // SLAMPOSE_H

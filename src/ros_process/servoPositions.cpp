@@ -89,14 +89,26 @@ void ServoPositionsMonitor::onMessageReceived(const QString &message){
         bool shouldEmit = false;
         {
             QMutexLocker locker(&m_mutex);
-            m_lastMsg = msgObj;
-            m_lastAngles = angles;
-            // 增加计数器，只有当累计到 m_batchSize 条消息时才发出更新信号，减少主线程负载
-            m_msgCounter++;
-            if (m_msgCounter >= m_batchSize) {
-                m_msgCounter = 0;
-                shouldEmit = true;
-            }
+                // 保存一份旧角度以供比较
+                QVector<double> oldAngles = m_lastAngles;
+                m_lastMsg = msgObj;
+                m_lastAngles = angles;
+                // 增加计数器，只有当累计到 m_batchSize 条消息时才发出更新信号，减少主线程负载
+                m_msgCounter++;
+                if (m_msgCounter >= m_batchSize) {
+                    m_msgCounter = 0;
+                    shouldEmit = true;
+                }
+                // 如果角度数组与上次相比发生显著变化，则立即发出更新（以降低行走时的延迟）
+                const double SIGNIFICANT_ANGLE_DELTA = 0.5; // degrees
+                if (!oldAngles.isEmpty() && oldAngles.size() == angles.size()) {
+                    for (int i = 0; i < angles.size(); ++i) {
+                        if (std::fabs(angles[i] - oldAngles[i]) > SIGNIFICANT_ANGLE_DELTA) {
+                            shouldEmit = true;
+                            break;
+                        }
+                    }
+                }
         }
         if (shouldEmit) {
             // 通过信号通知（连接到 RobotManager 时使用 QueuedConnection）
@@ -116,7 +128,18 @@ void ServoPositionsMonitor::onMessageReceived(const QString &message){
             qDebug() << "Current Walking Status:" << walkStatus;
             if(walkStatus == 1.0) {
                 qDebug() << "Robot is walking.";
+                // 先发出行走状态信号，告知上层播放行走动画
                 emit walkingStatusUpdated();
+                // 并且尽可能立即触发伺服/位置更新，减少行走动画与位置移动不同步的情况
+                // 这里在 mutex 下读取最后的角度并立即发出 servoPositionsUpdated
+                {
+                    QMutexLocker locker(&m_mutex);
+                    // 仅在已有角度数据时发出
+                    if (!m_lastAngles.isEmpty()) {
+                        // 直接发射更新信号以便上层尽快响应（通常为动画与位置相关逻辑）
+                        emit servoPositionsUpdated();
+                    }
+                }
             } else {
                 qDebug() << "Robot is standing.";
                 // 当检测到非行走状态（例如 0.0）时，发送停止信号以便上层停止行走动画播放

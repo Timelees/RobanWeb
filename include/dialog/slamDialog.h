@@ -1,5 +1,5 @@
-#ifndef SHDIALOG_H
-#define SHDIALOG_H
+#ifndef SLAMDIALOG_H
+#define SLAMDIALOG_H
 
 #include <QDialog>
 #include <QDebug>
@@ -20,18 +20,18 @@
 
 namespace Ui
 {
-    class ShDialog;
+    class slamDialog;
 } // namespace Ui
 
 class WebSocketWorker;
 
-class ShDialog : public QDialog
+class slamDialog : public QDialog
 {
     Q_OBJECT
 
 public:
-    explicit ShDialog(WebSocketWorker *webSocketWorker, QWidget *parent = nullptr);
-    ~ShDialog();
+    explicit slamDialog(WebSocketWorker *webSocketWorker, QWidget *parent = nullptr);
+    ~slamDialog();
 
 private slots:
     void onRunSLAMButtonClicked();
@@ -55,7 +55,7 @@ private:
 
 
 private:
-    Ui::ShDialog *ui;
+    Ui::slamDialog *ui;
     WebSocketWorker *m_worker;
     QThread *featuredImageThread;                       // 特征点图像处理线程
     CameraImageMonitor *featuredImageMonitor;           // 特征点图像监视器
@@ -70,4 +70,4 @@ private:
     bool localizationAdvertised = false;        // 是否已发布定位模式话题
 };
 
-#endif // SHDIALOG_H
+#endif // SLAMDIALOG_H

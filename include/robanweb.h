@@ -11,7 +11,9 @@
 #include <QLabel>
 #include <QJsonArray>
 #include <QProgressBar>
-
+// layout helper for replacing placeholder widget
+#include <QLayout>
+#include <QBoxLayout>
 
 
 #include "socket_process/websocketworker.h"
@@ -23,6 +25,12 @@
 #include "model_display/robotManager.h"
 #include "model_display/sceneManager.h"
 #include "ros_process/servoPositions.h"
+#include "ros_process/slamPose.h"
+#include "dialog/connectdialog.h"
+#include "dialog/slamDialog.h"
+#include "dialog/robotControlDialog.h"
+#include "util/load_param.hpp"
+
 
 
 class robanweb : public QMainWindow {
@@ -66,6 +74,12 @@ private:
     QThread *webSocketThread;       // webSocket 线程
     QThread *imageThread;           // 图像处理线程
     QThread *servoThread;          // 伺服处理线程
+    QThread *poseThread;          // 位置处理线程
+    
+    QThread *sceneManagerThread;         // 场景处理线程
+    QThread *robotManagerThread;   // 机器人管理线程
+
+
     QTimer *reconnectTimer;
     QString wsHost;
     QString wsPort;
@@ -79,7 +93,7 @@ private:
     BatteryMonitor *batteryMonitor = nullptr;   // 电量获取对象
     ImuMonitor *imuMonitor = nullptr;           // IMU获取对象
     ServoPositionsMonitor *servoPositionsMonitor = nullptr; // 伺服位置获取对象
-
+    PoseMonitor *poseMonitor = nullptr;         // 位置获取对象
 
     CameraImageMonitor *cameraImageMonitor = nullptr;
     QTimer *imagePullTimer = nullptr;           // 定时器，用于从相机监视器中获取最新帧

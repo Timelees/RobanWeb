@@ -32,6 +32,7 @@
 #include "model_display/meshes.h"
 #include "ros_process/servoPositions.h"
 #include "socket_process/webSocketWorker.h"
+#include "model_display/sceneManager.h"
 
 class WebSocketWorker;
 
@@ -41,7 +42,7 @@ class RobotManager : public QObject
 {
     Q_OBJECT
 public:
-    explicit RobotManager(const QString &modelPath, ServoPositionsMonitor *servoPositionsMonitor, QObject *parent = nullptr);
+    explicit RobotManager(const QString &modelPath, SceneManager *sceneManager, ServoPositionsMonitor *servoPositionsMonitor, QObject *parent = nullptr);
     ~RobotManager() override = default;
 
 
@@ -65,6 +66,9 @@ public:
     // 直接将模型移动到给定的世界坐标位置（基于 m_originalMeshVertices 做顶点平移，非重建 meshes）
     // target: 目标世界坐标 (x,y,z)
     void applyLocation(const QVector3D &target);
+
+    void refreshRobotPositionsFromScene();      // 根据接收到的实机位置刷新模型在场景中的位置
+    void resetRobotPositions();                  // 重置模型位置到场景中心
 
     // 设定模型整体的旋转（以度为单位的欧拉角），旋转围绕已计算的模型中心 m_modelCenterX/Y/Z。
     // 参数 eulerDeg 表示绕 X、Y、Z 轴的角度（单位：度）。内部按 Z * Y * X 的顺序复合旋转。
@@ -121,6 +125,8 @@ public slots:
     void stopWalkingPlayback();
     // 把一行角度值（与 CSV 同样的 22 个角度）应用到模型（复用 advancePlaceFrame 的映射规则）
     void applyServoAnglesRow(const QVector<double> &row);
+    // 当 SceneManager 收到新的机器人位姿时调用，该槽会触发场景坐标映射并刷新模型位置
+    void onSceneRobotPoseUpdated(const QVector3D &pose);
 
 private:
     bool loadModel(const std::string &file);
@@ -177,6 +183,7 @@ private:
     bool m_placeLooping = true;
 
     QPointer<ServoPositionsMonitor> m_servoPositionsMonitor = nullptr;
+    QPointer<SceneManager> m_sceneManager = nullptr;
     // --- 行走动画融合相关 ---
     // walk.csv 仅用于提供前 12 列的动画帧数据（预处理在 initialize() 中完成）
     QVector<QVector<double>> m_walkFirst12Rows; // 只保存每行的前12列，用于walking状态的骨骼融合

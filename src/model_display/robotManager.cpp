@@ -1,23 +1,12 @@
 #include "model_display/robotManager.h"
 #include "util/load_csv.hpp"
 #include <QDateTime>
-RobotManager::RobotManager(const QString &modelPath, ServoPositionsMonitor *servoPositionsMonitor, QObject *parent)
-    : QObject(parent), m_modelPath(modelPath), m_servoPositionsMonitor(servoPositionsMonitor)
+#include "model_display/sceneManager.h"
+RobotManager::RobotManager(const QString &modelPath,SceneManager *sceneManager, ServoPositionsMonitor *servoPositionsMonitor, QObject *parent)
+    : QObject(parent), m_modelPath(modelPath), m_sceneManager(sceneManager), m_servoPositionsMonitor(servoPositionsMonitor)
 {
     initialize();
-    // 如果有 ServoPositionsMonitor，则连接更新信号（queued connection），使用信号驱动直接应用角度，避免轮询
-    if (m_servoPositionsMonitor) {
-        // 连接伺服位置更新信号
-        connect(m_servoPositionsMonitor, &ServoPositionsMonitor::servoPositionsUpdated,
-                this, &RobotManager::onServoPositionsUpdated, Qt::QueuedConnection);
-        // 连接行走状态更新信号
-        connect(m_servoPositionsMonitor, &ServoPositionsMonitor::walkingStatusUpdated,
-                this, &RobotManager::onWalkingStatusUpdated, Qt::QueuedConnection);
-    // 连接行走停止信号，停止行走动画播放
-    connect(m_servoPositionsMonitor, &ServoPositionsMonitor::walkingStatusStopped,
-        this, &RobotManager::stopWalkingPlayback, Qt::QueuedConnection);
-        
-    }
+    
 }
 
 void RobotManager::initialize()
@@ -83,13 +72,27 @@ void RobotManager::initialize()
     }
     // ------------- 预处理结束 -------------
 
-    //  // ServoPositionsMonitor连接更新信号，使 RobotManager 可以读取最新消息
-    // if (m_servoPositionsMonitor) {
-    //     qDebug() << "RobotManager: connecting to ServoPositionsMonitor signals";
-    //     connect(m_servoPositionsMonitor->m_worker, &WebSocketWorker::messageReceived,
-    //             m_servoPositionsMonitor, &ServoPositionsMonitor::onMessageReceived);
-    // }
+    // 如果有 ServoPositionsMonitor，则连接更新信号（queued connection），使用信号驱动直接应用角度，避免轮询
+    if (m_servoPositionsMonitor) {
+        // 连接伺服位置更新信号
+        connect(m_servoPositionsMonitor, &ServoPositionsMonitor::servoPositionsUpdated,
+                this, &RobotManager::onServoPositionsUpdated, Qt::QueuedConnection);
+        // 连接行走状态更新信号
+        connect(m_servoPositionsMonitor, &ServoPositionsMonitor::walkingStatusUpdated,
+                this, &RobotManager::onWalkingStatusUpdated, Qt::QueuedConnection);
+    // 连接行走停止信号，停止行走动画播放
+    connect(m_servoPositionsMonitor, &ServoPositionsMonitor::walkingStatusStopped,
+        this, &RobotManager::stopWalkingPlayback, Qt::QueuedConnection);
+        
+    }
 
+    // 如果有 SceneManager，则监听其 robotPoseUpdated 信号以实现实时位置跟随
+    if (m_sceneManager) {
+        // 使用队列连接以确保线程安全
+        // 订阅 display 信号以获得平滑的连续位姿更新（渲染/位置过渡用），而保留 robotPoseUpdated 作为节流的原始位置事件
+        connect(m_sceneManager, &SceneManager::robotPoseDisplayUpdated,
+                this, &RobotManager::onSceneRobotPoseUpdated, Qt::QueuedConnection);
+    }
 
 
 }
@@ -950,7 +953,22 @@ void RobotManager::applyLocation(const QVector3D &target)
     applyJointAngles(m_currentJointAngles);
 }
 
+void RobotManager::refreshRobotPositionsFromScene(){
+    QVector3D scenePt;
+    if (!m_sceneManager->mapCurrentRobotPoseToScene(scenePt)) {
+        qDebug() << "RobotManager::refreshRobotPositionsFromScene: no valid mapping or robot pose";
+        return;
+    }
 
+    // Apply mapped scene position to the robot model
+    // qDebug() << "RobotManager::refreshRobotPositionsFromScene: mapped robot -> scene:" << scenePt;
+    applyLocation(scenePt);
+}
+
+void RobotManager::resetRobotPositions(){
+    QVector3D origin(0.0f, 0.0f, 0.0f);
+    applyLocation(origin);
+}
 
 
 // -----------------测试函数：应用csv位置行数据来移动模型--------------------
@@ -1272,4 +1290,13 @@ void RobotManager::onWalkingStatusUpdated(){
     }
     m_walkCurrentRow = 0;
     m_walkTimer->start(m_walkIntervalMs);
+}
+
+// 当 SceneManager 收到新的机器人位姿（来自 PoseMonitor）时调用此槽。
+// 不直接使用传入的 pose 参数，而是调用已有的刷新函数
+void RobotManager::onSceneRobotPoseUpdated(const QVector3D &pose)
+{
+    Q_UNUSED(pose);
+    // 触发位置映射并应用到模型
+    refreshRobotPositionsFromScene();
 }
