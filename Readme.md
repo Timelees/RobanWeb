@@ -181,13 +181,7 @@ rosrun bodyhub cmd_executor.py
 
 机器人整体的旋转（绕Y轴）
 
-**TODO：**
 
-1.标记点包括位置信息如(-5.37607, -9.53674e-07, 0.630011)，需要与slam传回的位置信息做映射，动态适应机器人位置
+从机器人端接收/gaitCommand话题数据【x,y,delta】,根据当前位置与【x,y,delta】计算，决定位置与旋转角度的刷新显示。
 
-2.通过机器人传回的yaw角转化成robotManager中的setModelRotation需要的绕Y轴旋转角度，控制模型的转向？？？
-
-3.转向动画设置通过test_showAction的插值旋转流程去设定同步问题？？？
-
-4.或者在机器人的源码里的话题发布前进、后退、左转、右转的标志，这边来解析？？？
-
+修改robotManager中的m_gaitScale参数，可决定模型移动的距离的显示缩放。

@@ -11,6 +11,7 @@
 #include <QTextStream>
 #include <QTimer>
 #include <QPointer>
+#include <QMutex>
 #include <QFileInfo>
 #include <QImage>
 #include <QDebug>
@@ -33,6 +34,8 @@
 #include "ros_process/servoPositions.h"
 #include "socket_process/webSocketWorker.h"
 #include "model_display/sceneManager.h"
+#include "ros_process/imu.h"
+#include "ros_process/gaitCommand.h"
 
 class WebSocketWorker;
 
@@ -44,6 +47,9 @@ class RobotManager : public QObject
 public:
     explicit RobotManager(const QString &modelPath, SceneManager *sceneManager, ServoPositionsMonitor *servoPositionsMonitor, QObject *parent = nullptr);
     ~RobotManager() override = default;
+
+    // 绑定 IMU 数据源：外部可创建 ImuMonitor 实例并通过该方法连接到 RobotManager
+    void attachImuMonitor(ImuMonitor *imu);
 
 
     bool loadBoneJointMapping(const QString &csvPath);
@@ -123,10 +129,17 @@ public slots:
     void onWalkingStatusUpdated();
     // 停止行走动画的播放（由 ServoPositionsMonitor 发出停止信号触发）
     void stopWalkingPlayback();
-    // 把一行角度值（与 CSV 同样的 22 个角度）应用到模型（复用 advancePlaceFrame 的映射规则）
+    // 把伺服角度值应用到模型（复用 advancePlaceFrame 的映射规则）
     void applyServoAnglesRow(const QVector<double> &row);
     // 当 SceneManager 收到新的机器人位姿时调用，该槽会触发场景坐标映射并刷新模型位置
-    void onSceneRobotPoseUpdated(const QVector3D &pose);
+    // void onSceneRobotPoseUpdated(const QVector3D &pose);
+
+
+    // 响应步态命令更新（来自 GaitCommandMonitor）
+    void onGaitCommandUpdated();
+    // 设置 gait command 数据源，RobotManager 会订阅其 gaitCommandUpdated 信号
+    void setGaitCommandMonitor(GaitCommandMonitor *monitor);
+
 
 private:
     bool loadModel(const std::string &file);
@@ -159,13 +172,20 @@ private:
     float m_initialCameraDistance = 3.0f;
     bool m_initialCameraDistanceSet = false;
     
-    // world-space translation applied to the whole model (set by applyLocation)
+    // 世界坐标系下应用于整个模型的平移（由 applyLocation 设置）
     QVector3D m_worldTranslation = QVector3D(0.0f, 0.0f, 0.0f);
 
     // world-space 旋转矩阵：由 setModelRotation 设置，表示在模型本地坐标系上绕模型中心的整体旋转
     Mat4 m_worldRotation; // 默认在构造函数中初始化为 identity
     // 以度为单位保存的欧拉角（x_deg, y_deg, z_deg），便于查询或 UI 反馈
     QVector3D m_modelRotationDeg = QVector3D(0.0f, 0.0f, 0.0f);
+    // 保存程序启动或模型加载时的初始模型欧拉角（用于 reset 恢复）
+    QVector3D m_initialModelRotationDeg = QVector3D(0.0f, 0.0f, 0.0f);
+    // 基础 yaw 偏置（度）：用于把来自 ROS/Scene 的 yaw（相对于机器人前向）合并到模型的初始朝向上
+    // 在 initialize() 中根据首次 setModelRotation 的结果初始化为当前 m_modelRotationDeg.y()
+    float m_modelYawOffsetDeg = 0.0f;
+    // 额外的可调补偿（度），用于在实机 yaw 与模型 yaw 之间做人工偏移/校准
+    float m_modelYawCompensationDeg = 35.0f;
 
     // --- 位置信息播放相关 ---
     QVector<QVector3D> m_locationRows; // 从 CSV 读取的 x,y,z 列表
@@ -184,14 +204,107 @@ private:
 
     QPointer<ServoPositionsMonitor> m_servoPositionsMonitor = nullptr;
     QPointer<SceneManager> m_sceneManager = nullptr;
+    QPointer<GaitCommandMonitor> m_gaitCommandMonitor = nullptr;
+    // 步态命令位移缩放（用于调节 gait 命令对模型移动的视觉表现）；默认 10.0
+    float m_gaitScale = 5.0f;
+
+public:
+    // 设置/获取模型 yaw 的补偿（度）。补偿会在从 gait/外部 yaw 计算出模型 Euler 并应用时加入。
+    void setModelYawCompensationDeg(float deg) { m_modelYawCompensationDeg = deg; }
+    float modelYawCompensationDeg() const { return m_modelYawCompensationDeg; }
+    // 设置 gait 缩放因子（例如 100 可把 0.06m 放大到 6m，用于调试可见性)
+    void setGaitScale(float s) { m_gaitScale = s; }
+
+    // runtime toggles for smoothing/behavior (useful to debug regressions)
+    void setEnableTimeBasedSmoothing(bool v) { m_enableTimeBasedSmoothing = v; }
+    void setEnableImmediateYaw(bool v) { m_enableImmediateYaw = v; }
+    void setServoStaleMs(int ms) { m_servoStaleMs = ms; }
+
+    // 设置应用 pending servo/gait 更新的定时器间隔（毫秒），用于调节合并更新频率
+    void setServoApplyIntervalMs(int ms) { m_servoApplyIntervalMs = ms; if (m_servoApplyTimer) m_servoApplyTimer->setInterval(ms); }
+
+    // 可配置的局部轴映射策略：有些模型的“前向”在本地坐标系上是 X 或 Z
+    enum GaitAxisMapping {
+        LocalXForward = 0, // local X = forward, local Z = left
+        LocalZForward = 1, // local Z = forward, local X = left
+        SwapAxes = 2        // swapped interpretation
+    };
+
+private:
+    GaitAxisMapping m_gaitAxisMapping = LocalZForward;
+
+public:
+    void setGaitAxisMapping(GaitAxisMapping m) { m_gaitAxisMapping = m; }
+
+
     // --- 行走动画融合相关 ---
     // walk.csv 仅用于提供前 12 列的动画帧数据（预处理在 initialize() 中完成）
     QVector<QVector<double>> m_walkFirst12Rows; // 只保存每行的前12列，用于walking状态的骨骼融合
     QTimer *m_walkTimer = nullptr;              // 行走时播放该CSV的定时器
     int m_walkCurrentRow = 0;
-    int m_walkIntervalMs = 100;                 // 默认行走动画帧率（ms），可调整
+    int m_walkIntervalMs = 50;                 // 默认行走动画帧率（ms），可调整
     bool m_walkLooping = true;
+
+    // --- Servo/Gait coalescing to reduce update frequency and avoid UI stalls ---
+private:
+    QTimer *m_servoApplyTimer = nullptr; // timer to apply pending servo/gait updates at a steady rate
+    int m_servoApplyIntervalMs = 33;     // default to ~30Hz
+    QMutex m_pendingServoMutex;
+    // pending servo frame with timestamp so we can drop stale frames and prefer latest
+    struct PendingServoFrame {
+        qint64 tsMs = 0; // milliseconds since epoch
+        QVector<double> angles;
+    };
+    PendingServoFrame m_pendingServo;
+    // drop servo frames older than this (ms) when applying
+    int m_servoStaleMs = 1000; // larger default to avoid accidental dropping
+
+    // feature toggles (allow quick rollback of time-based smoothing / immediate yaw)
+    bool m_enableTimeBasedSmoothing = false; // keep default off to preserve previous behavior
+    bool m_enableImmediateYaw = false;       // keep default off to avoid unexpected jumps
+
+    QMutex m_pendingGaitMutex;
+    double m_pendingGx = 0.0;
+    double m_pendingGy = 0.0;
+    double m_pendingGdelta = 0.0;
+    bool m_hasPendingGait = false;
+
+    // accumulated gait targets (world-space translation and absolute yaw degrees)
+    QVector3D m_gaitTargetWorldTranslation = QVector3D(0.0f, 0.0f, 0.0f);
+    float m_gaitTargetYawDeg = 0.0f;
+    // how quickly to follow gait target (0..1), yaw typically higher for responsiveness
+    float m_gaitFollowFactorTranslation = 0.5f;
+    float m_gaitFollowFactorYaw = 1.0f;
+
+    // --- quick-yaw assist when switching from translation to in-place rotation ---
+    // If the local translation magnitude is below this threshold and a non-trivial
+    // gdelta is received, temporarily boost yaw following to avoid visible lag.
+    float m_yawBoostTranslationThreshold = 0.02f; // local units (before m_gaitScale)
+    float m_yawActivationGdeltaThreshold = 0.5f; // degrees (minimum gdelta to consider a turn)
+    int m_yawBoostFrames = 3;                      // how many apply ticks to keep boosted yaw
+    int m_yawBoostRemaining = 0;                   // internal counter
+
+    // --- smoothing / blending state ---
+    // 0..1 lerp factors: 1.0 = immediate, 0.0 = no movement
+    float m_servoLerpFactor = 0.7f; // smooth servo angle changes (higher -> faster)
+    float m_gaitLerpFactor = 0.7f;  // smooth gait-driven translation/rotation
+
+    // last-applied servo angles for exponential/linear smoothing
+    std::vector<double> m_lastAppliedServoAngles;
+
+    // last apply timestamp (ms) used to compute dt for time-based smoothing
+    qint64 m_lastApplyMs = 0;
+
+    // last applied world translation / yaw used to lerp gait movement
+    QVector3D m_lastAppliedWorldTranslation = QVector3D(0.0f, 0.0f, 0.0f);
+    float m_lastAppliedYawDeg = 0.0f;
+    // whether last-applied caches were initialized from current state
+    bool m_hasInitializedApplyState = false;
+
+private slots:
+    void applyPendingServoAndGait();
 };
+
 
 #endif // MODEL_DISPLAY_ROBOTMANAGER_H
 

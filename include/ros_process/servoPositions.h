@@ -9,6 +9,7 @@
 #include <QMetaObject>
 #include <QMutex>
 #include <QVector3D>
+#include <QTimer>
 
 class WebSocketWorker;
 
@@ -41,6 +42,14 @@ private:
     // 批处理设置：累积 N 条消息后再发出一次更新以减少主线程负载
     int m_msgCounter = 0;
     int m_batchSize = 15; // 默认每15条消息触发一次更新
+    // 周期性发射器：在主线程以固定频率把最新角度推送到上层，避免高频信号风暴
+    int m_emitIntervalMs = 33; // 默认 ~30Hz
+    bool m_pendingUpdate = false; // 收到新数据但尚未通过定时器发布
+    QTimer *m_emitTimer = nullptr;
+
+private slots:
+    // 在主线程定期触发或被强制触发以安全地发出 servoPositionsUpdated
+    void emitBuffered();
 
 signals:
     // 当收到新的伺服位置消息时发出（仅表示已接收，新数据存储在 lastMessage()）
@@ -55,6 +64,8 @@ public:
     QVector<double> lastAngles() const;
     // 设置批大小（>=1）
     void setBatchSize(int n) { if (n > 0) m_batchSize = n; }
+    // 设置主线程发射间隔（毫秒），建议 16..100 范围
+    void setEmitIntervalMs(int ms) { if (ms > 0) m_emitIntervalMs = ms; }
 
 };
 

@@ -116,26 +116,41 @@ public:
     // or robot pose is not valid.
     bool mapCurrentRobotPoseToScene(QVector3D &outScene) const;
 
-    // Configuration: adjust display smoothing and throttle at runtime
-    void setDisplayIntervalMs(int ms) { m_displayIntervalMs = ms; if (m_displayTimer) m_displayTimer->setInterval(ms); }
-    int displayIntervalMs() const { return m_displayIntervalMs; }
-    void setDisplayLerpFactor(float f) { m_displayLerpFactor = f; }
-    float displayLerpFactor() const { return m_displayLerpFactor; }
-    void setPoseUpdateThrottle(int n) { m_poseUpdateThrottle = n; }
-    int poseUpdateThrottle() const { return m_poseUpdateThrottle; }
+    // // Configuration: adjust display smoothing and throttle at runtime
+    // Q_INVOKABLE void setDisplayIntervalMs(int ms) { m_displayIntervalMs = ms; if (m_displayTimer) m_displayTimer->setInterval(ms); }
+    // int displayIntervalMs() const { return m_displayIntervalMs; }
+    // Q_INVOKABLE void setDisplayLerpFactor(float f) { m_displayLerpFactor = f; }
+    // float displayLerpFactor() const { return m_displayLerpFactor; }
+    // Q_INVOKABLE void setPoseUpdateThrottle(int n) { m_poseUpdateThrottle = n; }
+    // int poseUpdateThrottle() const { return m_poseUpdateThrottle; }
+
+    // Position acceptance thresholds: when walking stops, only accept the
+    // most-recent SLAM pose as the new stable robot pose if the difference
+    // vs the previously-stable pose is within these thresholds.
+    // Q_INVOKABLE void setAcceptPositionThresholdMeters(float m) { m_acceptPositionThresholdMeters = m; }
+    // float acceptPositionThresholdMeters() const { return m_acceptPositionThresholdMeters; }
+    // Q_INVOKABLE void setAcceptYawThresholdDegrees(float d) { m_acceptYawThresholdDeg = d; }
+    // float acceptYawThresholdDegrees() const { return m_acceptYawThresholdDeg; }
+    // Q_INVOKABLE void setAcceptPoseOnStopEnabled(bool e) { m_acceptPoseOnStopEnabled = e; }
+    // bool acceptPoseOnStopEnabled() const { return m_acceptPoseOnStopEnabled; }
+
+public slots:
+    // 通知 SceneManager 当前机器人是否处于行走状态（true=行走，false=静止）
+    // 当从行走切换到静止（false）时，SceneManager 会把最近收到的稳定位姿应用到 robotPose 并发出 robotPoseUpdated
+    // void setRobotWalking(bool walking);
 
 
     const std::vector<Marker> &markers() const { return m_markers; }
 
 signals:
     // 当 SceneManager 收到新的机器人位姿时发出（x,y,yaw）
-    void robotPoseUpdated(const QVector3D &pose);
+    // void robotPoseUpdated(const QVector3D &pose);
     // 每次收到原始位姿（未节流）时发出。动画子系统应监听此信号以保持动画与实际运动同步。
     // 例如：腿部步态/骨骼动画可以使用此频繁的信号驱动，而不受位置更新节流影响。
-    void robotPoseAnimationUpdated(const QVector3D &pose);
+    // void robotPoseAnimationUpdated(const QVector3D &pose);
     // 用于渲染层的平滑显示位姿：SceneManager 内部会把节流后的目标位姿平滑插值到一个显示位姿并
     // 周期性发出此信号以驱动视图位置过渡（频率可配置，默认 ~60Hz）。渲染层应监听此信号以获得平滑位置。
-    void robotPoseDisplayUpdated(const QVector3D &pose);
+    // void robotPoseDisplayUpdated(const QVector3D &pose);
 
 private:
     // 内部函数：创建球体 mesh 并返回 mesh 索引（仅 SceneManager 内部使用）
@@ -157,15 +172,23 @@ private:
     PoseMonitor *m_poseMonitor;       // 位姿监视器
     QVector3D robotPose;            // 机器人当前位姿
     // 当前用于渲染/显示的插值位姿（在内部用定时器从 m_displayRobotPose 向 robotPose 平滑过渡）
-    QVector3D m_displayRobotPose;
-    QTimer *m_displayTimer = nullptr; // 用于推进平滑插值的定时器
-    int m_displayIntervalMs = 16;     // 默认 16ms -> ~60Hz 的显示更新
-    float m_displayLerpFactor = 0.15f; // 每帧插值因子(0..1)，越大过渡越快
+    // QVector3D m_displayRobotPose;
+    // QTimer *m_displayTimer = nullptr; // 用于推进平滑插值的定时器 (已注释)
+    // int m_displayIntervalMs = 16;     // 默认 16ms -> ~60Hz 的显示更新 (已注释)
+    // float m_displayLerpFactor = 0.15f; // 每帧插值因子(0..1)，越大过渡越快 (已注释)
     // 节流：接收到外部位姿更新时不必每次都通知渲染/其他模块
     // m_poseUpdateCounter 累计收到的更新次数，达到 m_poseUpdateThrottle 时才把收到的位姿写入 robotPose 并发出信号
     int m_poseUpdateCounter = 0;
-    int m_poseUpdateThrottle = 40; // 默认每 40 条更新一次（可按需调整）
+    int m_poseUpdateThrottle = 20; // 默认每 20 条更新一次（可按需调整）
     QVector3D m_lastReceivedPose;   // 最近一次收到但尚未转发的位姿
+    // 是否正在行走（来自 ServoPositionsMonitor walking status）
+    bool m_isWalking = false;
+    // 在非行走状态下用于记录稳定位置的副本（当 walking 停止时用于立即应用）
+    QVector3D m_lastStablePose;
+    // 接收slam位置数据作为稳定位置的阈值，避免位置因为slam位置的突变导致模型位置突变
+    float m_acceptPositionThresholdMeters = 0.10f; // default 30 cm
+    float m_acceptYawThresholdDeg = 10.0f;         // default 30 degrees
+    bool m_acceptPoseOnStopEnabled = true;         // enable acceptance check by default
 
     // 场景映射测试代码
     QVector<QVector3D>  cornerPoints;   // 场景的四个角点

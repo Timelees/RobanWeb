@@ -60,6 +60,14 @@ robanweb::~robanweb()
         poseMonitor = nullptr;
     }
 
+    if(gaitCommandMonitor){
+        gaitCommandThread->quit();
+        gaitCommandThread->wait();
+        delete gaitCommandThread;
+        gaitCommandThread = nullptr;
+        gaitCommandMonitor = nullptr;
+    }
+
     // 清理任务管理器
     if(taskManager) {
         delete taskManager;
@@ -151,13 +159,24 @@ void robanweb::init(){
     poseThread->start();
     connect(poseThread, &QThread::finished, poseMonitor, &QObject::deleteLater);
 
+    // 行走步态订阅对象
+    gaitCommandMonitor = new GaitCommandMonitor(webSocketWorker, this);
+    gaitCommandThread = new QThread(this);
+    gaitCommandMonitor->moveToThread(gaitCommandThread);
+    gaitCommandThread->start();
+    connect(gaitCommandThread, &QThread::finished, gaitCommandMonitor, &QObject::deleteLater);
+
     // 3D模型显示初始化
     QString modelRobot = QString::fromUtf8("..\\assets\\Roban.fbx"); // 默认机器人模型路径
     QString modelScene = QString::fromUtf8("..\\assets\\scene.obj"); // 默认场景模型路径
     
     sceneManager = new SceneManager(poseMonitor, modelScene, this);    // 场景管理器
     robotManager = new RobotManager(modelRobot, sceneManager, servoPositionsMonitor, this);    // 机器人管理器
-
+    // 把 gaitCommandMonitor 传给 robotManager，使其能订阅步态命令更新并直接处理位移/旋转
+    if (robotManager && gaitCommandMonitor) {
+        robotManager->setGaitCommandMonitor(gaitCommandMonitor);
+    }
+    // robotManager->attachImuMonitor(imuMonitor); // 绑定 IMU 数据源
 
     
     if (ui->modelDisplay) {
@@ -264,6 +283,11 @@ void robanweb::bindSlots(){
     // 从ros话题获取伺服位置消息
     if (servoPositionsMonitor) {
         connect(webSocketWorker, &WebSocketWorker::messageReceived, servoPositionsMonitor, &ServoPositionsMonitor::onMessageReceived, Qt::QueuedConnection);
+    }
+
+    // 从ros话题获取步态信息
+    if(gaitCommandMonitor){
+        connect(webSocketWorker, &WebSocketWorker::messageReceived, gaitCommandMonitor, &GaitCommandMonitor::onMessageReceived, Qt::QueuedConnection);
     }
 
     if(poseMonitor){
@@ -456,6 +480,11 @@ void robanweb::startSubscriptions(){
     // 启动位置订阅
     if(poseMonitor){
         QMetaObject::invokeMethod(poseMonitor, "start", Qt::QueuedConnection);
+    }
+
+    // 启动步态订阅
+    if (gaitCommandMonitor){
+        QMetaObject::invokeMethod(gaitCommandMonitor, "start", Qt::QueuedConnection);
     }
 }
 

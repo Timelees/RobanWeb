@@ -22,6 +22,11 @@ ServoPositionsMonitor::ServoPositionsMonitor(WebSocketWorker *worker, QObject *p
         walking_status_topic_type = "std_msgs/Float64";
         
     }
+
+    // 创建定时器以稳定在主线程以固定频率推送最新角度到上层，避免高频率直接 emit 导致 UI 卡顿
+    m_emitTimer = new QTimer(this);
+    m_emitTimer->setInterval(m_emitIntervalMs);
+    connect(m_emitTimer, &QTimer::timeout, this, &ServoPositionsMonitor::emitBuffered);
 }
 
 ServoPositionsMonitor::~ServoPositionsMonitor() {}
@@ -55,6 +60,10 @@ void ServoPositionsMonitor::start(){
     QString payload2 = QString::fromUtf8(doc2.toJson(QJsonDocument::Compact));
     QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload2));
 
+    // 启动定时器（如果未启动）以开始在 GUI 线程定期发射更新
+    if (m_emitTimer && !m_emitTimer->isActive())
+        m_emitTimer->start();
+
 }
 
 void ServoPositionsMonitor::onMessageReceived(const QString &message){
@@ -86,33 +95,31 @@ void ServoPositionsMonitor::onMessageReceived(const QString &message){
             }
         }
 
-        bool shouldEmit = false;
         {
             QMutexLocker locker(&m_mutex);
-                // 保存一份旧角度以供比较
-                QVector<double> oldAngles = m_lastAngles;
-                m_lastMsg = msgObj;
-                m_lastAngles = angles;
-                // 增加计数器，只有当累计到 m_batchSize 条消息时才发出更新信号，减少主线程负载
-                m_msgCounter++;
-                if (m_msgCounter >= m_batchSize) {
-                    m_msgCounter = 0;
-                    shouldEmit = true;
-                }
-                // 如果角度数组与上次相比发生显著变化，则立即发出更新（以降低行走时的延迟）
-                const double SIGNIFICANT_ANGLE_DELTA = 0.5; // degrees
-                if (!oldAngles.isEmpty() && oldAngles.size() == angles.size()) {
-                    for (int i = 0; i < angles.size(); ++i) {
-                        if (std::fabs(angles[i] - oldAngles[i]) > SIGNIFICANT_ANGLE_DELTA) {
-                            shouldEmit = true;
-                            break;
-                        }
+            // 保存一份旧角度以供比较
+            QVector<double> oldAngles = m_lastAngles;
+            m_lastMsg = msgObj;
+            m_lastAngles = angles;
+            // 标记为有待发布的新数据（由定时器在主线程定期发出）
+            m_pendingUpdate = true;
+            // 计数器仍然保留用于兼容或备用策略
+            m_msgCounter++;
+            // 如果累计到批次上限，也保持 pending（定时器会处理）
+            if (m_msgCounter >= m_batchSize) {
+                m_msgCounter = 0;
+            }
+            // 如果角度数组与上次相比发生显著变化，则尽快在主线程发出（通过 queued invoke）
+            const double SIGNIFICANT_ANGLE_DELTA = 0.5; // degrees
+            if (!oldAngles.isEmpty() && oldAngles.size() == angles.size()) {
+                for (int i = 0; i < angles.size(); ++i) {
+                    if (std::fabs(angles[i] - oldAngles[i]) > SIGNIFICANT_ANGLE_DELTA) {
+                        // 使用 queued invokeMethod 在拥有本对象的线程（通常为 GUI 线程）调用 emitBuffered
+                        QMetaObject::invokeMethod(this, "emitBuffered", Qt::QueuedConnection);
+                        break;
                     }
                 }
-        }
-        if (shouldEmit) {
-            // 通过信号通知（连接到 RobotManager 时使用 QueuedConnection）
-            emit servoPositionsUpdated();
+            }
         }
     }
     // 处理walking status消息
@@ -125,9 +132,9 @@ void ServoPositionsMonitor::onMessageReceived(const QString &message){
         // 这里可以根据需要处理walking status消息内容
         if(msgObj.contains("data") && msgObj["data"].isDouble()) {
             double walkStatus = msgObj["data"].toDouble();
-            qDebug() << "Current Walking Status:" << walkStatus;
+            // qDebug() << "Current Walking Status:" << walkStatus;
             if(walkStatus == 1.0) {
-                qDebug() << "Robot is walking.";
+                // qDebug() << "Robot is walking.";
                 // 先发出行走状态信号，告知上层播放行走动画
                 emit walkingStatusUpdated();
                 // 并且尽可能立即触发伺服/位置更新，减少行走动画与位置移动不同步的情况
@@ -141,11 +148,25 @@ void ServoPositionsMonitor::onMessageReceived(const QString &message){
                     }
                 }
             } else {
-                qDebug() << "Robot is standing.";
+                // qDebug() << "Robot is standing.";
                 // 当检测到非行走状态（例如 0.0）时，发送停止信号以便上层停止行走动画播放
                 emit walkingStatusStopped();
             }
         }
     }
 
+}
+
+void ServoPositionsMonitor::emitBuffered()
+{
+    // Copy and reset pending flag under mutex, then emit without holding the lock to avoid deadlocks
+    bool doEmit = false;
+    m_mutex.lock();
+    doEmit = m_pendingUpdate;
+    m_pendingUpdate = false;
+    m_mutex.unlock();
+
+    if (doEmit) {
+        emit servoPositionsUpdated();
+    }
 }

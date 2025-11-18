@@ -10,97 +10,108 @@ SceneManager::SceneManager(PoseMonitor *poseMonitor, const QString &modelPath, Q
     if(m_poseMonitor){
         // 从ros话题获取位置消息
         connect(m_poseMonitor, &PoseMonitor::poseUpdated, this, [this](const QVector3D &p) {
-            // 每次收到原始位姿时，先保存并立即发出动画专用信号，
-            // 以便动画子系统（例如步态/骨骼动画）可以保持与实机同步播放。
-            this->m_lastReceivedPose = p;
+            // 每次收到原始位姿时，先保存并立即发出动画专用信号。
+            // animation subsystem (legs/bones) should follow high-rate updates.
+            this->robotPose = p;
             // 立即发出未节流的动画更新信号（用于驱动动画帧）
-            emit robotPoseAnimationUpdated(p);
+            // emit robotPoseAnimationUpdated(p);
 
-            // 节流处理：只在累计到一定次数时才更新 robotPose 并发出位置更新信号，减少渲染/模型更新频率引起的卡顿。
-            // 但如果当前 robotPose 尚未初始化（isNull），则首次收到时立即更新一次。
-            this->m_poseUpdateCounter += 1;
-            if (this->robotPose.isNull() || this->m_poseUpdateCounter >= this->m_poseUpdateThrottle) {
-                // 重置计数器并更新
-                this->m_poseUpdateCounter = 0;
-                this->robotPose = this->m_lastReceivedPose;
-                // 发出信号，通知其他模块（使用队列连接的调用者将在主线程安全地处理）
-                emit robotPoseUpdated(this->robotPose);
-            }
+            // 节流与稳定位姿策略：
+            // - 当机器人处于行走状态 (m_isWalking==true) 时，不把位置写入用于模型位置映射的 `robotPose`，
+            //   以避免模型在行走过程被频繁抖动的位姿打断（我们只保留动画信号以驱动步态）。
+            // - 当机器人处于非行走状态时，按节流计数器把最近的 m_lastReceivedPose 写入 robotPose 并发出 robotPoseUpdated，
+            //   这样既能保证一定的更新频率，又能确保用于模型位置映射的是稳定的非行走位置。
+            // if (this->m_isWalking) {
+            //     // 如果正在行走，只更新 m_lastReceivedPose 并返回（动画仍然收到高频更新）。
+            //     return;
+            // }
+
+            // // 非行走：按节流策略更新 robotPose
+            // this->m_poseUpdateCounter += 1;
+            // if (this->robotPose.isNull() || this->m_poseUpdateCounter >= this->m_poseUpdateThrottle) {
+            //     this->m_poseUpdateCounter = 0;
+            //     this->robotPose = this->m_lastReceivedPose;
+            //     // 记录为稳定位姿副本，以便外部模块（如 RobotManager）在需要时直接使用
+            //     this->m_lastStablePose = this->robotPose;
+            //     emit robotPoseUpdated(this->robotPose);
+            // }
         });
     }
 
     // 启动用于平滑显示的定时器：在每个 tick 中把 m_displayRobotPose 插值到最新的 robotPose 并发出显示信号
     // 这样可以在不频繁修改 robotPose 的情况下，让渲染层获得连续的平滑位置变化。
-    m_displayTimer = new QTimer(this);
-    m_displayTimer->setInterval(m_displayIntervalMs);
-    connect(m_displayTimer, &QTimer::timeout, this, [this]() {
-        // 如果还没有任何有效目标位姿，则不发出信号
-        if (this->robotPose.isNull())
-            return;
+    // m_displayTimer = new QTimer(this);
+    // m_displayTimer->setInterval(m_displayIntervalMs);
+    // connect(m_displayTimer, &QTimer::timeout, this, [this]() {
+    //     // 如果还没有任何有效目标位姿，则不发出信号
+    //     if (this->robotPose.isNull())
+    //         return;
 
-        // 初始化显示位姿为目标位姿（首次）
-        if (this->m_displayRobotPose.isNull()) {
-            this->m_displayRobotPose = this->robotPose;
-            emit robotPoseDisplayUpdated(this->m_displayRobotPose);
-            return;
-        }
+    //     // 初始化显示位姿为目标位姿（首次）
+    //     if (this->m_displayRobotPose.isNull()) {
+    //         this->m_displayRobotPose = this->robotPose;
+    //         emit robotPoseDisplayUpdated(this->m_displayRobotPose);
+    //         return;
+    //     }
 
-        // 线性插值到目标位姿（x,y,yaw）。对 yaw 做循环差值处理。
-        auto lerp = [](float a, float b, float t) { return a + (b - a) * t; };
+    //     // 线性插值到目标位姿（x,y,yaw）。对 yaw 做循环差值处理。
+    //     auto lerp = [](float a, float b, float t) { return a + (b - a) * t; };
 
-        // 基础插值因子（可在类中配置），但我们会根据目标与当前的差异动态放大该因子以减少延迟
-        float baseT = this->m_displayLerpFactor;
-        QVector3D cur = this->m_displayRobotPose;
-        // 为了降低显示延迟，使用最近收到的位姿作为插值目标（m_lastReceivedPose），
-        // 即使 robotPose 仍受节流限制，m_lastReceivedPose 会尽可能快地反映实机状态。
-        QVector3D tgt = this->m_lastReceivedPose.isNull() ? this->robotPose : this->m_lastReceivedPose;
+    //     // 基础插值因子（可在类中配置），但我们会根据目标与当前的差异动态放大该因子以减少延迟
+    //     float baseT = this->m_displayLerpFactor;
+    //     QVector3D cur = this->m_displayRobotPose;
+    //     // 为了降低显示延迟，使用最近收到的位姿作为插值目标（m_lastReceivedPose），
+    //     // 即使 robotPose 仍受节流限制，m_lastReceivedPose 会尽可能快地反映实机状态。
+    //     QVector3D tgt = this->m_lastReceivedPose.isNull() ? this->robotPose : this->m_lastReceivedPose;
 
-        // 计算平移差距（平面）与偏航差距
-        float dx = tgt.x() - cur.x();
-        float dy = tgt.y() - cur.y();
-        float dist = std::sqrt(dx * dx + dy * dy);
+    //     // 计算平移差距（平面）与偏航差距
+    //     float dx = tgt.x() - cur.x();
+    //     float dy = tgt.y() - cur.y();
+    //     float dist = std::sqrt(dx * dx + dy * dy);
 
-        float cy = cur.z();
-        float ty = tgt.z();
-        float d = ty - cy;
-        // normalize del to [-180,180]
-        while (d > 180.0f) d -= 360.0f;
-        while (d < -180.0f) d += 360.0f;
-        float absYaw = std::fabs(d);
+    //     float cy = cur.z();
+    //     float ty = tgt.z();
+    //     float d = ty - cy;
+    //     // normalize del to [-180,180]
+    //     while (d > 180.0f) d -= 360.0f;
+    //     while (d < -180.0f) d += 360.0f;
+    //     float absYaw = std::fabs(d);
 
-        // 动态调整插值因子：当位移或偏航变化较大时快速跟随，减小时保持平滑
-        float t = baseT;
-        // 位移阈值（米） - 越大说明目标移动越多，越需要迅速跟随
-        if (dist > 0.25f) t = qMax(t, 0.95f);       // 大位移：几乎瞬间跳到目标
-        else if (dist > 0.08f) t = qMax(t, 0.75f);  // 中等位移：快速跟随
-        else if (dist > 0.02f) t = qMax(t, 0.45f);  // 小位移：适度加快
+    //     // 动态调整插值因子：当位移或偏航变化较大时快速跟随，减小时保持平滑
+    //     float t = baseT;
+    //     // 位移阈值（米） - 越大说明目标移动越多，越需要迅速跟随
+    //     if (dist > 0.25f) t = qMax(t, 0.95f);       // 大位移：几乎瞬间跳到目标
+    //     else if (dist > 0.08f) t = qMax(t, 0.75f);  // 中等位移：快速跟随
+    //     else if (dist > 0.02f) t = qMax(t, 0.45f);  // 小位移：适度加快
 
-        // 偏航也会促使更快的跟随
-        if (absYaw > 30.0f) t = qMax(t, 0.9f);
-        else if (absYaw > 8.0f) t = qMax(t, 0.6f);
+    //     // 偏航也会促使更快的跟随
+    //     if (absYaw > 30.0f) t = qMax(t, 0.9f);
+    //     else if (absYaw > 8.0f) t = qMax(t, 0.6f);
 
-        // position x,y 线性插值
-        float nx = lerp(cur.x(), tgt.x(), t);
-        float ny = lerp(cur.y(), tgt.y(), t);
+    //     // position x,y 线性插值
+    //     float nx = lerp(cur.x(), tgt.x(), t);
+    //     float ny = lerp(cur.y(), tgt.y(), t);
 
-        // yaw 插值（使用已归一化的 d）
-        float nyaw = cy + d * t;
+    //     // yaw 插值（使用已归一化的 d）
+    //     float nyaw = cy + d * t;
 
-        this->m_displayRobotPose = QVector3D(nx, ny, nyaw);
+    //     this->m_displayRobotPose = QVector3D(nx, ny, nyaw);
 
-        // 如果与目标非常接近则直接置为目标，避免长尾误差
-        const float EPS = 1e-3f;
-        if (std::fabs(this->m_displayRobotPose.x() - tgt.x()) < EPS && std::fabs(this->m_displayRobotPose.y() - tgt.y()) < EPS && std::fabs(this->m_displayRobotPose.z() - tgt.z()) < 0.5f)
-            this->m_displayRobotPose = tgt;
+    //     // 如果与目标非常接近则直接置为目标，避免长尾误差
+    //     const float EPS = 1e-3f;
+    //     if (std::fabs(this->m_displayRobotPose.x() - tgt.x()) < EPS && std::fabs(this->m_displayRobotPose.y() - tgt.y()) < EPS && std::fabs(this->m_displayRobotPose.z() - tgt.z()) < 0.5f)
+    //         this->m_displayRobotPose = tgt;
 
-        emit robotPoseDisplayUpdated(this->m_displayRobotPose);
-    });
-    m_displayTimer->start();
+    //     emit robotPoseDisplayUpdated(this->m_displayRobotPose);
+    // });
+    // m_displayTimer->start();
     
 }
 
 
 SceneManager::~SceneManager() {}
+
+
 
 void SceneManager::init(){
     loadSucceeded = loadModel(m_modelPath.toStdString());   // 加载模型

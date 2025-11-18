@@ -1,12 +1,13 @@
 #include "model_display/robotManager.h"
 #include "util/load_csv.hpp"
 #include <QDateTime>
+#include <cmath>
 #include "model_display/sceneManager.h"
-RobotManager::RobotManager(const QString &modelPath,SceneManager *sceneManager, ServoPositionsMonitor *servoPositionsMonitor, QObject *parent)
+#include "ros_process/gaitCommand.h"
+RobotManager::RobotManager(const QString &modelPath, SceneManager *sceneManager, ServoPositionsMonitor *servoPositionsMonitor, QObject *parent)
     : QObject(parent), m_modelPath(modelPath), m_sceneManager(sceneManager), m_servoPositionsMonitor(servoPositionsMonitor)
 {
     initialize();
-    
 }
 
 void RobotManager::initialize()
@@ -22,6 +23,10 @@ void RobotManager::initialize()
     {
         setModelRotation(QVector3D(0.0f, -90.0f, 0.0f));
     }
+    // 记录初始模型朝向以便以后 reset 时恢复
+    m_initialModelRotationDeg = m_modelRotationDeg;
+    // 将当前模型朝向的 Y 分量作为基础偏置记录下来，后续来自 Scene 的 yaw 将在此基础上叠加
+    // m_modelYawOffsetDeg = m_modelRotationDeg.y();
 
     // 设置关节映射
     jointConfigPath = resolveConfigPath("boneToJoint.csv");
@@ -33,7 +38,8 @@ void RobotManager::initialize()
     // 然后立即把需要的前12列数据拷贝到 m_walkFirst12Rows，再把 m_placeRows 恢复为调用前的内容，
     // 并清理由 loadActionCsv 新建的定时器（避免干扰正常的 place 播放逻辑）。
     QString walkCsv = resolveConfigPath("walk.csv");
-    if (!walkCsv.isEmpty() && QFile::exists(walkCsv)) {
+    if (!walkCsv.isEmpty() && QFile::exists(walkCsv))
+    {
         // 备份当前 place 数据与计时器指针
         auto backupPlaceRows = m_placeRows;
         QTimer *backupAnimTimer = m_animTimer;
@@ -41,10 +47,12 @@ void RobotManager::initialize()
 
         // 使用 loadActionCsv 解析 walk.csv（按要求使用此函数），采用较慢的间隔以便随即停止
         bool parsed = loadActionCsv(walkCsv, m_walkIntervalMs, m_walkLooping);
-        if (parsed) {
+        if (parsed)
+        {
             // 从解析出的 m_placeRows 中提取每行的前12列到 m_walkFirst12Rows
             m_walkFirst12Rows.clear();
-            for (const QVector<double> &r : m_placeRows) {
+            for (const QVector<double> &r : m_placeRows)
+            {
                 QVector<double> small;
                 int take = qMin(12, r.size());
                 for (int i = 0; i < take; ++i)
@@ -59,7 +67,8 @@ void RobotManager::initialize()
         // 停止并清理 loadActionCsv 可能创建的定时器，恢复之前的 m_placeRows/m_animTimer 状态
         stopPlacePlayback();
         // 如果之前没有计时器（backupAnimTimer==nullptr）但 loadActionCsv 创建了一个新的 m_animTimer，删除它
-        if (backupAnimTimer == nullptr && m_animTimer != nullptr) {
+        if (backupAnimTimer == nullptr && m_animTimer != nullptr)
+        {
             delete m_animTimer;
             m_animTimer = nullptr;
         }
@@ -73,29 +82,28 @@ void RobotManager::initialize()
     // ------------- 预处理结束 -------------
 
     // 如果有 ServoPositionsMonitor，则连接更新信号（queued connection），使用信号驱动直接应用角度，避免轮询
-    if (m_servoPositionsMonitor) {
+    if (m_servoPositionsMonitor)
+    {
         // 连接伺服位置更新信号
         connect(m_servoPositionsMonitor, &ServoPositionsMonitor::servoPositionsUpdated,
                 this, &RobotManager::onServoPositionsUpdated, Qt::QueuedConnection);
         // 连接行走状态更新信号
         connect(m_servoPositionsMonitor, &ServoPositionsMonitor::walkingStatusUpdated,
                 this, &RobotManager::onWalkingStatusUpdated, Qt::QueuedConnection);
-    // 连接行走停止信号，停止行走动画播放
-    connect(m_servoPositionsMonitor, &ServoPositionsMonitor::walkingStatusStopped,
-        this, &RobotManager::stopWalkingPlayback, Qt::QueuedConnection);
-        
+  
+        // 连接行走停止信号，停止行走动画播放
+        connect(m_servoPositionsMonitor, &ServoPositionsMonitor::walkingStatusStopped,
+                this, &RobotManager::stopWalkingPlayback, Qt::QueuedConnection);
     }
 
-    // 如果有 SceneManager，则监听其 robotPoseUpdated 信号以实现实时位置跟随
-    if (m_sceneManager) {
-        // 使用队列连接以确保线程安全
-        // 订阅 display 信号以获得平滑的连续位姿更新（渲染/位置过渡用），而保留 robotPoseUpdated 作为节流的原始位置事件
-        connect(m_sceneManager, &SceneManager::robotPoseDisplayUpdated,
-                this, &RobotManager::onSceneRobotPoseUpdated, Qt::QueuedConnection);
-    }
+    // 创建并启动用于合并并以固定频率应用伺服与步态更新的定时器（减少高频更新引起的卡顿）
+    m_servoApplyTimer = new QTimer(this);
+    m_servoApplyTimer->setInterval(m_servoApplyIntervalMs);
+    connect(m_servoApplyTimer, &QTimer::timeout, this, &RobotManager::applyPendingServoAndGait, Qt::QueuedConnection);
+    m_servoApplyTimer->start();
 
 
-}
+};
 
 // 设定模型整体旋转：传入度为单位的欧拉角 (x_deg, y_deg, z_deg)
 void RobotManager::setModelRotation(const QVector3D &eulerDeg)
@@ -201,7 +209,7 @@ bool RobotManager::loadActionCsv(const QString &csvPath, int intervalMs, bool lo
     m_cameraDistanceLockedDuringPlayback = true;
     // qDebug() << "RobotManager: started animation, rows=" << m_placeRows.size() << " cameraDistanceLockedDuringPlayback=" << m_cameraDistanceLockedDuringPlayback;
 
-    emit animationStarted();        // 连接ModelViewer, 设置视角
+    emit animationStarted(); // 连接ModelViewer, 设置视角
     m_currentRow = 0;
 
     return true;
@@ -210,7 +218,6 @@ bool RobotManager::loadActionCsv(const QString &csvPath, int intervalMs, bool lo
 void RobotManager::applyJointAngles(const std::map<int, double> &jointAngles)
 {
     m_currentJointAngles = jointAngles;
-
 
     // reset local to original
     for (auto &n : m_nodeInfos)
@@ -327,7 +334,6 @@ void RobotManager::applyJointAngles(const std::map<int, double> &jointAngles)
         flat[off + 11] = F.m[2][3];
     }
 
-
     // CPU skinning using compactInfluences
     for (size_t mi = 0; mi < m_meshes.size(); ++mi)
     {
@@ -398,7 +404,6 @@ void RobotManager::applyJointAngles(const std::map<int, double> &jointAngles)
             m.vertices[vi * 3 + 2] = az;
         }
     }
-
 
     emit frameAdvanced();
 }
@@ -532,8 +537,6 @@ bool RobotManager::loadModel(const std::string &file)
         m_meshes.push_back(std::move(sm));
     }
 
-    
-
     // 处理材质
     // assign texture (embedded image or path) per mesh based on material index
     for (unsigned int mi = 0; mi < scene->mNumMeshes; ++mi)
@@ -606,7 +609,7 @@ bool RobotManager::loadModel(const std::string &file)
         NodeInfo n;
         n.name = QString::fromUtf8(node->mName.C_Str());
         n.parent = parentIdx;
-    
+
         n.local = Mat4::fromAi(node->mTransformation);
         n.originalLocal = Mat4::orthonormalizeRotationKeepTranslation(n.local);
         m_nodeInfos.push_back(n);
@@ -642,7 +645,7 @@ bool RobotManager::loadModel(const std::string &file)
                 BoneInfo bn;
                 bn.name = bname;
                 bn.offset = Mat4::fromAi(bone->mOffsetMatrix);
-                
+
                 // map node name to index if present
                 auto nit = m_nodeNameToIndex.find(bname);
                 if (nit != m_nodeNameToIndex.end())
@@ -780,27 +783,33 @@ void RobotManager::advancePlaceFrame()
     }
     applyJointAngles(ja);
 
-    // m_currentRow = (m_currentRow + 1) % (int)m_placeRows.size(); 
+    // m_currentRow = (m_currentRow + 1) % (int)m_placeRows.size();
 
     // ---------------测试代码，从csv读取时是否循环读取---------------
-    if (m_placeLooping) {
+    if (m_placeLooping)
+    {
         m_currentRow = (m_currentRow + 1) % (int)m_placeRows.size();
-    } else {
+    }
+    else
+    {
         // 非循环模式：到最后一行后保持不再回到开头，且停止计时器以节省资源
-        if (m_currentRow + 1 < (int)m_placeRows.size()) {
+        if (m_currentRow + 1 < (int)m_placeRows.size())
+        {
             m_currentRow += 1;
-        } else {
+        }
+        else
+        {
             // 已到最后一帧，停止计时器但保持当前行（最后一行）不变
-            if (m_animTimer) {
+            if (m_animTimer)
+            {
                 m_animTimer->stop();
                 // don't delete timer here; keep for potential future reuse
             }
             // notify listeners that the place (action) playback reached its end
-            emit placePlaybackFinished();       // 当读取到csv最后一行时发出信号表示动画播放结束
+            emit placePlaybackFinished(); // 当读取到csv最后一行时发出信号表示动画播放结束
         }
     }
     // ---------------测试代码，从csv读取时是否循环读取---------------
-
 }
 
 // computeBounds: 计算模型包围盒并将模型居中归一化到一个合适的缩放范围
@@ -880,11 +889,14 @@ bool RobotManager::loadLocationCsv(const QString &csvPath)
     m_locationRows.clear();
     m_locationTimes.clear();
     QString firstLine = ts.readLine();
-    auto tryParseLine = [&](const QString &line) {
+    auto tryParseLine = [&](const QString &line)
+    {
         QString s = line.trimmed();
-        if (s.isEmpty()) return;
+        if (s.isEmpty())
+            return;
         QStringList parts = s.split(',');
-        if (parts.size() < 3) return;
+        if (parts.size() < 3)
+            return;
         bool okx = false, oky = false, okz = false;
         double x = parts[0].trimmed().toDouble(&okx);
         double y = parts[1].trimmed().toDouble(&oky);
@@ -935,8 +947,6 @@ void RobotManager::loadLocationRowsFromVector(const QVector<QVector3D> &rows)
 }
 // ---------------测试函数--------------------------
 
-
-
 // 将模型移动到给定的世界位置（直接修改 mesh 顶点为原始顶点 + delta）
 void RobotManager::applyLocation(const QVector3D &target)
 {
@@ -953,23 +963,53 @@ void RobotManager::applyLocation(const QVector3D &target)
     applyJointAngles(m_currentJointAngles);
 }
 
-void RobotManager::refreshRobotPositionsFromScene(){
+void RobotManager::refreshRobotPositionsFromScene()
+{
     QVector3D scenePt;
-    if (!m_sceneManager->mapCurrentRobotPoseToScene(scenePt)) {
+    if (!m_sceneManager->mapCurrentRobotPoseToScene(scenePt))
+    {
         qDebug() << "RobotManager::refreshRobotPositionsFromScene: no valid mapping or robot pose";
         return;
     }
 
-    // Apply mapped scene position to the robot model
     // qDebug() << "RobotManager::refreshRobotPositionsFromScene: mapped robot -> scene:" << scenePt;
     applyLocation(scenePt);
 }
 
-void RobotManager::resetRobotPositions(){
+void RobotManager::resetRobotPositions()
+{
+    // 恢复为初始朝向与初始位置，确保模型回到加载时的姿态
+    setModelRotation(m_initialModelRotationDeg);
     QVector3D origin(0.0f, 0.0f, 0.0f);
     applyLocation(origin);
-}
 
+    // Also reset smoothing / gait caches to avoid jumps when subsequent gait commands arrive.
+    // Clear pending gait accumulators under lock and reset last-applied / target caches
+    {
+        QMutexLocker locker(&m_pendingGaitMutex);
+        m_pendingGx = 0.0;
+        m_pendingGy = 0.0;
+        m_pendingGdelta = 0.0;
+        m_hasPendingGait = false;
+    }
+
+    // Reset last-applied and target values so smoothing starts from the reset state
+    m_lastAppliedWorldTranslation = m_worldTranslation;
+    m_gaitTargetWorldTranslation = m_worldTranslation;
+    m_lastAppliedYawDeg = m_modelRotationDeg.y();
+    m_gaitTargetYawDeg = m_modelRotationDeg.y();
+    m_hasInitializedApplyState = true;
+
+    // Clear pending servo angles (so smoothing won't lerp from stale values)
+    {
+        QMutexLocker locker(&m_pendingServoMutex);
+        m_pendingServo.tsMs = 0;
+        m_pendingServo.angles.clear();
+    }
+    m_lastAppliedServoAngles.clear();
+    // reset last apply time to avoid large dt on next apply
+    m_lastApplyMs = QDateTime::currentMSecsSinceEpoch();
+}
 
 // -----------------测试函数：应用csv位置行数据来移动模型--------------------
 // 应用已解析的第 row 行位置
@@ -1003,7 +1043,8 @@ bool RobotManager::startLocationPlayback(int intervalMs, bool loop)
     m_locationLooping = loop;
 
     m_locationTimer = new QTimer(this);
-    connect(m_locationTimer, &QTimer::timeout, this, [this]() {
+    connect(m_locationTimer, &QTimer::timeout, this, [this]()
+            {
         // apply current row
         applyLocationRow(m_currentLocationRow);
         // record timestamp for this played row (seconds)记录时间戳
@@ -1035,8 +1076,7 @@ bool RobotManager::startLocationPlayback(int intervalMs, bool loop)
                 }
                 emit locationPlaybackFinished();    // 发送位置更新结束的信号
             }
-        }
-    });
+        } });
     m_locationTimer->start(intervalMs);
     // qDebug() << "RobotManager::startLocationPlayback: 开始更新位置started rows=" << m_locationRows.size() << " intervalMs=" << intervalMs << " loop=" << m_locationLooping;
     return true;
@@ -1049,16 +1089,18 @@ bool RobotManager::startLocationPlayback(QVector3D &target_pos, int intervalMs)
     stopLocationPlayback();
 
     m_locationTimer = new QTimer(this);
-    connect(m_locationTimer, &QTimer::timeout, this, [this, &target_pos](){
-        applyLocation(target_pos);
+    connect(m_locationTimer, &QTimer::timeout, this, [this, &target_pos]()
+            {
+                applyLocation(target_pos);
 
-        if(m_locationTimer){
-            m_locationTimer->stop();
-            delete m_locationTimer;
-            m_locationTimer = nullptr;
-        }
-        emit locationPlaybackFinished();        // 发送位置更新结束的信号
-    });
+                if (m_locationTimer)
+                {
+                    m_locationTimer->stop();
+                    delete m_locationTimer;
+                    m_locationTimer = nullptr;
+                }
+                emit locationPlaybackFinished(); // 发送位置更新结束的信号
+            });
 
     m_locationTimer->start(intervalMs);
 
@@ -1089,7 +1131,7 @@ SimpleMesh RobotManager::buildTrajectoryMesh() const
         return out;
 
     out.vertices.reserve(count * 3);
-    out.colors.reserve(count * 4);  // 颜色设置
+    out.colors.reserve(count * 4); // 颜色设置
     for (int i = 0; i < count; ++i)
     {
         const QVector3D &p = m_locationRows[i];
@@ -1101,15 +1143,21 @@ SimpleMesh RobotManager::buildTrajectoryMesh() const
         float r = 0.0f, g = 1.0f, b = 0.0f;
         float a = 1.0f;
         // compute alpha based on time if available
-        if (i < m_locationTimes.size() && m_locationTimes[i] > 0 && m_trajectoryFadeSeconds > 0.0) {
+        if (i < m_locationTimes.size() && m_locationTimes[i] > 0 && m_trajectoryFadeSeconds > 0.0)
+        {
             double now = QDateTime::currentDateTimeUtc().toMSecsSinceEpoch() / 1000.0;
             double playedT = m_locationTimes[i];
             double age = now - playedT; // seconds since played
-            if (age >= m_trajectoryFadeSeconds) {
+            if (age >= m_trajectoryFadeSeconds)
+            {
                 a = 0.0f;
-            } else if (age <= 0.0) {
+            }
+            else if (age <= 0.0)
+            {
                 a = 1.0f;
-            } else {
+            }
+            else
+            {
                 a = float(1.0 - (age / m_trajectoryFadeSeconds));
             }
         }
@@ -1154,11 +1202,14 @@ void RobotManager::onServoPositionsUpdated()
         return;
     // 直接读取解析好的角度数组并应用到模型，避免轮询延迟
     QVector<double> angles = m_servoPositionsMonitor->lastAngles();
-    if (angles.isEmpty()) {
-        // nothing to apply
+    if (angles.isEmpty())
         return;
+    {
+        QMutexLocker locker(&m_pendingServoMutex);
+        // store as timestamped pending frame (replace any older pending)
+        m_pendingServo.tsMs = QDateTime::currentMSecsSinceEpoch();
+        m_pendingServo.angles = std::move(angles);
     }
-    applyServoAnglesRow(angles);
 }
 
 void RobotManager::applyServoAnglesRow(const QVector<double> &row)
@@ -1191,7 +1242,8 @@ void RobotManager::applyServoAnglesRow(const QVector<double> &row)
     applyJointAngles(ja);
 }
 
-void RobotManager::onWalkingStatusUpdated(){
+void RobotManager::onWalkingStatusUpdated()
+{
     if (!m_servoPositionsMonitor)
         return;
     // 当收到行走状态更新信号时，启动行走动画融合：
@@ -1199,17 +1251,21 @@ void RobotManager::onWalkingStatusUpdated(){
     //   来自机器人实时伺服数据的角度数组的前12项，得到融合后的完整角度向量，调用 applyServoAnglesRow
     // - 如果 m_walkFirst12Rows 为空，则尝试在此处再次按需加载（容错）
 
-    if (m_walkFirst12Rows.isEmpty()) {
+    if (m_walkFirst12Rows.isEmpty())
+    {
         // 容错：尝试动态解析 config/walk.csv（与 initialize 中相同的解析策略，但不破坏现有 placeRows）
         QString walkCsv = resolveConfigPath("walk.csv");
-        if (!walkCsv.isEmpty() && QFile::exists(walkCsv)) {
+        if (!walkCsv.isEmpty() && QFile::exists(walkCsv))
+        {
             auto backupPlaceRows = m_placeRows;
             QTimer *backupAnimTimer = m_animTimer;
             bool backupPlaceLooping = m_placeLooping;
             bool parsed = loadActionCsv(walkCsv, m_walkIntervalMs, m_walkLooping);
-            if (parsed) {
+            if (parsed)
+            {
                 m_walkFirst12Rows.clear();
-                for (const QVector<double> &r : m_placeRows) {
+                for (const QVector<double> &r : m_placeRows)
+                {
                     QVector<double> small;
                     int take = qMin(12, r.size());
                     for (int i = 0; i < take; ++i)
@@ -1220,7 +1276,8 @@ void RobotManager::onWalkingStatusUpdated(){
                 }
             }
             stopPlacePlayback();
-            if (backupAnimTimer == nullptr && m_animTimer != nullptr) {
+            if (backupAnimTimer == nullptr && m_animTimer != nullptr)
+            {
                 delete m_animTimer;
                 m_animTimer = nullptr;
             }
@@ -1232,21 +1289,25 @@ void RobotManager::onWalkingStatusUpdated(){
     }
 
     // 如果没有解析到有效的行走帧数据，直接返回（此时仍然可以由 applyServoAnglesRow 持续使用实时伺服数据）
-    if (m_walkFirst12Rows.isEmpty()) {
+    if (m_walkFirst12Rows.isEmpty())
+    {
         qDebug() << "RobotManager::onWalkingStatusUpdated: no walk csv first-12 rows loaded, skip fused playback.";
         return;
     }
 
     // 如果已经在播放中，则重置到开头（避免多次重复创建定时器）
-    if (m_walkTimer && m_walkTimer->isActive()) {
+    if (m_walkTimer && m_walkTimer->isActive())
+    {
         m_walkCurrentRow = 0;
         return;
     }
 
     // 创建并启动行走播放定时器（周期性把 CSV 的前12列和实时伺服角度融合后应用）
-    if (!m_walkTimer) {
+    if (!m_walkTimer)
+    {
         m_walkTimer = new QTimer(this);
-        connect(m_walkTimer, &QTimer::timeout, this, [this]() {
+        connect(m_walkTimer, &QTimer::timeout, this, [this]()
+                {
             // 读取当前的实时伺服角度数组
             QVector<double> servo = m_servoPositionsMonitor ? m_servoPositionsMonitor->lastAngles() : QVector<double>();
             // 目标尺寸：优先使用 servo 的长度以保留实时数据；若 servo 不足，则按 22 个关节长度扩展
@@ -1268,8 +1329,12 @@ void RobotManager::onWalkingStatusUpdated(){
                 }
             }
 
-            // 将融合结果应用到模型（applyServoAnglesRow 会做坐标/符号调整并触发渲染）
-            applyServoAnglesRow(fused);
+            // 将融合结果放入 timestamped pending 缓冲，由 applyPendingServoAndGait 定时器在稳定频率下应用并做平滑
+            {
+                QMutexLocker locker(&m_pendingServoMutex);
+                m_pendingServo.tsMs = QDateTime::currentMSecsSinceEpoch();
+                m_pendingServo.angles = fused;
+            }
 
             // advance
             if (m_walkLooping) {
@@ -1285,18 +1350,298 @@ void RobotManager::onWalkingStatusUpdated(){
                         m_walkTimer = nullptr;
                     }
                 }
-            }
-        });
+            } });
     }
     m_walkCurrentRow = 0;
     m_walkTimer->start(m_walkIntervalMs);
 }
 
-// 当 SceneManager 收到新的机器人位姿（来自 PoseMonitor）时调用此槽。
-// 不直接使用传入的 pose 参数，而是调用已有的刷新函数
-void RobotManager::onSceneRobotPoseUpdated(const QVector3D &pose)
+// 设置 gait command 数据源：保存指针并订阅其更新信号（使用队列连接以线程安全）
+void RobotManager::setGaitCommandMonitor(GaitCommandMonitor *monitor)
 {
-    Q_UNUSED(pose);
-    // 触发位置映射并应用到模型
-    refreshRobotPositionsFromScene();
+    if (m_gaitCommandMonitor == monitor)
+        return;
+    if (m_gaitCommandMonitor)
+    {
+        // disconnect previous if any
+        disconnect(m_gaitCommandMonitor, &GaitCommandMonitor::gaitCommandUpdated, this, &RobotManager::onGaitCommandUpdated);
+    }
+    m_gaitCommandMonitor = monitor;
+    if (m_gaitCommandMonitor)
+    {
+        connect(m_gaitCommandMonitor, &GaitCommandMonitor::gaitCommandUpdated, this, &RobotManager::onGaitCommandUpdated, Qt::QueuedConnection);
+    }
 }
+
+// 当收到步态命令更新时调用：读取 gaitCommand 中的 x,y,delta 并把模型移动/旋转到新的位置
+void RobotManager::onGaitCommandUpdated()
+{
+    if (!m_gaitCommandMonitor)
+        return;
+
+    // 线程安全的访问 getters
+    double gx = m_gaitCommandMonitor->gaitX();
+    double gy = m_gaitCommandMonitor->gaitY();
+    double gdelta = m_gaitCommandMonitor->gaitDelta();
+
+    // Coalesce gait updates: accumulate small increments into pending sums so that
+    // fast frequent updates are integrated and applied by the periodic timer.
+    {
+        QMutexLocker locker(&m_pendingGaitMutex);
+        m_pendingGx += gx;
+        m_pendingGy += gy;
+        m_pendingGdelta += gdelta;
+        m_hasPendingGait = true;
+
+        // compute local translation magnitude (pre-scale) to detect in-place turn intent
+        float lx = 0.0f, lz = 0.0f;
+        switch (m_gaitAxisMapping)
+        {
+        case RobotManager::LocalXForward:
+            lx = float(gx);
+            lz = float(gy);
+            break;
+        case RobotManager::LocalZForward:
+            lx = float(gy);
+            lz = float(gx);
+            break;
+        case RobotManager::SwapAxes:
+            lx = float(gy);
+            lz = -float(gx);
+            break;
+        default:
+            lx = float(gx);
+            lz = float(gy);
+            break;
+        }
+        float localMoveMag = std::sqrt(lx * lx + lz * lz);
+
+        // If translation is tiny but we received a meaningful gdelta, apply yaw immediately
+        if (localMoveMag < m_yawBoostTranslationThreshold && std::fabs(gdelta) >= m_yawActivationGdeltaThreshold)
+        {
+            // consume the pending gdelta we just stored so applyPending won't double-apply it
+            double immediateGdelta = m_pendingGdelta;
+            m_pendingGdelta -= immediateGdelta;
+            if (m_pendingGx == 0.0 && m_pendingGy == 0.0 && m_pendingGdelta == 0.0)
+                m_hasPendingGait = false;
+
+            // ensure apply caches initialized
+            if (!m_hasInitializedApplyState)
+            {
+                m_lastAppliedWorldTranslation = m_worldTranslation;
+                m_lastAppliedYawDeg = m_modelRotationDeg.y();
+                m_gaitTargetWorldTranslation = m_worldTranslation;
+                m_gaitTargetYawDeg = m_modelRotationDeg.y();
+                m_hasInitializedApplyState = true;
+            }
+
+            // update target and last-applied yaw and set model rotation immediately
+            m_gaitTargetYawDeg += float(immediateGdelta);
+            m_lastAppliedYawDeg = m_gaitTargetYawDeg;
+            QVector3D newEuler = m_modelRotationDeg;
+            // apply user-configurable compensation between real yaw and model yaw
+            newEuler.setY(m_lastAppliedYawDeg + m_modelYawCompensationDeg);
+            setModelRotation(newEuler);
+            // update last apply timestamp to avoid a large dt
+            m_lastApplyMs = QDateTime::currentMSecsSinceEpoch();
+        }
+    }
+}
+
+void RobotManager::applyPendingServoAndGait()
+{
+    // Extract pending servo angles and gait under locks with minimal hold time
+    QVector<double> servoAngles;
+    qint64 servoTs = 0;
+    {
+        QMutexLocker locker(&m_pendingServoMutex);
+        if (!m_pendingServo.angles.isEmpty()) {
+            servoAngles = m_pendingServo.angles;
+            servoTs = m_pendingServo.tsMs;
+        }
+        // clear pending (we replaced it with last snapshot)
+        m_pendingServo.tsMs = 0;
+        m_pendingServo.angles.clear();
+    }
+
+    qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+
+    double gx = 0.0, gy = 0.0, gdelta = 0.0;
+    bool hasGait = false;
+    {
+        QMutexLocker locker(&m_pendingGaitMutex);
+        if (m_hasPendingGait)
+        {
+            gx = m_pendingGx;
+            gy = m_pendingGy;
+            gdelta = m_pendingGdelta;
+            hasGait = true;
+            m_hasPendingGait = false;
+            // clear accumulated pending after taking a snapshot
+            m_pendingGx = 0.0;
+            m_pendingGy = 0.0;
+            m_pendingGdelta = 0.0;
+        }
+    }
+
+    // Apply servo angles (if any)
+    if (!servoAngles.isEmpty())
+    {
+        // drop stale frames that are too old
+        if (servoTs > 0 && (nowMs - servoTs) > m_servoStaleMs) {
+            // stale -> ignore
+            servoAngles.clear();
+        }
+    }
+
+    if (!servoAngles.isEmpty())
+    {
+        // smoothing: lerp between lastApplied and new servoAngles to reduce jitter
+        std::vector<double> toApply;
+        toApply.resize(servoAngles.size());
+        if (m_lastAppliedServoAngles.empty())
+        {
+            // first time: initialize lastApplied to current values
+            m_lastAppliedServoAngles = std::vector<double>(servoAngles.begin(), servoAngles.end());
+        }
+        // ensure lastApplied has same size
+        if (m_lastAppliedServoAngles.size() < servoAngles.size())
+            m_lastAppliedServoAngles.resize(servoAngles.size(), 0.0);
+
+        // compute effective lerp factor: either time-based smoothing or fixed per-frame lerp
+        double effF = std::min(std::max<double>(m_servoLerpFactor, 0.0), 1.0);
+        if (m_enableTimeBasedSmoothing)
+        {
+            double dtMs = (m_lastApplyMs == 0) ? double(m_servoApplyIntervalMs) : double(nowMs - m_lastApplyMs);
+            double baseMs = double(qMax(1, m_servoApplyIntervalMs));
+            double baseF = std::min(std::max<double>(m_servoLerpFactor, 0.0), 0.999);
+            effF = 1.0 - std::pow(1.0 - baseF, dtMs / baseMs);
+            if (!(effF >= 0.0 && effF <= 1.0)) effF = baseF; // fallback
+        }
+        for (int i = 0; i < servoAngles.size(); ++i)
+        {
+            double last = (i < m_lastAppliedServoAngles.size()) ? m_lastAppliedServoAngles[i] : 0.0;
+            double cur = servoAngles[i];
+            double v = last + (cur - last) * effF;
+            toApply[i] = v;
+        }
+        // apply smoothed angles (construct QVector<double> for applyServoAnglesRow)
+        QVector<double> qToApply;
+        qToApply.reserve((int)toApply.size());
+        for (size_t i = 0; i < toApply.size(); ++i)
+            qToApply.append(toApply[i]);
+        applyServoAnglesRow(qToApply);
+        // store last applied
+        m_lastAppliedServoAngles = toApply;
+        // update last apply time
+        m_lastApplyMs = nowMs;
+    }
+
+    // Apply gait-driven translation/rotation (if any)
+    if (hasGait)
+    {
+    Mat4 R = m_worldRotation;
+    float lx = 0.0f, ly = 0.0f, lz = 0.0f;
+        switch (m_gaitAxisMapping)
+        {
+        case RobotManager::LocalXForward:
+            lx = float(gx) * m_gaitScale;
+            lz = float(gy) * m_gaitScale;
+            break;
+        case RobotManager::LocalZForward:
+            lx = float(gy) * m_gaitScale;
+            lz = float(gx) * m_gaitScale;
+            break;
+        case RobotManager::SwapAxes:
+            lx = float(gy) * m_gaitScale;
+            lz = -float(gx) * m_gaitScale;
+            break;
+        default:
+            lx = float(gx) * m_gaitScale;
+            lz = float(gy) * m_gaitScale;
+            break;
+        }
+        float world_dx = lx * R.m[0][0] + ly * R.m[0][1] + lz * R.m[0][2];
+        float world_dy = lx * R.m[1][0] + ly * R.m[1][1] + lz * R.m[1][2];
+        float world_dz = lx * R.m[2][0] + ly * R.m[2][1] + lz * R.m[2][2];
+        // accumulate into gait target (world-space translation and absolute yaw)
+        if (!m_hasInitializedApplyState)
+        {
+            m_lastAppliedWorldTranslation = m_worldTranslation;
+            m_lastAppliedYawDeg = m_modelRotationDeg.y();
+            // initialize targets to current state
+            m_gaitTargetWorldTranslation = m_worldTranslation;
+            m_gaitTargetYawDeg = m_modelRotationDeg.y();
+            m_hasInitializedApplyState = true;
+        }
+
+        // add incremental world delta into gait target
+        m_gaitTargetWorldTranslation += QVector3D(world_dx, world_dy, world_dz);
+        // add delta yaw (degrees) to target yaw
+        m_gaitTargetYawDeg += float(gdelta);
+
+        // compute local translation magnitude (before rotating into world) to
+        // detect when the robot is essentially turning in-place
+        float localMoveMag = std::sqrt(lx * lx + lz * lz);
+        // trigger yaw-boost if we detect small translation but a significant gdelta
+        if (localMoveMag < m_yawBoostTranslationThreshold && std::fabs(gdelta) >= m_yawActivationGdeltaThreshold)
+        {
+            m_yawBoostRemaining = m_yawBoostFrames;
+        }
+
+        // lerp from last applied toward target using configurable follow factors
+        // compute effective follow factors based on elapsed time for consistent behavior
+        double effTf = double(m_gaitFollowFactorTranslation);
+        double effYf = double(m_gaitFollowFactorYaw);
+        if (m_enableTimeBasedSmoothing)
+        {
+            double dtMs = (m_lastApplyMs == 0) ? double(m_servoApplyIntervalMs) : double(nowMs - m_lastApplyMs);
+            double baseMs = double(qMax(1, m_servoApplyIntervalMs));
+            double tf_base = std::min(std::max<double>(m_gaitFollowFactorTranslation, 0.0), 0.999);
+            double yf_base = std::min(std::max<double>(m_gaitFollowFactorYaw, 0.0), 0.999);
+            effTf = 1.0 - std::pow(1.0 - tf_base, dtMs / baseMs);
+            effYf = 1.0 - std::pow(1.0 - yf_base, dtMs / baseMs);
+        }
+
+        // if we have an active yaw-boost window, apply yaw immediately (or with full follow)
+        bool applyImmediateYaw = false;
+        if (m_yawBoostRemaining > 0)
+        {
+            applyImmediateYaw = true;
+            m_yawBoostRemaining -= 1;
+        }
+        QVector3D lerped = m_lastAppliedWorldTranslation + (m_gaitTargetWorldTranslation - m_lastAppliedWorldTranslation) * float(effTf);
+        float lerpedYaw;
+        if (applyImmediateYaw && m_enableImmediateYaw)
+        {
+            // snap yaw to target to avoid perceptible lag when switching to turning-in-place
+            lerpedYaw = m_gaitTargetYawDeg;
+        }
+        else
+        {
+            lerpedYaw = m_lastAppliedYawDeg + (m_gaitTargetYawDeg - m_lastAppliedYawDeg) * float(effYf);
+        }
+
+        // apply rotation & translation
+    QVector3D newEuler = m_modelRotationDeg;
+    // 仅在确实存在 yaw 变化（目标 yaw 与上次应用 yaw 不同）或处于 yaw-boost/立即应用的窗口时
+    // 才把补偿角加入到模型 yaw 中。这样可以避免在纯平移时引入补偿导致的误旋转。
+    const float YAW_COMPENSATION_THRESHOLD = 1e-3f; // degrees
+    bool hasYawChange = (std::fabs(m_gaitTargetYawDeg - m_lastAppliedYawDeg) > YAW_COMPENSATION_THRESHOLD) || applyImmediateYaw;
+    float finalYaw = lerpedYaw + (hasYawChange ? m_modelYawCompensationDeg : 0.0f);
+    newEuler.setY(finalYaw);
+    setModelRotation(newEuler);
+
+        QVector3D applyTarget = lerped + QVector3D(m_modelCenterX, m_modelCenterY, m_modelCenterZ);
+        applyLocation(applyTarget);
+
+        // update last applied cache
+        m_lastAppliedWorldTranslation = lerped;
+        m_lastAppliedYawDeg = lerpedYaw;
+        // update last apply time
+        m_lastApplyMs = nowMs;
+    }
+}
+
+
+

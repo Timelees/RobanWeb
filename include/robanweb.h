@@ -30,7 +30,7 @@
 #include "dialog/slamDialog.h"
 #include "dialog/robotControlDialog.h"
 #include "util/load_param.hpp"
-
+#include "ros_process/gaitCommand.h"
 
 
 class robanweb : public QMainWindow {
@@ -75,6 +75,7 @@ private:
     QThread *imageThread;           // 图像处理线程
     QThread *servoThread;          // 伺服处理线程
     QThread *poseThread;          // 位置处理线程
+    QThread *gaitCommandThread;   // 步态命令处理线程
     
     QThread *sceneManagerThread;         // 场景处理线程
     QThread *robotManagerThread;   // 机器人管理线程
@@ -94,6 +95,7 @@ private:
     ImuMonitor *imuMonitor = nullptr;           // IMU获取对象
     ServoPositionsMonitor *servoPositionsMonitor = nullptr; // 伺服位置获取对象
     PoseMonitor *poseMonitor = nullptr;         // 位置获取对象
+    GaitCommandMonitor *gaitCommandMonitor = nullptr;         // 行走步态命令对象
 
     CameraImageMonitor *cameraImageMonitor = nullptr;
     QTimer *imagePullTimer = nullptr;           // 定时器，用于从相机监视器中获取最新帧
