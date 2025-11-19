@@ -2,27 +2,17 @@
 
 TaskManager::TaskManager(QListWidget* taskListWidget, 
                          QPushButton* addTaskButton,
-                         QPushButton* importTaskButton,
                          QPushButton* runTaskButton,
                          WebSocketWorker* webSocketWorker,
                          QObject* parent)
     : QObject(parent),
       m_taskListWidget(taskListWidget),
       m_addTaskButton(addTaskButton),
-      m_importTaskButton(importTaskButton),
       m_runTaskButton(runTaskButton),
       m_webSocketWorker(webSocketWorker)
 {
-    // 设置任务配置目录
-    m_taskConfigDir = QDir::current().filePath("config");
-    QDir dir(m_taskConfigDir);
-    if (!dir.exists()) {
-        dir.mkpath(".");
-    }
-    
     // 绑定按钮点击事件
     connect(m_addTaskButton, &QPushButton::clicked, this, &TaskManager::onAddTaskClicked);
-    connect(m_importTaskButton, &QPushButton::clicked, this, &TaskManager::onImportTaskClicked);
     connect(m_runTaskButton, &QPushButton::clicked, this, &TaskManager::onRunTaskClicked);
     
     // 绑定列表项双击事件
@@ -33,13 +23,12 @@ TaskManager::TaskManager(QListWidget* taskListWidget,
     connect(m_taskListWidget, &QListWidget::customContextMenuRequested, this, &TaskManager::showTaskContextMenu);
     
     // 加载任务列表
-    loadTasks();
+    loadTasksFromConfig();
 }
 
 TaskManager::~TaskManager()
 {
-    saveTasks();
-    
+    saveTasksToConfig();   
     // 清理任务对象
     for (Task* task : m_tasks) {
         delete task;
@@ -47,31 +36,36 @@ TaskManager::~TaskManager()
     m_tasks.clear();
 }
 
-QString TaskManager::getTaskConfigPath() const
-{
-    return QDir(m_taskConfigDir).filePath("tasks.json");
-}
 
-void TaskManager::loadTasks()
+void TaskManager::loadTasksFromConfig()
 {
-    QString configPath = getTaskConfigPath();
-    QFile file(configPath);
-    
+    QDir appdir(QCoreApplication::applicationDirPath());
+    QString cand = QDir::cleanPath(appdir.filePath(QString("../config/tasks_config.json")));
+    QFile file(cand);
+
+    // 确保config目录存在
+    QDir configDir = QFileInfo(file).absoluteDir();
+    if (!configDir.exists()) {
+        configDir.mkpath(".");
+    }
+
     if (!file.exists()) {
         // 配置文件不存在，创建默认任务
-        Task* defaultTask2 = new Task(tr("跳舞"), "identify_numbers.py", this);
-        Task* defaultTask3 = new Task(tr("搬运箱子"), "carry_box.py", this);
-        
+        Task* defaultTask1 = new Task(tr("Say-yeah舞蹈"), "say_yeah.sh", 
+                    "~/robot_ros_application/catkin_ws/src/ros_actions_node/scripts/Say-yeah舞蹈案例.py", this);
+        Task* defaultTask2 = new Task(tr("货物搬运"), "Task_carry.sh", 
+                    "/home/lemon/robot_ros_application/catkin_ws/src/ros_actions_node/scripts/game/2022/caai_roban_challenge/colleges/scripts/Task_carry_box.py", this);
+
+        m_tasks.append(defaultTask1);
         m_tasks.append(defaultTask2);
-        m_tasks.append(defaultTask3);
         
-        saveTasks();
+        saveTasksToConfig();
         updateTaskListUI();
         return;
     }
     
     if (!file.open(QIODevice::ReadOnly)) {
-        qWarning() << "无法打开任务配置文件:" << configPath;
+        qWarning() << "无法打开任务配置文件:" << file.fileName() << "，错误：" << file.errorString();
         return;
     }
     
@@ -102,14 +96,24 @@ void TaskManager::loadTasks()
     
     updateTaskListUI();
 }
-
-void TaskManager::saveTasks()
+// 保存Task列表到配置文件
+void TaskManager::saveTasksToConfig()
 {
-    QString configPath = getTaskConfigPath();
-    QFile file(configPath);
-    
-    if (!file.open(QIODevice::WriteOnly)) {
-        qWarning() << "无法保存任务配置文件:" << configPath;
+    QDir appdir(QCoreApplication::applicationDirPath());
+    QString cand = QDir::cleanPath(appdir.filePath(QString("../config/tasks_config.json")));
+    QFile file(cand);
+
+    // 确保config目录存在
+    QDir configDir = QFileInfo(file).absoluteDir();
+    if (!configDir.exists()) {
+        if (!configDir.mkpath(".")) {
+            qWarning() << "无法创建配置目录:" << configDir.absolutePath();
+            return;
+        }
+    }
+
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        qWarning() << "无法保存任务配置文件:" << file.fileName() << "，错误：" << file.errorString();
         return;
     }
     
@@ -122,15 +126,15 @@ void TaskManager::saveTasks()
     file.write(doc.toJson(QJsonDocument::Indented));
     file.close();
 }
-
+// 添加任务
 void TaskManager::addTask(Task* task)
 {
     m_tasks.append(task);
     updateTaskListUI();
     emit taskAdded(task);
-    saveTasks();
+    saveTasksToConfig();
 }
-
+// 删除任务
 void TaskManager::removeTask(int index)
 {
     if (index >= 0 && index < m_tasks.size()) {
@@ -139,17 +143,17 @@ void TaskManager::removeTask(int index)
         delete task;
         updateTaskListUI();
         emit taskRemoved(index);
-        saveTasks();
+        saveTasksToConfig();
     }
 }
-
+// 更新任务列表
 void TaskManager::updateTaskListUI()
 {
     m_taskListWidget->clear();
     
     for (const Task* task : m_tasks) {
-        QListWidgetItem* item = new QListWidgetItem(task->name());
-        item->setToolTip(task->scriptPath());  // 使用脚本路径作为工具提示
+        QListWidgetItem* item = new QListWidgetItem(task->getTaskName());
+        item->setToolTip(task->getScriptName());  // 使用脚本名称作为工具提示
         m_taskListWidget->addItem(item);
     }
 }
@@ -163,16 +167,24 @@ Task* TaskManager::showAddTaskDialog()
     if (taskName.isEmpty()) {
         return nullptr;
     }
-    
-    // 获取脚本路径
-    QString scriptPath = QInputDialog::getText(nullptr, tr("添加任务"), 
-                                              tr("请输入脚本路径:"), 
+
+    // 获取脚本名称
+    QString scriptName = QInputDialog::getText(nullptr, tr("添加任务"), 
+                                              tr("请输入任务脚本名称:"), 
                                               QLineEdit::Normal);
-    if (scriptPath.isEmpty()) {
+    if (scriptName.isEmpty()) {
+        return nullptr;
+    }
+
+    // 获取任务代码路径
+    QString TaskCodePath = QInputDialog::getText(nullptr, tr("添加任务"), 
+                                              tr("请输入任务代码路径:"), 
+                                              QLineEdit::Normal);
+    if (TaskCodePath.isEmpty()) {
         return nullptr;
     }
     
-    return new Task(taskName, scriptPath, this);
+    return new Task(taskName, scriptName, TaskCodePath, this);
 }
 
 void TaskManager::onAddTaskClicked()
@@ -183,34 +195,6 @@ void TaskManager::onAddTaskClicked()
     }
 }
 
-void TaskManager::onImportTaskClicked()
-{
-    // 打开文件对话框选择Python脚本文件
-    QString filePath = QFileDialog::getOpenFileName(nullptr, 
-                                                   tr("导入任务脚本"), 
-                                                   QDir::currentPath(), 
-                                                   tr("Python脚本 (*.py);;所有文件 (*.*)"));
-    if (filePath.isEmpty()) {
-        return;
-    }
-    
-    // 从文件名提取默认任务名
-    QFileInfo fileInfo(filePath);
-    QString defaultTaskName = fileInfo.baseName();
-    
-    // 获取任务名称
-    QString taskName = QInputDialog::getText(nullptr, tr("导入任务"), 
-                                            tr("请输入任务名称:"), 
-                                            QLineEdit::Normal, 
-                                            defaultTaskName);
-    if (taskName.isEmpty()) {
-        return;
-    }
-    
-    // 创建并添加任务
-    Task* newTask = new Task(taskName, filePath, this);
-    addTask(newTask);
-}
 
 void TaskManager::onRunTaskClicked()
 {
@@ -218,30 +202,23 @@ void TaskManager::onRunTaskClicked()
     if (currentRow >= 0 && currentRow < m_tasks.size()) {
         Task* selectedTask = m_tasks.at(currentRow);
         
-        // 发出任务执行信号
-        emit taskExecuted(selectedTask->scriptPath());
-        
-        // 通过WebSocket发送执行脚本的命令
+        // 通过WebSocket发送执行脚本的命令（先检查连接状态）
+        bool wsConnected = false;
         if (m_webSocketWorker) {
-            QJsonObject pub;
-            pub["op"] = "publish";
-            pub["topic"] = "/robot/exec_py";
-            pub["type"] = "std_msgs/String";
-            QJsonObject msg;
-            msg["data"] = selectedTask->scriptPath();
-            pub["msg"] = msg;
-            QJsonDocument doc(pub);
-            QString payload = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
-            
-            // 通过 worker 发送发布消息
-            QMetaObject::invokeMethod(m_webSocketWorker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload));
-            
-            QMessageBox::information(nullptr, tr("执行任务"),
-                                    tr("任务 '%1' 已发送执行命令").arg(selectedTask->name()));
-        } else {
-            QMessageBox::warning(nullptr, tr("错误"),
-                               tr("WebSocket连接未建立，无法执行任务"));
+            // 调用 worker 的 isConnected()，在 worker 所在线程中执行以获知真实状态
+            QMetaObject::invokeMethod(m_webSocketWorker, "isConnected", Qt::BlockingQueuedConnection, Q_RETURN_ARG(bool, wsConnected));
         }
+
+        if (!m_webSocketWorker || !wsConnected) {
+            QMessageBox::warning(nullptr, tr("错误"),
+                                 tr("WebSocket 未连接，无法执行任务，请先建立连接。"));
+            return;
+        }
+
+        
+        // 发出任务执行信号（仅在已成功发送时）
+        emit taskExecuted(selectedTask->getScriptPath());
+
     } else {
         QMessageBox::warning(nullptr, tr("提示"),
                            tr("请先选择要执行的任务"));
@@ -257,9 +234,11 @@ void TaskManager::onTaskItemDoubleClicked(QListWidgetItem* item)
         
         // 显示任务详情
         QMessageBox::information(nullptr, tr("任务详情"),
-                               tr("名称: %1\n脚本: %2")
-                               .arg(selectedTask->name())
-                               .arg(selectedTask->scriptPath()));
+                               tr("名称: %1\n脚本名称: %2\n脚本路径: %3\n代码路径: %4")
+                               .arg(selectedTask->getTaskName())
+                               .arg(selectedTask->getScriptName())
+                               .arg(selectedTask->getScriptPath())
+                               .arg(selectedTask->getTaskCodePath()));
     }
 }
 
@@ -284,23 +263,17 @@ void TaskManager::showTaskContextMenu(const QPoint& pos)
         if (row >= 0 && row < m_tasks.size()) {
             Task* selectedTask = m_tasks.at(row);
             
-            // 发出任务执行信号
-            emit taskExecuted(selectedTask->scriptPath());
-            
-            // 通过WebSocket发送执行脚本的命令
+            // 通过WebSocket发送执行脚本的命令（先检查连接状态）
+            bool wsConnected = false;
             if (m_webSocketWorker) {
-                QJsonObject pub;
-                pub["op"] = "publish";
-                pub["topic"] = "/robot/exec_py";
-                pub["type"] = "std_msgs/String";
-                QJsonObject msg;
-                msg["data"] = selectedTask->scriptPath();
-                pub["msg"] = msg;
-                QJsonDocument doc(pub);
-                QString payload = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
-                
-                // 通过 worker 发送发布消息
-                QMetaObject::invokeMethod(m_webSocketWorker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload));
+                QMetaObject::invokeMethod(m_webSocketWorker, "isConnected", Qt::BlockingQueuedConnection, Q_RETURN_ARG(bool, wsConnected));
+            }
+            if (!m_webSocketWorker || !wsConnected) {
+                QMessageBox::warning(nullptr, tr("错误"),
+                                     tr("WebSocket 未连接，无法执行任务，请先建立连接。"));
+            } else {
+                // 发出任务执行信号（仅在已连接时）
+                emit taskExecuted(selectedTask->getTaskCodePath());
             }
         }
     } else if (selectedAction == editAction) {
@@ -312,31 +285,38 @@ void TaskManager::showTaskContextMenu(const QPoint& pos)
             QString newName = QInputDialog::getText(nullptr, tr("编辑任务"), 
                                                   tr("任务名称:"), 
                                                   QLineEdit::Normal, 
-                                                  task->name());
+                                                  task->getTaskName());
             if (!newName.isEmpty()) {
-                task->setName(newName);
+                task->setTaskName(newName);
             }
-            
-            // 编辑脚本路径
-            QString newPath = QInputDialog::getText(nullptr, tr("编辑任务"), 
-                                                  tr("脚本路径:"), 
-                                                  QLineEdit::Normal, 
-                                                  task->scriptPath());
-            if (!newPath.isEmpty()) {
-                task->setScriptPath(newPath);
-            }
-            
 
-            
+            // 编辑脚本名称
+            QString newScriptName = QInputDialog::getText(nullptr, tr("编辑任务"), 
+                                                  tr("脚本名称:"), 
+                                                  QLineEdit::Normal, 
+                                                  task->getScriptName());
+            if (!newScriptName.isEmpty()) {
+                task->setScriptName(newScriptName);
+            }
+
+            // 编辑代码路径
+            QString newPath = QInputDialog::getText(nullptr, tr("编辑任务"), 
+                                                  tr("代码路径:"), 
+                                                  QLineEdit::Normal, 
+                                                  task->getTaskCodePath());
+            if (!newPath.isEmpty()) {
+                task->setTaskCodePath(newPath);
+            }
+
             updateTaskListUI();
-            saveTasks();
+            saveTasksToConfig();
         }
     } else if (selectedAction == deleteAction) {
         // 删除任务
         if (row >= 0 && row < m_tasks.size()) {
             QMessageBox::StandardButton reply;
             reply = QMessageBox::question(nullptr, tr("确认删除"),
-                                        tr("确定要删除任务 '%1' 吗?").arg(item->text()),
+                                        tr("是否删除任务 '%1' 吗?").arg(item->text()),
                                         QMessageBox::Yes | QMessageBox::No);
             
             if (reply == QMessageBox::Yes) {

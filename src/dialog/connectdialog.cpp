@@ -17,7 +17,7 @@ ConnectDialog::ConnectDialog(QWidget *parent) :
         ui->robot1GroupBox->setVisible(true);
     }
     if (ui->robot2GroupBox) {
-        ui->robot2GroupBox->setVisible(false);
+        ui->robot2GroupBox->setVisible(true);
     }
 
 
@@ -31,8 +31,8 @@ ConnectDialog::ConnectDialog(QWidget *parent) :
     connect(ui->cancelButton, &QPushButton::clicked, this, &ConnectDialog::onCancelButtonClicked);
     connect(ui->addPB, &QPushButton::clicked, this, &ConnectDialog::onAddButtonClicked);
     connect(ui->delPB, &QPushButton::clicked, this, &ConnectDialog::onDeleteButtonClicked);
-    connect(ui->robot1ToggleButton, &QPushButton::clicked, this, &ConnectDialog::onRobot1ToggleButtonClicked);
-    connect(ui->robot2ToggleButton, &QPushButton::clicked, this, &ConnectDialog::onRobot2ToggleButtonClicked);
+    // connect(ui->robot1ToggleButton, &QPushButton::clicked, this, &ConnectDialog::onRobot1ToggleButtonClicked);
+    // connect(ui->robot2ToggleButton, &QPushButton::clicked, this, &ConnectDialog::onRobot2ToggleButtonClicked);
     connect(ui->robot2AddPB, &QPushButton::clicked, this, &ConnectDialog::onRobot2AddButtonClicked);
     connect(ui->robot2DelPB, &QPushButton::clicked, this, &ConnectDialog::onRobot2DeleteButtonClicked);
     connect(ui->robot2ConnectButton, &QPushButton::clicked, this, &ConnectDialog::onRobot2ConnectButtonClicked);

@@ -2,7 +2,9 @@
 #include "ui_slamDialog.h"
 #include "socket_process/websocketworker.h"
 #include "util/load_param.hpp"
-
+#include <QCloseEvent>
+#include <QIcon>
+#include <QSize>
 
 
 slamDialog::slamDialog(WebSocketWorker *webSocketWorker, QWidget *parent)
@@ -20,6 +22,9 @@ slamDialog::slamDialog(WebSocketWorker *webSocketWorker, QWidget *parent)
 
 slamDialog::~slamDialog()
 {
+
+    qDebug() << "slamDialog析构 - 资源释放";
+    
     // Stop pull timer
     if (featuredImagePullTimer) {
         featuredImagePullTimer->stop();
@@ -151,6 +156,8 @@ void slamDialog::init()
     if (ui->groupBox_2) {
         ui->groupBox_2->setVisible(false);
         ui->localization_checkBox->setChecked(false);   // 定位模式默认关闭
+        // 设置初始图标为未选中
+        updateLocalizationIcon(false);
     }
 
 }
@@ -237,6 +244,8 @@ void slamDialog::bindSlots(){
     // 定位模式开关：发布模式变更到 rosbridge
     if (ui->localization_checkBox) {
         connect(ui->localization_checkBox, &QCheckBox::toggled, this, &slamDialog::onLocalizationModeToggled);
+        // ensure icon reflects initial checked state
+        updateLocalizationIcon(ui->localization_checkBox->isChecked());
     }
 
 }
@@ -266,18 +275,20 @@ void slamDialog::onRunSLAMButtonClicked()
     if (!s) return;
     QString cmd;
     // 从config文件加载命令
-    if (s == ui->startSlam_Button) {
+        if (s == ui->startSlam_Button) {
         cmd = loadCmdFromConfig("start_slam_bash");
         if(cmd.isEmpty()){
             cmd = "/home/lemon/slam.sh";
         }
         ui->localization_checkBox->setChecked(false);   // 非定位模式
+            updateLocalizationIcon(false);
     } else if (s == ui->locationSlam_Button) {
         cmd = loadCmdFromConfig("start_slam_location_bash");
         if(cmd.isEmpty()){
             cmd = "/home/lemon/slam_tt.sh";
         }
         ui->localization_checkBox->setChecked(true);    // 定位模式
+            updateLocalizationIcon(true);
     } else {
         qDebug() << "Unknown run source";
         return;
@@ -431,6 +442,7 @@ void slamDialog::onCloseSLAMButtonClicked()
     if (ui->groupBox_2) {
         ui->groupBox_2->setVisible(false);
         ui->localization_checkBox->setChecked(false);   // 定位模式关闭
+        updateLocalizationIcon(false);
     }
 
     // Unadvertise localization topic if we advertised it earlier
@@ -560,6 +572,9 @@ void slamDialog::onControlButtonClicked()
 // 当 localization_checkBox 状态变化时，通过 rosbridge 发布 /SLAM/localizationMode (std_msgs/Bool)
 void slamDialog::onLocalizationModeToggled(bool checked)
 {
+    // 更新复选框图标以反映当前状态
+    updateLocalizationIcon(checked);
+
     if (!m_worker) {
         qDebug() << "onLocalizationModeToggled: m_worker is null, cannot publish";
         return;
@@ -577,4 +592,26 @@ void slamDialog::onLocalizationModeToggled(bool checked)
     QString jsonString = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
     QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, jsonString));
     qDebug() << "Published /SLAM/localizationMode:" << checked;
+}
+
+void slamDialog::closeEvent(QCloseEvent *event)
+{
+    // 拦截关闭事件，只隐藏窗口，不销毁对象，从而保留内部线程和资源
+    this->hide();
+    event->ignore();
+}
+
+// 根据 checked 状态设置 localization_checkBox 图标
+void slamDialog::updateLocalizationIcon(bool checked)
+{
+    if (!ui || !ui->localization_checkBox) return;
+    QIcon icon;
+    if (checked) {
+        icon = QIcon(":/icon/check_yes.png");
+    } else {
+        icon = QIcon(":/icon/check_no.png");
+    }
+    ui->localization_checkBox->setIcon(icon);
+    // 可选：设置图标大小使其在不同平台上显示适当
+    ui->localization_checkBox->setIconSize(QSize(20, 20));
 }

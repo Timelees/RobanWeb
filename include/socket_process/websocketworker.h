@@ -22,6 +22,7 @@ public slots:
     void startConnect(const QString &url);
     void closeConnection();
     void sendText(const QString &text);
+    Q_INVOKABLE bool isConnected() const;
 
 signals:
     void connected();

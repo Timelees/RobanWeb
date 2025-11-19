@@ -29,7 +29,6 @@ endif()
 # 设置包含目录
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/task_manager
 )
 
 # 设置UIC的搜索路径，让它在ui目录中查找.ui文件

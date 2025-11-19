@@ -5,6 +5,7 @@ import shlex
 import subprocess
 import threading
 import json
+import re
 import time
 import os
 import shutil
@@ -43,7 +44,6 @@ def is_allowed(cmd):
                 user_home = os.path.expanduser('~')
                 if first.startswith(user_home):
                     return True
-        return False
         return False
     except Exception:
         return False
@@ -88,8 +88,13 @@ def execute_command(cmd):
                 pid = proc.pid
                 try:
                     _proc_registry[pid] = proc
-                    # 标记为 control 类型（由 move.sh 启动的本地控制脚本）
-                    _proc_meta[pid] = {'cmd': cmd, 'which': 'control', 'script': first_token}
+                    # 自动识别是否为 SLAM（脚本名或命令中包含 slam/ORB/ORB_SLAM 等关键词）
+                    which_label = 'control'
+                    cmd_l = cmd.lower() if isinstance(cmd, str) else ''
+                    script_name_l = script_base.lower() if isinstance(script_base, str) else ''
+                    if 'slam' in cmd_l or 'orb' in cmd_l or 'orb_slam' in cmd_l or 'slam' in script_name_l:
+                        which_label = 'slam'
+                    _proc_meta[pid] = {'cmd': cmd, 'which': which_label, 'script': first_token}
                 except Exception:
                     pass
                 duration = time.time() - start
@@ -406,6 +411,56 @@ class ExecNode(object):
         try:
             parsed = json.loads(raw)
             rospy.loginfo("Parsed JSON payload: %s", json.dumps(parsed, ensure_ascii=False))
+            # 如果有 action 字段，优先处理 add/stop 请求
+            # 如果 action=='add'，将 data 写入 sh_path 指定的脚本文件（创建文件并设置可执行权限）
+            if isinstance(parsed, dict) and parsed.get('action') == 'add':
+                # 支持多种 data 位置：parsed['msg']['data'] 或 parsed['data']
+                sh_path = parsed.get('sh_path')
+                data_content = None
+                try:
+                    if 'msg' in parsed and isinstance(parsed['msg'], dict) and 'data' in parsed['msg']:
+                        data_content = parsed['msg']['data']
+                    elif 'data' in parsed and isinstance(parsed['data'], str):
+                        data_content = parsed['data']
+                except Exception:
+                    data_content = None
+
+                # 未提供必要字段则返回错误信息
+                if not sh_path:
+                    self.pub.publish(String(json.dumps({'action':'add','ok':False,'error':'missing sh_path'})))
+                    return
+                if data_content is None:
+                    self.pub.publish(String(json.dumps({'action':'add','ok':False,'error':'no data to write'})))
+                    return
+
+                # 写入脚本文件（覆盖写入），并设置为可执行。
+                try:
+                    dirpath = os.path.dirname(sh_path)
+                    if dirpath and not os.path.exists(dirpath):
+                        os.makedirs(dirpath, exist_ok=True)
+                    # 写入文件；如果数据没有 shebang，则添加 bash shebang
+                    try:
+                        with open(sh_path, 'w') as sf:
+                            if not isinstance(data_content, str):
+                                data_content = str(data_content)
+                            if not data_content.startswith('#!'):
+                                sf.write('#!/bin/bash\n')
+                            sf.write(data_content)
+                            if not data_content.endswith('\n'):
+                                sf.write('\n')
+                        # 设置可执行权限（类似 sudo chmod +x）
+                        os.chmod(sh_path, 0o755)
+                        res = {'action':'add','sh_path':sh_path,'ok':True}
+                        rospy.loginfo("Successfully added script: %s", sh_path)
+                    except Exception as e:
+                        res = {'action':'add','sh_path':sh_path,'ok':False,'error':str(e)}
+                        rospy.logwarn("Failed to write script %s: %s", sh_path, str(e))
+                    self.pub.publish(String(json.dumps(res)))
+                    return
+                except Exception as e:
+                    self.pub.publish(String(json.dumps({'action':'add','ok':False,'error':str(e)})))
+                    return
+
             # 如果是 stop 请求，优先处理
             if isinstance(parsed, dict) and parsed.get('action') == 'stop':
                 # 支持通过 pid 停止
@@ -417,17 +472,19 @@ class ExecNode(object):
                 # 支持通用的 which 停止，例如 which: 'slam' 或 which: 'control'
                 if 'which' in parsed:
                     which_val = parsed.get('which')
+                    # 支持可选的 force 标志：只有当 force=True 时才执行更广泛的 /proc 模糊匹配回退
+                    force = bool(parsed.get('force', False))
                     results = []
-                    # 优先使用 _proc_meta 中的标记匹配
+                    # 仅停止由本节点启动并在 _proc_meta 中标记为对应 which 的进程
                     for pid, meta in list(_proc_meta.items()):
                         try:
-                            if meta and 'which' in meta and meta['which'] and which_val and meta['which'].lower() == which_val.lower():
+                            if meta and meta.get('which') and which_val and meta.get('which').lower() == which_val.lower():
                                 r = _stop_proc_by_pid(pid)
                                 results.append(r)
                         except Exception as e:
                             results.append({'pid': pid, 'ok': False, 'error': str(e)})
-                    # 如果没有通过 meta 停掉的，再回退到 /proc cmdline 模糊匹配
-                    if not results:
+                    # 只有在显式要求时（force=True）才尝试回退到 /proc cmdline 的模糊匹配，避免误杀非本节点管理的进程
+                    if not results and force:
                         for pid, proc in list(_proc_registry.items()):
                             try:
                                 cmdline_path = f'/proc/{pid}/cmdline'
@@ -443,7 +500,12 @@ class ExecNode(object):
                                     results.append(r)
                             except Exception as e:
                                 results.append({'pid': pid, 'ok': False, 'error': str(e)})
-                    self.pub.publish(String(json.dumps({'action':'stop','which':which_val,'results':results})))
+                    # 如果没有找到任何匹配，返回清晰说明（不再默认模糊匹配）
+                    if not results:
+                        info = {'action': 'stop', 'which': which_val, 'results': results, 'note': 'no matching processes found in registry; use force=true to try broader match'}
+                    else:
+                        info = {'action': 'stop', 'which': which_val, 'results': results}
+                    self.pub.publish(String(json.dumps(info)))
                     return
 
             if isinstance(parsed, dict):
@@ -463,9 +525,71 @@ class ExecNode(object):
                 elif 'data' in parsed and isinstance(parsed['data'], str):
                     cmd = parsed['data']
         except Exception as e:
-            # 不是 JSON，就当作普通命令字符串
-            rospy.logwarn("JSON parse failed: %s", str(e))
-            cmd = raw
+            # 如果直接解析失败，尝试从 raw 中提取可能被转义或包裹的 JSON 子串并解析（例如客户端把 JSON 放在字符串里）
+            rospy.logwarn("JSON parse failed: %s; trying to extract JSON substring", str(e))
+            parsed = None
+            try:
+                first = raw.find('{')
+                last = raw.rfind('}')
+                if first != -1 and last != -1 and last > first:
+                    candidate = raw[first:last+1]
+                    try:
+                        parsed = json.loads(candidate)
+                        rospy.loginfo("Extracted JSON payload: %s", json.dumps(parsed, ensure_ascii=False))
+                    except Exception as e2:
+                        rospy.logwarn("extracted substring is not valid JSON: %s", str(e2))
+            except Exception:
+                parsed = None
+
+            if parsed is None:
+                # 如果还是没有解析到 JSON，尝试用正则从 raw 中抽取 action/sh_path/data（处理被当作字符串包裹或转义的情况）
+                try:
+                    action_match = re.search(r'"action"\s*:\s*"([^"\\]+)"', raw)
+                    shpath_match = re.search(r'"sh_path"\s*:\s*"([^"\\]+)"', raw)
+                    # data 可能包含转义字符，尽量捕获所有转义内容
+                    data_match = re.search(r'"data"\s*:\s*"((?:\\.|[^"\\])*)"', raw)
+                    action_val = action_match.group(1) if action_match else None
+                    sh_path = shpath_match.group(1) if shpath_match else None
+                    data_content = None
+                    if data_match:
+                        # data_match.group(1) 是未解码的 JSON 字符串片段，要用 json.loads 去解码转义
+                        try:
+                            data_content = json.loads('"' + data_match.group(1) + '"')
+                        except Exception:
+                            # 解码失败则直接使用原始捕获内容（可能包含转义）
+                            data_content = data_match.group(1)
+
+                    if action_val and action_val.lower() == 'add':
+                        # 如果找到了 add 指令，则按 add 流程写文件（与上面相同的写入逻辑）
+                        if not sh_path:
+                            self.pub.publish(String(json.dumps({'action':'add','ok':False,'error':'missing sh_path'})))
+                            return
+                        if data_content is None:
+                            self.pub.publish(String(json.dumps({'action':'add','ok':False,'error':'no data to write'})))
+                            return
+                        try:
+                            dirpath = os.path.dirname(sh_path)
+                            if dirpath and not os.path.exists(dirpath):
+                                os.makedirs(dirpath, exist_ok=True)
+                            with open(sh_path, 'w') as sf:
+                                if not isinstance(data_content, str):
+                                    data_content = str(data_content)
+                                if not data_content.startswith('#!'):
+                                    sf.write('#!/bin/bash\n')
+                                sf.write(data_content)
+                                if not data_content.endswith('\n'):
+                                    sf.write('\n')
+                            os.chmod(sh_path, 0o755)
+                            res = {'action':'add','sh_path':sh_path,'ok':True}
+                        except Exception as e:
+                            res = {'action':'add','sh_path':sh_path,'ok':False,'error':str(e)}
+                        self.pub.publish(String(json.dumps(res)))
+                        return
+                except Exception:
+                    pass
+
+                # 仍然不是 JSON，就当作普通命令字符串
+                cmd = raw
 
         # 如果解析出来仍为空，退出
         if not cmd:

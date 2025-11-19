@@ -1,10 +1,10 @@
-# 上位机
+# Roban上位机
 
 ## 功能：
 
 1. 数据通信
    
-    (1) 基于rosBridge和QWebSocket进行ros和windows端qt软件的数据桥接
+    (1) 基于rosBridge和QWebSocket进行ros和windows端上位机的数据桥接
 
     (2) 机器人IP和端口信息数据库存储
 
@@ -18,63 +18,60 @@
 
 	(4) 机器人控制
 
+
 3. 数字孪生显示
 
-	机器人模型行为显示
+	机器人模型与实机行为的实时显示
 
-## TODO:
-
-	机器人模型显示
-
-	日志功能
-
-	slam建图时位置信息的输出显示
 
 ## 使用教程
 
-**assimp库的安装**
+**重要！！！**
 
-参考博客：https://blog.csdn.net/weixin_44518102/article/details/125436218?ops_request_misc=%257B%2522request%255Fid%2522%253A%25221ef85b073f4146e037932b633e16507f%2522%252C%2522scm%2522%253A%252220140713.130102334..%2522%257D&request_id=1ef85b073f4146e037932b633e16507f&biz_id=0&utm_medium=distribute.pc_search_result.none-task-blog-2~all~sobaiduend~default-1-125436218-null-null.142^v102^pc_search_result_base1&utm_term=%20QT%E7%8E%AF%E5%A2%83%E4%B8%8B%E9%85%8D%E7%BD%AEassimp%E5%BA%93&spm=1018.2226.3001.4187
+对于初次配置或者机器人重新刷了镜像，需要做以下**文件替换处理**
 
-直接安装的assimp Github上的最新版本，用CMake构建，使用Qt中的mingw进行编译后，将build/include下的assimp文件夹复制到本项目的include文件夹中进行替换；build/lib下的libassimp.dll.a复制到本项目的lib文件夹下进行替换；build/bin下的libassimp-6.dll进行替换。
+将need_change_code文件夹下的文件替换对应路径下的文件：
 
-对项目进行编译，通过后，会在build中生成一个test_viewer.exe文件，执行以下指令运行，弹出窗口可以显示机器人模型，即表示assimp库安装成功。
+【1】bridge.sh和start.sh：/home/lemon/（即~/）
 
-```
-.\test_viewer.exe "..\\assets\\Roban.fbx"
-```
+【2】其他.sh文件：~/exec_scripts(需要新建该文件夹)
 
-![alt text](image/assimp_test.png)
+【3】MapDrawer.cc、Viewer.cc和MapDrawer.h、Viewer.h：分别位于~/robot_ros_application/catkin_ws/src/SLAM/ORB_SLAM2文件夹下的src和include文件夹中
+
+【4】SensorHubNode.py：/home/lemon/robot_ros_application/catkin_ws/src/sensorhub/scripts/SensorHubNode.py
+
+【5】slam_map.py：~/robot_ros_application/catkin_ws/src/ros_actions_node/scripts/game/2022/caai_roban_challenge/colleges/scripts/slam_map.py
+
 
 
 主界面
 
-![alt text](image/main_window.png)
+![alt text](image/mainWindow.png)
 
 1.通信连接
 
-在roban上新开终端启动ros_bridge，qt程序上通过QWebSocket进行连接
+启动机器人时，系统自启动start.sh脚本，脚本调用bridge.sh，启动rosbridge和接收执行sh脚本的命令程序cmd_executor.py，二者对应如下指令，若启动失败可以单独运行启动
 
 ```c++
  roslaunch rosbridge_server rosbridge_websocket.launch
+ 
+ rosrun bodyhub cmd_executor.py
 ```
+
+![alt text](image/bridge.png)
+
 点击主界面连接设置，进入连接设置界面，输入连接网络ipv4地址和端口号（ros_bridge默认端口9090），可通过添加将数据保存至数据库中，选中表单中的项，可对数据进行删除。
 
 勾选需要连接的ip前的复选框，点击连接即可建立通信。连接成功，主界面左下方的状态栏显示已连接。
 
-![alt text](image/connect_window.png)
+![alt text](image/connectDialog.png)
 
 
-2.电量显示
-
-状态栏显示电池电量
-
-
-3.IMU数据显示
+2.IMU数据显示
 
 右侧信息栏显示机器人位姿信息，包括oritention, linear_acceleration,angular_velocity
 
-将need_change_code中的SensorHubNode.py替换到机器人端的~/robot_ros_application/catkin_ws/src/sensorhub/scripts路径下的SensorHubNode.py,并编译
+将need_change_code中的SensorHubNode.py替换到机器人端的~/robot_ros_application/catkin_ws/src/sensorhub/scripts路径下的SensorHubNode.py,并**编译**
 
 ```
 python3 -m py_compile /home/lemon/robot_ros_application/catkin_ws/src/sensorhub/scripts/SensorHubNode.py
@@ -86,7 +83,7 @@ python3 -m py_compile /home/lemon/robot_ros_application/catkin_ws/src/sensorhub/
 
 5.SLAM与控制启动
 
-![alt text](image/SLAM_control_window.png)
+![alt text](image/slam.png)
 
 左侧界面为SLAM的初始建图模式、定位模式启动、关闭SLAM建图按钮，下方包括点云数据图和特征图显示
 
@@ -102,9 +99,9 @@ cd /home/lemon/robot_ros_application/catkin_ws && catkin_make -DCATKIN_WHITELIST
 
 然后对相应的sh脚本进行读写权限修改
 ```
-chmod +x /home/lemon/slam.sh
-chmod +x /home/lemon/slam_tt.sh
-chmod +x /home/lemon/move.sh
+chmod +x /home/lemon/exec_scripts/slam.sh
+chmod +x /home/lemon/exec_scripts/slam_tt.sh
+chmod +x /home/lemon/exec_scripts/move.sh
 ```
 
 将need_change_code文件夹中的cmd_executor.py添加到机器人系统的~/robot_ros_application/catkin_ws/src/bodyhub/scripts中），并启动使其接受传过去的cmd指令
@@ -115,7 +112,7 @@ chmod +x /home/lemon/move.sh
 python3 -m py_compile /home/lemon/robot_ros_application/catkin_ws/src/bodyhub/scripts/cmd_executor.py
 ```
 
-启动指令执行脚本
+启动指令执行脚本,开机会自启动，如果启动失败可以手动执行以下命令
 ```
 rosrun bodyhub cmd_executor.py 
 ```
@@ -130,18 +127,16 @@ SLAM建图定位模式对应指令——rosrun SLAM RGBD true true：适用于�
 点击按钮后会弹出定位模式开始按钮复选框，效果和机器人端显示界面里的localization按钮功能一样。
 
 点云图显示界面，鼠标左键按住可拖动画面，右键按住可旋转视角，滚轮缩放画面大小
-![alt text](image/image-1.png)
 
 
-
-7.键盘控制
+6.键盘控制
 
 **使用前需要修改：**
 将need_change_code文件夹下的slam_map.py内容覆盖到机器人系统的以下路径的slam_map.py
-
 ```
 ~/robot_ros_application/catkin_ws/src/ros_actions_node/scripts/game/2022/caai_roban_challenge/colleges/scripts
 ```
+
 使用时确保脚本cmd_executor.py处于运行状态
 ```
 rosrun bodyhub cmd_executor.py 
@@ -157,31 +152,55 @@ rosrun bodyhub cmd_executor.py
 
 1.使用持续扫描时，按两次E无法关闭持续扫描
 
-2.点击关闭控制时，会把slam的进程也关闭掉
 
 
+7.语音控制
 
-8.语音控制
+在/home/lemon/exec_scripts/路径下创建largeModel.sh，将need_change_code下的该文件内容添加进去，并chmod +x largeModel.sh
 
-在/home/lemon路径下创建largeModel.sh，将need_change_code下的该文件内容添加进去，并chmod +x largeModel.sh
+点击语音控制按钮即可开启语音功能,机器人端新建终端显示信息
 
-点击语音控制按钮即可开启语音功能
+![alt text](image/largeModel.png)
 
 
+9.模型显示
 
-9.模型显示测试
+![alt text](image/mdel_display.png)
 
-![alt text](image/model_display.png)
+启动slam后，平台会接收ros的/initialpose话题数据，包括（x,y,yaw）。
 
-左键点击地图上，点击地图标定，生成绿色标记点；点击取货点标定，生成红色标记点；点击放置点标定，生成蓝色标记点；点击标定保存，保存点位信息到assets/calib_points.json。选中对应的标记点，点击标定删除，可删除标记点，退出程序前需点击保存；点击全部删除，将删除地图上全部标记点。
+**场景坐标映射预处理**
 
-机器人根据位置列表更新位置，实现移动效果
+按照需要移动机器人到场景对应位置，左键点击地图上，点击地图标定，生成绿色标记点，依次操作生成四个标记点；点击标定保存，保存点位信息到config/calib_points.json。
 
-搬运流程演示按钮显示搬运流程效果
+点击场景映射，即可将四个绿色标记点围成的区域的场景坐标和实际机器人位置进行映射对应。右键绿色标记点，可显示其场景坐标和实机slam坐标。
 
-机器人整体的旋转（绕Y轴）
+![alt text](image/zuobiao.png)
 
+选中对应的标记点，点击标定删除，可删除标记点，退出程序前需点击保存；点击全部删除，将删除地图上全部标记点。
+
+位置刷新按钮可将机器人模型移动到实机在场景中的对应位置
+
+位置重置按钮可将机器人模型重置到场景中心
+
+**模型动画与显示**
+
+**TODO:优化移动动画**
+
+从机器人端接收/MediumSize/BodyHub/ServoPositions话题伺服电机数据，驱动fbx模型的骨骼显示动画效果
 
 从机器人端接收/gaitCommand话题数据【x,y,delta】,根据当前位置与【x,y,delta】计算，决定位置与旋转角度的刷新显示。
 
 修改robotManager中的m_gaitScale参数，可决定模型移动的距离的显示缩放。
+
+10.任务列表添加
+
+![alt text](image/task.png)
+
+双击任务列表的具体任务，显示任务的具体信息;
+
+![alt text](image/task_info.png)
+
+右键任务列表的任务，可选择执行，编辑，删除任务
+
+添加任务按钮，输入任务名称，脚本名称，脚本路径和代码路径，创建对应的任务，并保存到配置文件。同时会在机器人端的exec_scripts文件夹中创建对应的sh脚本。

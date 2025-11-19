@@ -73,6 +73,12 @@ robanweb::~robanweb()
         delete taskManager;
         taskManager = nullptr;
     }
+    
+    if (m_slamDialog) {
+        delete m_slamDialog;
+        m_slamDialog = nullptr;
+    }
+
     delete reconnectTimer;
     // delete imagePullTimer;
     delete ui; 
@@ -87,11 +93,10 @@ void robanweb::init(){
     
     // 初始化任务管理器
     // 注：ui->taskListWidget 等组件在 robanweb.ui 中定义
-    if (ui->taskListWidget && ui->addTaskButton && ui->importTaskButton && ui->runTaskButton) {
+    if (ui->taskListWidget && ui->addTaskButton && ui->runTaskButton) {
         try {
             taskManager = new TaskManager(ui->taskListWidget, 
                                          ui->addTaskButton, 
-                                         ui->importTaskButton, 
                                          ui->runTaskButton, 
                                          webSocketWorker, 
                                          this);
@@ -110,7 +115,7 @@ void robanweb::init(){
 
 
     // ros话题接收对象
-    batteryMonitor = new BatteryMonitor(webSocketWorker, this);         // 电池数据
+    // batteryMonitor = new BatteryMonitor(webSocketWorker, this);         // 电池数据
     imuMonitor = new ImuMonitor(webSocketWorker, this);                 // IMU数据
    
     // 创建 cameraImageMonitor 时不指定父对象，并将其移动到 imageThread进行处理,订阅压缩图像
@@ -234,12 +239,12 @@ void robanweb::settingStatusBar(){
     connect_label->setFont(QFont("Arial", 10, QFont::Bold));
     connect_label->setAlignment(Qt::AlignVCenter | Qt::AlignVCenter);
     ui->statusbar->addWidget(connect_label);
-    // 电量显示
-    batteryProgressBar = new QProgressBar();
-    batteryProgressBar->setRange(0, 100);
-    batteryProgressBar->setValue(0); // 初始值
-    batteryProgressBar->setFixedWidth(100);
-    ui->statusbar->addPermanentWidget(batteryProgressBar);
+    // // 电量显示
+    // batteryProgressBar = new QProgressBar();
+    // batteryProgressBar->setRange(0, 100);
+    // batteryProgressBar->setValue(0); // 初始值
+    // batteryProgressBar->setFixedWidth(100);
+    // ui->statusbar->addPermanentWidget(batteryProgressBar);
 }
 
 void robanweb::bindSlots(){
@@ -254,8 +259,9 @@ void robanweb::bindSlots(){
     
     // 连接任务管理器信号 - 使用 SIGNAL/SLOT 宏语法连接信号槽
     if (taskManager) {
-        connect(taskManager, SIGNAL(taskExecuted(const QString&)), 
-                this, SLOT(onTaskExecuted(const QString&)));
+    connect(taskManager, SIGNAL(taskExecuted(const QString&)), 
+        this, SLOT(onTaskExecuted(const QString&)));
+    connect(taskManager, SIGNAL(taskAdded(Task*)), this, SLOT(onAddTask(Task*)));
     }
 
 
@@ -272,10 +278,10 @@ void robanweb::bindSlots(){
     connect(reconnectTimer, &QTimer::timeout, this, &robanweb::tryReconnect);
 
     // 从ros话题获取电量信息
-    connect(webSocketWorker, &WebSocketWorker::messageReceived, batteryMonitor, &BatteryMonitor::onMessageReceived, Qt::QueuedConnection);
-    connect(batteryMonitor, &BatteryMonitor::batteryLevelChanged, this, [this](int pct){
-        if (batteryProgressBar) batteryProgressBar->setValue(pct);
-    }, Qt::QueuedConnection);
+    // connect(webSocketWorker, &WebSocketWorker::messageReceived, batteryMonitor, &BatteryMonitor::onMessageReceived, Qt::QueuedConnection);
+    // connect(batteryMonitor, &BatteryMonitor::batteryLevelChanged, this, [this](int pct){
+        // if (batteryProgressBar) batteryProgressBar->setValue(pct);
+    // }, Qt::QueuedConnection);
     
     // 从ros话题获取IMU信息
     connect(webSocketWorker, &WebSocketWorker::messageReceived, imuMonitor, &ImuMonitor::onMessageReceived, Qt::QueuedConnection);
@@ -336,18 +342,76 @@ void robanweb::bindSlots(){
 void robanweb::onTaskExecuted(const QString& scriptPath)
 {
     qDebug() << "执行任务脚本:" << scriptPath;
-    // 如果需要，可以在这里添加更多处理逻辑
+    QString cmd = scriptPath;
+
+    if (!cmd.isEmpty()) {
+        QJsonObject pub;
+        pub["op"] = "publish";
+        pub["topic"] = "/robot/exec_sh";;
+        pub["type"] = "std_msgs/String";
+        QJsonObject msg;
+        msg["data"] = cmd;
+        pub["msg"] = msg;
+        QJsonDocument doc(pub);
+        QString payload = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+        // 通过 worker 发送发布消息
+        QMetaObject::invokeMethod(webSocketWorker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload));
+        
+        QMessageBox::information(this, "任务执行", "已发送任务执行命令:\n" + cmd);
+        qDebug() << "Sent exec command to robot:" << cmd;   
+    }else{ 
+        QMessageBox::warning(this, tr("连接错误"), tr("WebSocket连接未建立，无法执行任务"));
+    }
+
+}
+
+// 添加任务槽函数
+void robanweb::onAddTask(Task* task)
+{
+    QString codePath = task->getTaskCodePath();
+    QString sourceCmd = "source ~/robot_ros_application/catkin_ws/devel/setup.bash";
+    QString execCmd = QString("python %1").arg(codePath);
+    QString fullCmd = QString("%1 \"%2 && %3\"").arg("gnome-terminal -- bash -c").arg(sourceCmd).arg(execCmd);
+    if(!fullCmd.isEmpty()){
+        // 1. 构建完整的 payload 对象，包含 action, sh_path 和 data
+        QJsonObject payloadObj;
+        payloadObj["action"] = "add";
+        payloadObj["sh_path"] = task->getScriptPath();
+        payloadObj["data"] = fullCmd; // 将实际命令放入 data 字段
+        
+        // 2. 将 payload 对象序列化为 JSON 字符串
+        QJsonDocument payloadDoc(payloadObj);
+        QString payloadStr = QString::fromUtf8(payloadDoc.toJson(QJsonDocument::Compact));
+
+        // 3. 构建 rosbridge 发布消息
+        QJsonObject pub;
+        pub["op"] = "publish";
+        pub["topic"] = "/robot/exec_sh";
+        pub["type"] = "std_msgs/String";
+        
+        // 4. 将序列化后的 JSON 字符串作为 ROS 消息的内容
+        QJsonObject msg;
+        msg["data"] = payloadStr; 
+        pub["msg"] = msg;
+        
+        QJsonDocument doc(pub);
+        QString payload = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+        
+        // 通过 worker 发送发布消息
+        QMetaObject::invokeMethod(webSocketWorker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload));
+        qDebug() << "Sent add task command to robot:" << payload;
+    }
 }
 
 // SLAM控制按钮槽函数
 void robanweb::onSlamControlButtonClicked()
 {
-    slamDialog dialog(webSocketWorker, this);
-    // connect dialog signal to main slot
-    // connect(&dialog, &slamDialog::runScriptRequested, this, &robanweb::onRunScriptRequested, Qt::QueuedConnection);
-    if(dialog.exec() == QDialog::Accepted){
-        qDebug() << "脚本功能对话框开启";
+    if (!m_slamDialog) {
+        m_slamDialog = new slamDialog(webSocketWorker, this);
     }
+    m_slamDialog->show();
+    m_slamDialog->raise();
+    m_slamDialog->activateWindow();
 }
 
 //机器人控制按钮槽函数
@@ -459,9 +523,9 @@ void robanweb::startSubscriptions(){
 
 
     // 启动电量订阅
-    if (batteryMonitor) {
-        QMetaObject::invokeMethod(batteryMonitor, "start", Qt::QueuedConnection);
-    }
+    // if (batteryMonitor) {
+    //     QMetaObject::invokeMethod(batteryMonitor, "start", Qt::QueuedConnection);
+    // }
     // 启动IMU订阅
     if(imuMonitor){
         QMetaObject::invokeMethod(imuMonitor, "start", Qt::QueuedConnection);

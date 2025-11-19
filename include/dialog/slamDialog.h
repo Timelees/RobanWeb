@@ -33,6 +33,9 @@ public:
     explicit slamDialog(WebSocketWorker *webSocketWorker, QWidget *parent = nullptr);
     ~slamDialog();
 
+protected:
+    void closeEvent(QCloseEvent *event) override;
+
 private slots:
     void onRunSLAMButtonClicked();
     void onCloseSLAMButtonClicked();
@@ -52,6 +55,8 @@ private:
     void init();
     void bindSlots();
     bool eventFilter(QObject *watched, QEvent *event) override;
+    // 更新 localization_checkBox 的图标（根据是否选中）
+    void updateLocalizationIcon(bool checked);
 
 
 private:

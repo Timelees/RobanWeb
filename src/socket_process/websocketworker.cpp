@@ -86,6 +86,11 @@ void WebSocketWorker::sendText(const QString &text)
         qDebug() << "WebSocketWorker: cannot send, socket not connected";
     }
 }
+
+bool WebSocketWorker::isConnected() const
+{
+    return (m_webSocket && m_webSocket->state() == QAbstractSocket::ConnectedState);
+}
 // 连接成功
 void WebSocketWorker::onConnected()
 {
