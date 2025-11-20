@@ -1,6 +1,6 @@
 [
     {
-        "TaskCodePath": "~/robot_ros_application/catkin_ws/src/ros_actions_node/scripts/Say-yeah舞蹈案例.py",
+        "TaskCodePath": "/home/lemon/robot_ros_application/catkin_ws/src/ros_actions_node/scripts/Say-yeah舞蹈案例.py",
         "name": "Say-yeah舞蹈",
         "scriptName": "say_yeah.sh",
         "scriptPath": "/home/lemon/exec_scripts/say_yeah.sh"

@@ -1,4 +1,6 @@
 #include "robanweb.h"
+#include <QFileInfo>
+#include <QDateTime>
 
 
 
@@ -98,6 +100,7 @@ void robanweb::init(){
             taskManager = new TaskManager(ui->taskListWidget, 
                                          ui->addTaskButton, 
                                          ui->runTaskButton, 
+                                         ui->stopTaskButton,
                                          webSocketWorker, 
                                          this);
             qDebug() << "任务管理器初始化成功";
@@ -127,8 +130,8 @@ void robanweb::init(){
     connect(imageThread, &QThread::finished, cameraImageMonitor, &QObject::deleteLater);
     // Ensure image display label does not resize itself to the pixmap
     if (ui->imageRawDisplay) {
-        // Let the worker scale to the desired target size and avoid QLabel auto-scaling to prevent blur
-        ui->imageRawDisplay->setScaledContents(false);
+        // Enable scaled contents to fill the widget
+        ui->imageRawDisplay->setScaledContents(true);
         ui->imageRawDisplay->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
     }
     // 设置目标显示尺寸和最大帧率（在 worker 线程中设置）
@@ -261,6 +264,8 @@ void robanweb::bindSlots(){
     if (taskManager) {
     connect(taskManager, SIGNAL(taskExecuted(const QString&)), 
         this, SLOT(onTaskExecuted(const QString&)));
+    connect(taskManager, SIGNAL(taskStopped(const QString&)), 
+        this, SLOT(onTaskStopped(const QString&)));
     connect(taskManager, SIGNAL(taskAdded(Task*)), this, SLOT(onAddTask(Task*)));
     }
 
@@ -341,25 +346,31 @@ void robanweb::bindSlots(){
 // 任务执行槽函数
 void robanweb::onTaskExecuted(const QString& scriptPath)
 {
-    qDebug() << "执行任务脚本:" << scriptPath;
     QString cmd = scriptPath;
+    // 使用脚本文件名作为简单的 task 标识（可改为 UUID 或其它规则）
+    QString taskId = QFileInfo(scriptPath).fileName();
+    if (taskId.isEmpty()) {
+        taskId = QString::number(QDateTime::currentMSecsSinceEpoch());
+    }
 
     if (!cmd.isEmpty()) {
+        // 直接把脚本路径字符串放入 msg.data，cmd_executor.py 对纯字符串也能正确处理。
         QJsonObject pub;
         pub["op"] = "publish";
-        pub["topic"] = "/robot/exec_sh";;
+        pub["topic"] = "/robot/exec_sh";
         pub["type"] = "std_msgs/String";
         QJsonObject msg;
+        // 直接发送脚本路径（非 JSON 字符串），可确保机器人端按原样将其当作命令执行
         msg["data"] = cmd;
         pub["msg"] = msg;
         QJsonDocument doc(pub);
         QString payload = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
         // 通过 worker 发送发布消息
         QMetaObject::invokeMethod(webSocketWorker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload));
-        
-        QMessageBox::information(this, "任务执行", "已发送任务执行命令:\n" + cmd);
-        qDebug() << "Sent exec command to robot:" << cmd;   
-    }else{ 
+
+        QMessageBox::information(this, "任务执行", "已发送任务执行命令:\n" + cmd + "\n任务ID:" + taskId);
+        qDebug() << "Sent exec command to robot (data):" << cmd << " task:" << taskId;
+    } else {
         QMessageBox::warning(this, tr("连接错误"), tr("WebSocket连接未建立，无法执行任务"));
     }
 
@@ -371,7 +382,7 @@ void robanweb::onAddTask(Task* task)
     QString codePath = task->getTaskCodePath();
     QString sourceCmd = "source ~/robot_ros_application/catkin_ws/devel/setup.bash";
     QString execCmd = QString("python %1").arg(codePath);
-    QString fullCmd = QString("%1 \"%2 && %3\"").arg("gnome-terminal -- bash -c").arg(sourceCmd).arg(execCmd);
+    QString fullCmd = QString("%1 && %2").arg(sourceCmd).arg(execCmd);
     if(!fullCmd.isEmpty()){
         // 1. 构建完整的 payload 对象，包含 action, sh_path 和 data
         QJsonObject payloadObj;
@@ -400,6 +411,40 @@ void robanweb::onAddTask(Task* task)
         // 通过 worker 发送发布消息
         QMetaObject::invokeMethod(webSocketWorker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload));
         qDebug() << "Sent add task command to robot:" << payload;
+    }
+}
+
+// 任务停止槽函数
+void robanweb::onTaskStopped(const QString& scriptPath)
+{
+    if (!scriptPath.isEmpty()) {
+        // 使用与 onTaskExecuted 相同的 task 标识约定（脚本文件名），便于机器人端根据 task 停止对应进程
+        QString taskId = QFileInfo(scriptPath).fileName();
+        if (taskId.isEmpty()) taskId = scriptPath;
+
+        QJsonObject payloadObj;
+        payloadObj["action"] = "stop";
+        // 向机器人端指明要停止的是由本地脚本启动的控制类型进程（cmd_executor.py 在启动本地脚本时会把 which 标记为 'control'）
+        payloadObj["which"] = "control";
+        payloadObj["task"] = taskId;
+        payloadObj["script_path"] = scriptPath;
+
+        QJsonDocument payloadDoc(payloadObj);
+        QString payloadStr = QString::fromUtf8(payloadDoc.toJson(QJsonDocument::Compact));
+
+        QJsonObject pub;
+        pub["op"] = "publish";
+        pub["topic"] = "/robot/exec_sh";
+        pub["type"] = "std_msgs/String";
+        QJsonObject msg;
+        msg["data"] = payloadStr;
+        pub["msg"] = msg;
+        QJsonDocument doc(pub);
+        QString payload = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+
+        // 通过 worker 发送发布消息
+        QMetaObject::invokeMethod(webSocketWorker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload));
+        qDebug() << "Sent stop task command to robot:" << payload;
     }
 }
 
@@ -511,21 +556,7 @@ void robanweb::onWebSocketConnected()
 }
 
 void robanweb::startSubscriptions(){
-    // // 订阅 ROS 话题（例如 /robot_status）
-    // QJsonObject subscribeMsg;
-    // subscribeMsg["op"] = "subscribe";
-    // subscribeMsg["topic"] = "/MediumSize/BodyHub/ServoPositions";    
-    // subscribeMsg["type"] = "bodyhub/ServoPositionAngle"; 
-    // QJsonDocument doc(subscribeMsg);
-    // QString payload = QString(doc.toJson());
-    // // 通过 worker 发送订阅消息
-    // QMetaObject::invokeMethod(webSocketWorker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload));
-
-
-    // 启动电量订阅
-    // if (batteryMonitor) {
-    //     QMetaObject::invokeMethod(batteryMonitor, "start", Qt::QueuedConnection);
-    // }
+  
     // 启动IMU订阅
     if(imuMonitor){
         QMetaObject::invokeMethod(imuMonitor, "start", Qt::QueuedConnection);
@@ -633,3 +664,4 @@ bool robanweb::eventFilter(QObject *watched, QEvent *event)
     }
     return QMainWindow::eventFilter(watched, event);
 }
+

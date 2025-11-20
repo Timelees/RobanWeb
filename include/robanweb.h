@@ -50,6 +50,7 @@ private slots:
     void onVoiceControlButtonClicked();         // 语音控制按钮 槽函数
     void onrobanControlButtonclicked();         // 机器人控制按钮 槽函数
     void onTaskExecuted(const QString& scriptPath); // 任务执行 槽函数
+    void onTaskStopped(const QString& scriptPath);  // 任务停止 槽函数
     void onAddTask(Task* task);           // 添加任务 槽函数
 
     // webSocket 相关槽函数

@@ -11,6 +11,9 @@ ServoPositionsMonitor::ServoPositionsMonitor(WebSocketWorker *worker, QObject *p
     walking_status_topic_name = loadTopicFromConfig("walk_state_topic");
     walking_status_topic_type = loadTopicFromConfig("walk_state_topic_type");
 
+    leg_joint_angle_topic_name = loadTopicFromConfig("leg_joint_angle_topic");
+    leg_joint_angle_topic_type = loadTopicFromConfig("leg_joint_angle_topic_type");
+
     // qDebug() << "Loaded servo positions topic from config:"
     //          << servo_positions_topic_name << "(" << servo_positions_topic_type << ")";
     if(servo_positions_topic_name.isEmpty() || servo_positions_topic_type.isEmpty()) {
@@ -20,7 +23,10 @@ ServoPositionsMonitor::ServoPositionsMonitor(WebSocketWorker *worker, QObject *p
     if(walking_status_topic_name.isEmpty() || walking_status_topic_type.isEmpty()) {
         walking_status_topic_name = "/MediumSize/BodyHub/WalkingStatus"; 
         walking_status_topic_type = "std_msgs/Float64";
-        
+    }
+    if(leg_joint_angle_topic_name.isEmpty() || leg_joint_angle_topic_type.isEmpty()) {
+        leg_joint_angle_topic_name = "/joint/angle/measure"; 
+        leg_joint_angle_topic_type = "std_msgs/Float64MultiArray";
     }
 
     // 创建定时器以稳定在主线程以固定频率推送最新角度到上层，避免高频率直接 emit 导致 UI 卡顿
@@ -38,6 +44,11 @@ QVector<double> ServoPositionsMonitor::lastAngles() const {
     return m_lastAngles;
 }
 
+QVector<double> ServoPositionsMonitor::lastLegAngles() const {
+    QMutexLocker locker(&m_mutex);
+    return m_lastLegAngles;
+}
+
 void ServoPositionsMonitor::start(){
     if(!m_worker) return;
     // 发送订阅请求给servo positions话题
@@ -52,13 +63,23 @@ void ServoPositionsMonitor::start(){
 
 
     // 发送订阅请求给walking status话题
-    QJsonObject subscribeMsg2;
-    subscribeMsg2["op"] = "subscribe";
-    subscribeMsg2["topic"] = walking_status_topic_name;
-    subscribeMsg2["type"] = walking_status_topic_type;
-    QJsonDocument doc2(subscribeMsg2);
-    QString payload2 = QString::fromUtf8(doc2.toJson(QJsonDocument::Compact));
-    QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload2));
+    // QJsonObject subscribeMsg2;
+    // subscribeMsg2["op"] = "subscribe";
+    // subscribeMsg2["topic"] = walking_status_topic_name;
+    // subscribeMsg2["type"] = walking_status_topic_type;
+    // QJsonDocument doc2(subscribeMsg2);
+    // QString payload2 = QString::fromUtf8(doc2.toJson(QJsonDocument::Compact));
+    // QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload2));
+
+
+    // 发送订阅请求给leg joint angle话题
+    QJsonObject subscribeMsg3;
+    subscribeMsg3["op"] = "subscribe";
+    subscribeMsg3["topic"] = leg_joint_angle_topic_name;
+    subscribeMsg3["type"] = leg_joint_angle_topic_type;
+    QJsonDocument doc3(subscribeMsg3);
+    QString payload3 = QString::fromUtf8(doc3.toJson(QJsonDocument::Compact));
+    QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload3));
 
     // 启动定时器（如果未启动）以开始在 GUI 线程定期发射更新
     if (m_emitTimer && !m_emitTimer->isActive())
@@ -123,34 +144,70 @@ void ServoPositionsMonitor::onMessageReceived(const QString &message){
         }
     }
     // 处理walking status消息
-    else if(obj["op"].toString() == "publish" && topic == walking_status_topic_name){
+    // else if(obj["op"].toString() == "publish" && topic == walking_status_topic_name){
+    //     QJsonObject msgObj = obj["msg"].toObject();
+    //     QJsonDocument msgDoc(msgObj);
+    //     QString msgJson = QString::fromUtf8(msgDoc.toJson(QJsonDocument::Compact));
+    //     // qDebug() << "Received WalkingStatus message: " << msgJson;
+
+    //     // 这里可以根据需要处理walking status消息内容
+    //     if(msgObj.contains("data") && msgObj["data"].isDouble()) {
+    //         double walkStatus = msgObj["data"].toDouble();
+    //         // qDebug() << "Current Walking Status:" << walkStatus;
+    //         if(walkStatus == 1.0) {
+    //             // qDebug() << "Robot is walking.";
+    //             // 先发出行走状态信号，告知上层播放行走动画
+    //             emit walkingStatusUpdated();
+    //             // 并且尽可能立即触发伺服/位置更新，减少行走动画与位置移动不同步的情况
+    //             // 这里在 mutex 下读取最后的角度并立即发出 servoPositionsUpdated
+    //             {
+    //                 QMutexLocker locker(&m_mutex);
+    //                 // 仅在已有角度数据时发出
+    //                 if (!m_lastAngles.isEmpty()) {
+    //                     // 直接发射更新信号以便上层尽快响应（通常为动画与位置相关逻辑）
+    //                     emit servoPositionsUpdated();
+    //                 }
+    //             }
+    //         } else {
+    //             // qDebug() << "Robot is standing.";
+    //             // 当检测到非行走状态（例如 0.0）时，发送停止信号以便上层停止行走动画播放
+    //             emit walkingStatusStopped();
+    //         }
+    //     }
+    // }
+    else if(obj["op"].toString() == "publish" && topic == leg_joint_angle_topic_name){
         QJsonObject msgObj = obj["msg"].toObject();
         QJsonDocument msgDoc(msgObj);
         QString msgJson = QString::fromUtf8(msgDoc.toJson(QJsonDocument::Compact));
-        // qDebug() << "Received WalkingStatus message: " << msgJson;
+        // qDebug() << "Received LegJointAngle message: " << msgJson;
 
-        // 这里可以根据需要处理walking status消息内容
-        if(msgObj.contains("data") && msgObj["data"].isDouble()) {
-            double walkStatus = msgObj["data"].toDouble();
-            // qDebug() << "Current Walking Status:" << walkStatus;
-            if(walkStatus == 1.0) {
-                // qDebug() << "Robot is walking.";
-                // 先发出行走状态信号，告知上层播放行走动画
-                emit walkingStatusUpdated();
-                // 并且尽可能立即触发伺服/位置更新，减少行走动画与位置移动不同步的情况
-                // 这里在 mutex 下读取最后的角度并立即发出 servoPositionsUpdated
-                {
-                    QMutexLocker locker(&m_mutex);
-                    // 仅在已有角度数据时发出
-                    if (!m_lastAngles.isEmpty()) {
-                        // 直接发射更新信号以便上层尽快响应（通常为动画与位置相关逻辑）
-                        emit servoPositionsUpdated();
+        // 处理leg joint angle消息内的data数组:[12个腿部关节的数据]
+        if(msgObj.contains("data") && msgObj["data"].isArray()) {
+            QJsonArray arr = msgObj["data"].toArray();
+            QVector<double> legAngles;
+            legAngles.reserve(arr.size());
+            int i = 1;
+            for (const QJsonValue &v : arr) {
+                if (v.isDouble()) {
+                    // 以下关节需要取反，适应fbx模型坐标系
+                    if( i == 3 || i == 4 || i == 6 || i == 11 || i == 12){
+                        legAngles.append(-v.toDouble());
+                    } else {
+                        legAngles.append(v.toDouble());
                     }
+                    i++;
+                } else if (v.isString()) {
+                    bool ok = false;
+                    double d = v.toString().toDouble(&ok);
+                    if (ok) legAngles.append(d);
                 }
-            } else {
-                // qDebug() << "Robot is standing.";
-                // 当检测到非行走状态（例如 0.0）时，发送停止信号以便上层停止行走动画播放
-                emit walkingStatusStopped();
+            }
+            // 这里可以根据需要使用 legAngles 数组
+            // emit legJointAnglesUpdated();
+            {
+                QMutexLocker locker(&m_mutex);
+                m_lastLegAngles = legAngles;
+                m_pendingLegUpdate = true;
             }
         }
     }
@@ -161,12 +218,18 @@ void ServoPositionsMonitor::emitBuffered()
 {
     // Copy and reset pending flag under mutex, then emit without holding the lock to avoid deadlocks
     bool doEmit = false;
+    bool doEmitLeg = false;
     m_mutex.lock();
     doEmit = m_pendingUpdate;
     m_pendingUpdate = false;
+    doEmitLeg = m_pendingLegUpdate;
+    m_pendingLegUpdate = false;
     m_mutex.unlock();
 
     if (doEmit) {
         emit servoPositionsUpdated();
+    }
+    if (doEmitLeg) {
+        emit legJointAnglesUpdated();
     }
 }

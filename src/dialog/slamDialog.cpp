@@ -100,6 +100,8 @@ void slamDialog::init()
         // Use explicit scaling rather than letting the QLabel auto-scale the pixmap
         ui->featurePoint_Display->setScaledContents(false);
         ui->featurePoint_Display->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
+        // Center the pixmap in the label so when we crop the scaled pixmap it stays centered
+        ui->featurePoint_Display->setAlignment(Qt::AlignCenter);
     }
 
     // 设置目标显示尺寸和最大帧率
@@ -173,10 +175,30 @@ void slamDialog::bindSlots(){
     // 连接webSocket信号到特征点图像监视器槽函数
     connect(m_worker, &WebSocketWorker::messageReceived, featuredImageMonitor, &CameraImageMonitor::onMessageReceived, Qt::QueuedConnection);
     connect(featuredImageMonitor, &CameraImageMonitor::imageReceived, this, [this](const QImage &img){
-        if (ui->featurePoint_Display) {
-            // The worker already scales to the configured target size (SmoothTransformation), set pixmap directly
-            ui->featurePoint_Display->setPixmap(QPixmap::fromImage(img));
+        if (!ui->featurePoint_Display) return;
+
+        // Convert incoming image to pixmap
+        QPixmap pix = QPixmap::fromImage(img);
+        QSize lblSize = ui->featurePoint_Display->size();
+
+        // If label has no size yet, set original pixmap
+        if (lblSize.isEmpty()) {
+            ui->featurePoint_Display->setPixmap(pix);
+            return;
         }
+
+        // Scale the pixmap so it fills the label while preserving aspect ratio.
+        // KeepAspectRatioByExpanding ensures the pixmap covers the full label area.
+        QPixmap scaled = pix.scaled(lblSize, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+
+        // If the scaled pixmap is larger than the label, crop center to exactly match label size
+        if (scaled.size() != lblSize) {
+            int x = (scaled.width() - lblSize.width()) / 2;
+            int y = (scaled.height() - lblSize.height()) / 2;
+            scaled = scaled.copy(x, y, lblSize.width(), lblSize.height());
+        }
+
+        ui->featurePoint_Display->setPixmap(scaled);
     }, Qt::QueuedConnection);
 
 
@@ -278,14 +300,14 @@ void slamDialog::onRunSLAMButtonClicked()
         if (s == ui->startSlam_Button) {
         cmd = loadCmdFromConfig("start_slam_bash");
         if(cmd.isEmpty()){
-            cmd = "/home/lemon/slam.sh";
+            cmd = "/home/lemon/exec_scripts/slam.sh";
         }
         ui->localization_checkBox->setChecked(false);   // 非定位模式
             updateLocalizationIcon(false);
     } else if (s == ui->locationSlam_Button) {
         cmd = loadCmdFromConfig("start_slam_location_bash");
         if(cmd.isEmpty()){
-            cmd = "/home/lemon/slam_tt.sh";
+            cmd = "/home/lemon/exec_scripts/slam_tt.sh";
         }
         ui->localization_checkBox->setChecked(true);    // 定位模式
             updateLocalizationIcon(true);

@@ -110,7 +110,7 @@ void RobotControlDialog::onCancelControlButtonClicked()
     QString jsonString = QString::fromUtf8(jsonDoc.toJson(QJsonDocument::Compact));
 
     QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, jsonString));
-    qDebug() << "Sent stop control command to robot:" << innerStr;
+    qDebug() << "Sent stop control command to robot:" << jsonString;
 }
 
 // 接收控制按钮点击事件

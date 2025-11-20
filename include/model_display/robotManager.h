@@ -125,10 +125,13 @@ public slots:
     void applyJointAngles(const std::map<int, double> &jointAngles);
     // 响应 ServoPositionsMonitor 的更新通知，允许 RobotManager 读取最新伺服消息
     void onServoPositionsUpdated();
-    // 响应 ServoPositionsMonitor 的行走状态更新通知
-    void onWalkingStatusUpdated();
-    // 停止行走动画的播放（由 ServoPositionsMonitor 发出停止信号触发）
-    void stopWalkingPlayback();
+
+    // 响应ServoPositionsMonitor的腿部关节角度更新
+    void onLegJointAnglesUpdated();
+
+    // 辅助函数：融合伺服数据和腿部数据并更新 pendingServo
+    void updateFusedServo();
+
     // 把伺服角度值应用到模型（复用 advancePlaceFrame 的映射规则）
     void applyServoAnglesRow(const QVector<double> &row);
     // 当 SceneManager 收到新的机器人位姿时调用，该槽会触发场景坐标映射并刷新模型位置
@@ -244,6 +247,8 @@ public:
     int m_walkCurrentRow = 0;
     int m_walkIntervalMs = 50;                 // 默认行走动画帧率（ms），可调整
     bool m_walkLooping = true;
+    bool m_isWalking = false;                  // 标记是否处于行走状态
+    QVector<double> m_cachedLegAngles;         // 缓存最新的腿部关节数据
 
     // --- Servo/Gait coalescing to reduce update frequency and avoid UI stalls ---
 private:

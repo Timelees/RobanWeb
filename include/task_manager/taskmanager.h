@@ -92,6 +92,7 @@ public:
     TaskManager(QListWidget* taskListWidget, 
                 QPushButton* addTaskButton,
                 QPushButton* runTaskButton,
+                QPushButton* stopTaskButton,
                 WebSocketWorker* webSocketWorker,
                 QObject* parent = nullptr);
     ~TaskManager();
@@ -115,7 +116,7 @@ public slots:
     // UI按钮点击处理
     void onAddTaskClicked();
     void onRunTaskClicked();
-    
+    void onStopTaskClicked();
     // 任务列表项双击处理
     void onTaskItemDoubleClicked(QListWidgetItem* item);
     
@@ -127,6 +128,7 @@ signals:
     void taskRemoved(int index);
     void taskSelected(Task* task);
     void taskExecuted(const QString& TaskCodePath);
+    void taskStopped(const QString& scriptPath);
 
 private:
     // 更新UI显示
@@ -140,6 +142,7 @@ private:
     QListWidget* m_taskListWidget;
     QPushButton* m_addTaskButton;
     QPushButton* m_runTaskButton;
+    QPushButton* m_stopTaskButton;
     WebSocketWorker* m_webSocketWorker;
     QVector<Task*> m_tasks;
     QString m_taskConfigDir;

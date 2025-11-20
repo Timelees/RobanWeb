@@ -45,6 +45,11 @@ servo_positions_topic_type: "bodyhub/ServoPositionAngle"
 walk_state_topic: "/MediumSize/BodyHub/WalkingStatus"
 walk_state_topic_type: "std_msgs/Float64"
 
+# 机器人腿部关节数据话题
+leg_joint_angle_topic: "/joint/angle/measure"
+leg_joint_angle_topic_type: "std_msgs/Float64MultiArray"
+
+
 # 机器人行走方向话题
 gait_command_topic: "/gaitCommand"
 gait_command_topic_type: "std_msgs/Float64MultiArray"

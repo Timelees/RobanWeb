@@ -3,18 +3,20 @@
 TaskManager::TaskManager(QListWidget* taskListWidget, 
                          QPushButton* addTaskButton,
                          QPushButton* runTaskButton,
+                         QPushButton* stopTaskButton,
                          WebSocketWorker* webSocketWorker,
                          QObject* parent)
     : QObject(parent),
       m_taskListWidget(taskListWidget),
       m_addTaskButton(addTaskButton),
       m_runTaskButton(runTaskButton),
+      m_stopTaskButton(stopTaskButton),
       m_webSocketWorker(webSocketWorker)
 {
     // 绑定按钮点击事件
     connect(m_addTaskButton, &QPushButton::clicked, this, &TaskManager::onAddTaskClicked);
     connect(m_runTaskButton, &QPushButton::clicked, this, &TaskManager::onRunTaskClicked);
-    
+    connect(m_stopTaskButton, &QPushButton::clicked, this, &TaskManager::onStopTaskClicked);
     // 绑定列表项双击事件
     connect(m_taskListWidget, &QListWidget::itemDoubleClicked, this, &TaskManager::onTaskItemDoubleClicked);
     
@@ -52,7 +54,7 @@ void TaskManager::loadTasksFromConfig()
     if (!file.exists()) {
         // 配置文件不存在，创建默认任务
         Task* defaultTask1 = new Task(tr("Say-yeah舞蹈"), "say_yeah.sh", 
-                    "~/robot_ros_application/catkin_ws/src/ros_actions_node/scripts/Say-yeah舞蹈案例.py", this);
+                    "/home/lemon/robot_ros_application/catkin_ws/src/ros_actions_node/scripts/Say-yeah舞蹈案例.py", this);
         Task* defaultTask2 = new Task(tr("货物搬运"), "Task_carry.sh", 
                     "/home/lemon/robot_ros_application/catkin_ws/src/ros_actions_node/scripts/game/2022/caai_roban_challenge/colleges/scripts/Task_carry_box.py", this);
 
@@ -224,6 +226,31 @@ void TaskManager::onRunTaskClicked()
                            tr("请先选择要执行的任务"));
     }
 }
+void TaskManager::onStopTaskClicked()
+{
+    int currentRow = m_taskListWidget->currentRow();
+    if (currentRow >= 0 && currentRow < m_tasks.size()) {
+        Task* selectedTask = m_tasks.at(currentRow);
+        
+        // 通过WebSocket发送停止脚本的命令（先检查连接状态）
+        bool wsConnected = false;
+        if (m_webSocketWorker) {
+            QMetaObject::invokeMethod(m_webSocketWorker, "isConnected", Qt::BlockingQueuedConnection, Q_RETURN_ARG(bool, wsConnected));
+        }
+        if (!m_webSocketWorker || !wsConnected) {
+            QMessageBox::warning(nullptr, tr("错误"),
+                                 tr("WebSocket 未连接，无法停止任务，请先建立连接。"));
+            return;
+        }
+
+        // 发出任务停止信号
+        emit taskStopped(selectedTask->getScriptPath());
+
+    } else {
+        QMessageBox::warning(nullptr, tr("提示"),
+                           tr("请先选择要停止的任务"));
+    }
+}
 
 void TaskManager::onTaskItemDoubleClicked(QListWidgetItem* item)
 {
@@ -253,6 +280,7 @@ void TaskManager::showTaskContextMenu(const QPoint& pos)
     
     QMenu contextMenu;
     QAction* runAction = contextMenu.addAction(tr("执行"));
+    QAction* stopAction = contextMenu.addAction(tr("停止"));
     QAction* editAction = contextMenu.addAction(tr("编辑"));
     QAction* deleteAction = contextMenu.addAction(tr("删除"));
     
@@ -273,10 +301,30 @@ void TaskManager::showTaskContextMenu(const QPoint& pos)
                                      tr("WebSocket 未连接，无法执行任务，请先建立连接。"));
             } else {
                 // 发出任务执行信号（仅在已连接时）
-                emit taskExecuted(selectedTask->getTaskCodePath());
+                emit taskExecuted(selectedTask->getScriptPath());
             }
         }
-    } else if (selectedAction == editAction) {
+    }else if(selectedAction == stopAction) {
+        // 停止任务
+        if (row >= 0 && row < m_tasks.size()) {
+            Task* selectedTask = m_tasks.at(row);
+            
+            // 通过WebSocket发送停止脚本的命令（先检查连接状态）
+            bool wsConnected = false;
+            if (m_webSocketWorker) {
+                QMetaObject::invokeMethod(m_webSocketWorker, "isConnected", Qt::BlockingQueuedConnection, Q_RETURN_ARG(bool, wsConnected));
+            }
+            if (!m_webSocketWorker || !wsConnected) {
+                QMessageBox::warning(nullptr, tr("错误"),
+                                     tr("WebSocket 未连接，无法停止任务，请先建立连接。"));
+            } else {
+                // 发出任务停止信号
+                emit taskStopped(selectedTask->getScriptPath());
+            }
+        }
+    }
+    
+    else if (selectedAction == editAction) {
         // 编辑任务
         if (row >= 0 && row < m_tasks.size()) {
             Task* task = m_tasks.at(row);

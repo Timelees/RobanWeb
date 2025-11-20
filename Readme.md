@@ -146,13 +146,6 @@ rosrun bodyhub cmd_executor.py
 
 ![alt text](image/control.png)
 
-**TODO:**
-
-待修复bug：
-
-1.使用持续扫描时，按两次E无法关闭持续扫描
-
-
 
 7.语音控制
 
@@ -201,6 +194,8 @@ rosrun bodyhub cmd_executor.py
 
 ![alt text](image/task_info.png)
 
-右键任务列表的任务，可选择执行，编辑，删除任务
+右键任务列表的任务，可选择执行，停止，编辑，删除任务
 
 添加任务按钮，输入任务名称，脚本名称，脚本路径和代码路径，创建对应的任务，并保存到配置文件。同时会在机器人端的exec_scripts文件夹中创建对应的sh脚本。
+
+(**代码路径示例：/home/lemon/robot_ros_application/catkin_ws/src/ros_actions_node/scripts/Say-yeah舞蹈案例.py**)

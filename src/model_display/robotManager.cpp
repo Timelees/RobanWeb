@@ -32,54 +32,6 @@ void RobotManager::initialize()
     jointConfigPath = resolveConfigPath("boneToJoint.csv");
     loadBoneJointMapping(jointConfigPath);
 
-    // ------------- 预处理：加载 walking 动作 CSV（仅提取前12列用于行走时的角度融合） -------------
-    // 说明：按要求使用 loadActionCsv 加载文件内容，但我们不想让该函数启动默认的播放定时器
-    // 因此这里的策略是：调用 loadActionCsv 把数据解析到 m_placeRows（该函数会可能创建并启动 m_animTimer），
-    // 然后立即把需要的前12列数据拷贝到 m_walkFirst12Rows，再把 m_placeRows 恢复为调用前的内容，
-    // 并清理由 loadActionCsv 新建的定时器（避免干扰正常的 place 播放逻辑）。
-    QString walkCsv = resolveConfigPath("walk.csv");
-    if (!walkCsv.isEmpty() && QFile::exists(walkCsv))
-    {
-        // 备份当前 place 数据与计时器指针
-        auto backupPlaceRows = m_placeRows;
-        QTimer *backupAnimTimer = m_animTimer;
-        bool backupPlaceLooping = m_placeLooping;
-
-        // 使用 loadActionCsv 解析 walk.csv（按要求使用此函数），采用较慢的间隔以便随即停止
-        bool parsed = loadActionCsv(walkCsv, m_walkIntervalMs, m_walkLooping);
-        if (parsed)
-        {
-            // 从解析出的 m_placeRows 中提取每行的前12列到 m_walkFirst12Rows
-            m_walkFirst12Rows.clear();
-            for (const QVector<double> &r : m_placeRows)
-            {
-                QVector<double> small;
-                int take = qMin(12, r.size());
-                for (int i = 0; i < take; ++i)
-                    small.append(r[i]);
-                // 若某行不足12列，用 0 填充以保证长度一致性
-                for (int i = take; i < 12; ++i)
-                    small.append(0.0);
-                m_walkFirst12Rows.append(small);
-            }
-        }
-
-        // 停止并清理 loadActionCsv 可能创建的定时器，恢复之前的 m_placeRows/m_animTimer 状态
-        stopPlacePlayback();
-        // 如果之前没有计时器（backupAnimTimer==nullptr）但 loadActionCsv 创建了一个新的 m_animTimer，删除它
-        if (backupAnimTimer == nullptr && m_animTimer != nullptr)
-        {
-            delete m_animTimer;
-            m_animTimer = nullptr;
-        }
-        // 恢复之前的 placeRows 和 placeLooping
-        m_placeRows = backupPlaceRows;
-        m_placeLooping = backupPlaceLooping;
-        // 如果之前存在计时器指针则恢复
-        if (backupAnimTimer != nullptr)
-            m_animTimer = backupAnimTimer;
-    }
-    // ------------- 预处理结束 -------------
 
     // 如果有 ServoPositionsMonitor，则连接更新信号（queued connection），使用信号驱动直接应用角度，避免轮询
     if (m_servoPositionsMonitor)
@@ -87,13 +39,16 @@ void RobotManager::initialize()
         // 连接伺服位置更新信号
         connect(m_servoPositionsMonitor, &ServoPositionsMonitor::servoPositionsUpdated,
                 this, &RobotManager::onServoPositionsUpdated, Qt::QueuedConnection);
-        // 连接行走状态更新信号
-        connect(m_servoPositionsMonitor, &ServoPositionsMonitor::walkingStatusUpdated,
-                this, &RobotManager::onWalkingStatusUpdated, Qt::QueuedConnection);
+        // // 连接行走状态更新信号
+        // connect(m_servoPositionsMonitor, &ServoPositionsMonitor::walkingStatusUpdated,
+        //         this, &RobotManager::onWalkingStatusUpdated, Qt::QueuedConnection);
   
-        // 连接行走停止信号，停止行走动画播放
-        connect(m_servoPositionsMonitor, &ServoPositionsMonitor::walkingStatusStopped,
-                this, &RobotManager::stopWalkingPlayback, Qt::QueuedConnection);
+        // // 连接行走停止信号，停止行走动画播放
+        // connect(m_servoPositionsMonitor, &ServoPositionsMonitor::walkingStatusStopped,
+        //         this, &RobotManager::stopWalkingPlayback, Qt::QueuedConnection);
+
+        connect(m_servoPositionsMonitor, &ServoPositionsMonitor::legJointAnglesUpdated,
+                this, &RobotManager::onLegJointAnglesUpdated, Qt::QueuedConnection);
     }
 
     // 创建并启动用于合并并以固定频率应用伺服与步态更新的定时器（减少高频更新引起的卡顿）
@@ -872,80 +827,7 @@ void RobotManager::computeBounds()
     }
 }
 
-// ---------------测试函数--------------------------
-// loadLocationCsv: 从 CSV 加载场景下的位置点 (x,y,z)。
-// 实现原则：不重新生成 mesh 或贴图，而是直接在已加载的 mesh 顶点上应用平移（基于加载时计算的模型中心 m_modelCenterX/Y/Z），
-// 从而把整个机器人模型移动到目标世界位置。若 intervalMs>0，则以定时器循环播放每一行位置并发出 frameAdvanced() 以触发视图刷新。
-bool RobotManager::loadLocationCsv(const QString &csvPath)
-{
-    QFile f(csvPath);
-    if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
-    {
-        qDebug() << "RobotManager: fail open location csv" << csvPath;
-        return false;
-    }
-    QTextStream ts(&f);
-    // 解析 CSV：仅把数据保存到 m_locationRows，其他行为（应用/播放）由单独的函数负责
-    m_locationRows.clear();
-    m_locationTimes.clear();
-    QString firstLine = ts.readLine();
-    auto tryParseLine = [&](const QString &line)
-    {
-        QString s = line.trimmed();
-        if (s.isEmpty())
-            return;
-        QStringList parts = s.split(',');
-        if (parts.size() < 3)
-            return;
-        bool okx = false, oky = false, okz = false;
-        double x = parts[0].trimmed().toDouble(&okx);
-        double y = parts[1].trimmed().toDouble(&oky);
-        double z = parts[2].trimmed().toDouble(&okz);
-        if (okx && oky && okz)
-            m_locationRows.push_back(QVector3D(float(x), float(y), float(z)));
-    };
 
-    // 如果第一行看起来像数据则解析
-    if (!firstLine.isEmpty() && (firstLine.at(0).isDigit() || firstLine.at(0) == QChar('-') || firstLine.startsWith("0")))
-        tryParseLine(firstLine);
-
-    while (!ts.atEnd())
-    {
-        QString line = ts.readLine();
-        tryParseLine(line);
-    }
-    f.close();
-
-    if (m_locationRows.empty())
-    {
-        qDebug() << "RobotManager::loadLocationCsv: no valid location rows in" << csvPath;
-        return false;
-    }
-
-    // 解析完成（不自动应用/播放），调用者可使用 applyLocationRow/startLocationPlayback
-    // 重置已播放计数，确保轨迹在未开始播放前不被绘制
-    m_playedLocationCount = 0;
-    // ensure timestamps vector matches rows (initialized to 0 -> not-yet-played)
-    m_locationTimes.resize(m_locationRows.size());
-    // qDebug() << "RobotManager::loadLocationCsv: parsed" << m_locationRows.size() << "rows from" << csvPath;
-    return true;
-}
-
-// 从外部传入的场景坐标数组加载位置行（替代 CSV 加载），用于播放或立即应用
-void RobotManager::loadLocationRowsFromVector(const QVector<QVector3D> &rows)
-{
-    m_locationRows.clear();
-    m_locationTimes.clear();
-    for (const QVector3D &p : rows)
-    {
-        m_locationRows.push_back(p);
-        m_locationTimes.push_back(0.0);
-    }
-    // reset playback state (caller should start playback with startLocationPlayback)
-    m_currentLocationRow = 0;
-    m_playedLocationCount = 0;
-}
-// ---------------测试函数--------------------------
 
 // 将模型移动到给定的世界位置（直接修改 mesh 顶点为原始顶点 + delta）
 void RobotManager::applyLocation(const QVector3D &target)
@@ -1011,77 +893,6 @@ void RobotManager::resetRobotPositions()
     m_lastApplyMs = QDateTime::currentMSecsSinceEpoch();
 }
 
-// -----------------测试函数：应用csv位置行数据来移动模型--------------------
-// 应用已解析的第 row 行位置
-void RobotManager::applyLocationRow(int row)
-{
-    if (row < 0 || row >= m_locationRows.size())
-    {
-        qDebug() << "RobotManager::applyLocationRow: invalid row" << row;
-        return;
-    }
-    // 记录当前行并更新已播放计数，使轨迹只包含已经应用的点
-    m_currentLocationRow = row;
-    if (row + 1 > m_playedLocationCount)
-        m_playedLocationCount = row + 1;
-    applyLocation(m_locationRows[row]);
-}
-
-// 启动按间隔播放位置的计时器
-bool RobotManager::startLocationPlayback(int intervalMs, bool loop)
-{
-    if (m_locationRows.empty())
-    {
-        qDebug() << "RobotManager::startLocationPlayback: no location rows loaded";
-        return false;
-    }
-    stopLocationPlayback();
-    m_currentLocationRow = 0;
-    // reset played count so trajectory starts empty and grows as positions are applied
-    m_playedLocationCount = 0;
-    // set looping behavior according to caller
-    m_locationLooping = loop;
-
-    m_locationTimer = new QTimer(this);
-    connect(m_locationTimer, &QTimer::timeout, this, [this]()
-            {
-        // apply current row
-        applyLocationRow(m_currentLocationRow);
-        // record timestamp for this played row (seconds)记录时间戳
-        double t = QDateTime::currentDateTimeUtc().toMSecsSinceEpoch() / 1000.0;
-        if (m_currentLocationRow >= 0 && m_currentLocationRow < m_locationTimes.size())
-        {
-            m_locationTimes[m_currentLocationRow] = t;
-        }
-        else if (m_currentLocationRow >= 0 && m_currentLocationRow < m_locationRows.size())
-        {
-            // ensure m_locationTimes has same size
-            if (m_locationTimes.size() != m_locationRows.size())
-                m_locationTimes.resize(m_locationRows.size());
-            m_locationTimes[m_currentLocationRow] = t;
-        }
-        if (m_locationLooping) {
-            // cycle
-            m_currentLocationRow = (m_currentLocationRow + 1) % m_locationRows.size();
-        } else {
-            // advance until last row, then stop and emit finished signal
-            if (m_currentLocationRow + 1 < (int)m_locationRows.size()) {
-                m_currentLocationRow += 1;
-            } else {
-                // reached last row: stop timer and notify 读取到最后一行位置后停止播放
-                if (m_locationTimer) {
-                    m_locationTimer->stop();
-                    delete m_locationTimer;
-                    m_locationTimer = nullptr;
-                }
-                emit locationPlaybackFinished();    // 发送位置更新结束的信号
-            }
-        } });
-    m_locationTimer->start(intervalMs);
-    // qDebug() << "RobotManager::startLocationPlayback: 开始更新位置started rows=" << m_locationRows.size() << " intervalMs=" << intervalMs << " loop=" << m_locationLooping;
-    return true;
-}
-// -----------------测试函数--------------------
 
 // 使用从机器人位置转换来的场景坐标，启动定时器执行模型移动
 bool RobotManager::startLocationPlayback(QVector3D &target_pos, int intervalMs)
@@ -1184,32 +995,19 @@ void RobotManager::stopPlacePlayback()
 }
 
 // 停止行走动画播放：停止并删除行走播放定时器，重置播放索引
-void RobotManager::stopWalkingPlayback()
-{
-    if (m_walkTimer)
-    {
-        m_walkTimer->stop();
-        delete m_walkTimer;
-        m_walkTimer = nullptr;
-    }
-    m_walkCurrentRow = 0;
-    qDebug() << "RobotManager::stopWalkingPlayback: stopped walk animation";
-}
+// void RobotManager::stopWalkingPlayback()
+// {
+//     m_isWalking = false;
+ 
+// }
 
 void RobotManager::onServoPositionsUpdated()
 {
     if (!m_servoPositionsMonitor)
         return;
-    // 直接读取解析好的角度数组并应用到模型，避免轮询延迟
-    QVector<double> angles = m_servoPositionsMonitor->lastAngles();
-    if (angles.isEmpty())
-        return;
-    {
-        QMutexLocker locker(&m_pendingServoMutex);
-        // store as timestamped pending frame (replace any older pending)
-        m_pendingServo.tsMs = QDateTime::currentMSecsSinceEpoch();
-        m_pendingServo.angles = std::move(angles);
-    }
+    
+    // 调用融合更新逻辑
+    updateFusedServo();
 }
 
 void RobotManager::applyServoAnglesRow(const QVector<double> &row)
@@ -1221,7 +1019,7 @@ void RobotManager::applyServoAnglesRow(const QVector<double> &row)
         int jointId = i + 1;
         double val = row[i];
         // 使用与 advancePlaceFrame 相同的坐标系/符号调整规则
-        if (jointId == 2 || jointId == 3 || jointId == 4 || jointId == 6 || jointId == 11 || jointId == 12 || jointId == 13 || jointId == 16 || jointId == 22)
+        if ( jointId == 2 || jointId == 3 || jointId == 4 || jointId == 6 || jointId == 11 || jointId == 12 || jointId == 13 || jointId == 16 || jointId == 22)
         {
             ja[jointId] = -val;
         }
@@ -1242,119 +1040,54 @@ void RobotManager::applyServoAnglesRow(const QVector<double> &row)
     applyJointAngles(ja);
 }
 
-void RobotManager::onWalkingStatusUpdated()
-{
-    if (!m_servoPositionsMonitor)
-        return;
-    // 当收到行走状态更新信号时，启动行走动画融合：
-    // - 使用初始化阶段预处理得到的 m_walkFirst12Rows（每行前12列），周期性地把这些列覆盖到
-    //   来自机器人实时伺服数据的角度数组的前12项，得到融合后的完整角度向量，调用 applyServoAnglesRow
-    // - 如果 m_walkFirst12Rows 为空，则尝试在此处再次按需加载（容错）
-
-    if (m_walkFirst12Rows.isEmpty())
-    {
-        // 容错：尝试动态解析 config/walk.csv（与 initialize 中相同的解析策略，但不破坏现有 placeRows）
-        QString walkCsv = resolveConfigPath("walk.csv");
-        if (!walkCsv.isEmpty() && QFile::exists(walkCsv))
-        {
-            auto backupPlaceRows = m_placeRows;
-            QTimer *backupAnimTimer = m_animTimer;
-            bool backupPlaceLooping = m_placeLooping;
-            bool parsed = loadActionCsv(walkCsv, m_walkIntervalMs, m_walkLooping);
-            if (parsed)
-            {
-                m_walkFirst12Rows.clear();
-                for (const QVector<double> &r : m_placeRows)
-                {
-                    QVector<double> small;
-                    int take = qMin(12, r.size());
-                    for (int i = 0; i < take; ++i)
-                        small.append(r[i]);
-                    for (int i = take; i < 12; ++i)
-                        small.append(0.0);
-                    m_walkFirst12Rows.append(small);
-                }
-            }
-            stopPlacePlayback();
-            if (backupAnimTimer == nullptr && m_animTimer != nullptr)
-            {
-                delete m_animTimer;
-                m_animTimer = nullptr;
-            }
-            m_placeRows = backupPlaceRows;
-            m_placeLooping = backupPlaceLooping;
-            if (backupAnimTimer != nullptr)
-                m_animTimer = backupAnimTimer;
-        }
-    }
-
-    // 如果没有解析到有效的行走帧数据，直接返回（此时仍然可以由 applyServoAnglesRow 持续使用实时伺服数据）
-    if (m_walkFirst12Rows.isEmpty())
-    {
-        qDebug() << "RobotManager::onWalkingStatusUpdated: no walk csv first-12 rows loaded, skip fused playback.";
-        return;
-    }
-
-    // 如果已经在播放中，则重置到开头（避免多次重复创建定时器）
-    if (m_walkTimer && m_walkTimer->isActive())
-    {
-        m_walkCurrentRow = 0;
-        return;
-    }
-
-    // 创建并启动行走播放定时器（周期性把 CSV 的前12列和实时伺服角度融合后应用）
-    if (!m_walkTimer)
-    {
-        m_walkTimer = new QTimer(this);
-        connect(m_walkTimer, &QTimer::timeout, this, [this]()
-                {
-            // 读取当前的实时伺服角度数组
-            QVector<double> servo = m_servoPositionsMonitor ? m_servoPositionsMonitor->lastAngles() : QVector<double>();
-            // 目标尺寸：优先使用 servo 的长度以保留实时数据；若 servo 不足，则按 22 个关节长度扩展
-            int targetSize = qMax<int>(servo.size(), 22);
-            QVector<double> fused;
-            fused.resize(targetSize);
-            // 先用 servo 的数据填充（若存在），否则填 0
-            for (int i = 0; i < targetSize; ++i) {
-                if (i < servo.size()) fused[i] = servo[i];
-                else fused[i] = 0.0;
-            }
-
-            // 用 walk CSV 的前12列覆盖 fused 的前12项（m_walkCurrentRow 对应当前帧）
-            if (m_walkCurrentRow >= 0 && m_walkCurrentRow < m_walkFirst12Rows.size()) {
-                const QVector<double> &small = m_walkFirst12Rows[m_walkCurrentRow];
-                int take = qMin(12, small.size());
-                for (int i = 0; i < take; ++i) {
-                    fused[i] = small[i];
-                }
-            }
-
-            // 将融合结果放入 timestamped pending 缓冲，由 applyPendingServoAndGait 定时器在稳定频率下应用并做平滑
-            {
-                QMutexLocker locker(&m_pendingServoMutex);
-                m_pendingServo.tsMs = QDateTime::currentMSecsSinceEpoch();
-                m_pendingServo.angles = fused;
-            }
-
-            // advance
-            if (m_walkLooping) {
-                m_walkCurrentRow = (m_walkCurrentRow + 1) % m_walkFirst12Rows.size();
-            } else {
-                if (m_walkCurrentRow + 1 < m_walkFirst12Rows.size())
-                    m_walkCurrentRow += 1;
-                else {
-                    // 非循环：到结尾后停止播放
-                    if (m_walkTimer) {
-                        m_walkTimer->stop();
-                        delete m_walkTimer;
-                        m_walkTimer = nullptr;
-                    }
-                }
-            } });
-    }
-    m_walkCurrentRow = 0;
-    m_walkTimer->start(m_walkIntervalMs);
+void RobotManager::onLegJointAnglesUpdated(){
+    if (!m_servoPositionsMonitor) return;
+    // 获取最新的腿部关节数据并缓存
+    m_cachedLegAngles = m_servoPositionsMonitor->lastLegAngles();
+    // 总是触发融合更新，不再依赖行走状态
+    updateFusedServo();
 }
+
+void RobotManager::updateFusedServo() {
+    if (!m_servoPositionsMonitor) return;
+
+    // 获取最新的全身伺服数据
+    QVector<double> servo = m_servoPositionsMonitor->lastAngles();
+    
+    // 如果有腿部数据，进行融合（直接覆盖前12维）
+    if (!m_cachedLegAngles.isEmpty()) {
+        // 目标尺寸：优先使用 servo 的长度以保留实时数据；若 servo 不足，则按 22 个关节长度扩展
+        int targetSize = qMax<int>(servo.size(), 22);
+        QVector<double> fused;
+        fused.resize(targetSize);
+        
+        // 先用 servo 的数据填充（若存在），否则填 0
+        for (int i = 0; i < targetSize; ++i) {
+            if (i < servo.size()) fused[i] = servo[i];
+            else fused[i] = 0.0;
+        }
+
+        // 用 legJointAngles 的数据覆盖 fused 的前 N 项 (通常腿部关节在前)
+        // 假设 legJointAngles 包含 12 个关节数据
+        int take = qMin(12, m_cachedLegAngles.size());
+        for (int i = 0; i < take; ++i) {
+            fused[i] = m_cachedLegAngles[i];
+        }
+        
+        // 使用融合后的数据
+        servo = fused;
+    }
+
+    if (servo.isEmpty()) return;
+
+    {
+        QMutexLocker locker(&m_pendingServoMutex);
+        // store as timestamped pending frame (replace any older pending)
+        m_pendingServo.tsMs = QDateTime::currentMSecsSinceEpoch();
+        m_pendingServo.angles = std::move(servo);
+    }
+}
+
 
 // 设置 gait command 数据源：保存指针并订阅其更新信号（使用队列连接以线程安全）
 void RobotManager::setGaitCommandMonitor(GaitCommandMonitor *monitor)

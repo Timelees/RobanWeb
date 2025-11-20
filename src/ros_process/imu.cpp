@@ -27,7 +27,7 @@ void ImuMonitor::start(){
     subscribeMsg["type"] = "sensor_msgs/Imu";
     QJsonDocument doc(subscribeMsg);
     QString payload = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
-    // qDebug() << "ImuMonitor subscribing to IMU topic:" << payload;
+    qDebug() << "ImuMonitor subscribing to IMU topic:" << payload;
     QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload));
 
     // send subscribe request for IMU pose
@@ -47,7 +47,7 @@ void ImuMonitor::onMessageReceived(const QString &message){
     if(!doc.isObject()) return;
     QJsonObject obj = doc.object();
     QString topic = obj["topic"].toString();
-
+    // qDebug() << "ImuMonitor received message " << doc.toJson(QJsonDocument::Compact);
     // 处理imu加速度和线速度数据
     if (obj["op"].toString() == "publish" && topic == imu_topic_name) {
         QJsonObject msgObj = obj["msg"].toObject();

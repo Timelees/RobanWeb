@@ -575,32 +575,6 @@ border-radius:15px</string>
                </widget>
               </item>
               <item>
-               <widget class="QPushButton" name="importTaskButton">
-                <property name="minimumSize">
-                 <size>
-                  <width>80</width>
-                  <height>25</height>
-                 </size>
-                </property>
-                <property name="font">
-                 <font>
-                  <pointsize>10</pointsize>
-                  <bold>true</bold>
-                 </font>
-                </property>
-                <property name="styleSheet">
-                 <string notr="true">QPushButton {
-    background-color: rgb(47, 86, 135);
-    color: white;
-    border-radius: 10px;
-}</string>
-                </property>
-                <property name="text">
-                 <string>导入代码</string>
-                </property>
-               </widget>
-              </item>
-              <item>
                <widget class="QPushButton" name="runTaskButton">
                 <property name="minimumSize">
                  <size>
@@ -623,6 +597,32 @@ border-radius:15px</string>
                 </property>
                 <property name="text">
                  <string>执行任务</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="stopTaskButton">
+                <property name="minimumSize">
+                 <size>
+                  <width>80</width>
+                  <height>25</height>
+                 </size>
+                </property>
+                <property name="font">
+                 <font>
+                  <pointsize>10</pointsize>
+                  <bold>true</bold>
+                 </font>
+                </property>
+                <property name="styleSheet">
+                 <string notr="true">QPushButton {
+    background-color: rgb(47, 86, 135);
+    color: white;
+    border-radius: 10px;
+}</string>
+                </property>
+                <property name="text">
+                 <string>停止任务</string>
                 </property>
                </widget>
               </item>
