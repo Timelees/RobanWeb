@@ -10,6 +10,24 @@ RobotManager::RobotManager(const QString &modelPath, SceneManager *sceneManager,
     initialize();
 }
 
+void RobotManager::setServoPositionsMonitor(ServoPositionsMonitor *monitor)
+{
+    if (m_servoPositionsMonitor == monitor)
+        return;
+    if (m_servoPositionsMonitor) {
+        disconnect(m_servoPositionsMonitor, nullptr, this, nullptr);
+    }
+    m_servoPositionsMonitor = monitor;
+    if (m_servoPositionsMonitor)
+    {
+        connect(m_servoPositionsMonitor, &ServoPositionsMonitor::servoPositionsUpdated,
+                this, &RobotManager::onServoPositionsUpdated, Qt::QueuedConnection);
+
+        connect(m_servoPositionsMonitor, &ServoPositionsMonitor::legJointAnglesUpdated,
+                this, &RobotManager::onLegJointAnglesUpdated, Qt::QueuedConnection);
+    }
+}
+
 void RobotManager::initialize()
 {
     // 初始化整体旋转矩阵与欧拉角（默认无旋转）

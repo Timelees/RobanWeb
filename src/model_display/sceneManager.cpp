@@ -32,6 +32,22 @@ void SceneManager::init(){
  
 }
 
+void SceneManager::setPoseMonitor(PoseMonitor *poseMonitor)
+{
+    if (m_poseMonitor == poseMonitor)
+        return;
+    if (m_poseMonitor) {
+        // best-effort: disconnect any existing connections (use QObject::disconnect)
+        disconnect(m_poseMonitor, nullptr, this, nullptr);
+    }
+    m_poseMonitor = poseMonitor;
+    if (m_poseMonitor) {
+        connect(m_poseMonitor, &PoseMonitor::poseUpdated, this, [this](const QVector3D &p) {
+            this->robotPose = p;
+        });
+    }
+}
+
 // 场景映射测试 (成员函数)，从csv解析数据
 QVector<QVector3D> SceneManager::test_sceneCornerMapping(){
     QString poseCsvPath = resolveConfigPath("test_robot_cornerPose.csv");

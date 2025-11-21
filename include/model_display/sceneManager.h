@@ -116,6 +116,10 @@ public:
     // or robot pose is not valid.
     bool mapCurrentRobotPoseToScene(QVector3D &outScene) const;
 
+    // Allow setting or changing the PoseMonitor after construction. When set,
+    // SceneManager will subscribe to pose updates from the provided monitor.
+    void setPoseMonitor(PoseMonitor *poseMonitor);
+
     // // Configuration: adjust display smoothing and throttle at runtime
     // Q_INVOKABLE void setDisplayIntervalMs(int ms) { m_displayIntervalMs = ms; if (m_displayTimer) m_displayTimer->setInterval(ms); }
     // int displayIntervalMs() const { return m_displayIntervalMs; }

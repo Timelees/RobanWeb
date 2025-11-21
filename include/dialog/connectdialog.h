@@ -25,6 +25,10 @@ public:
 
 signals:
     void connectRequested(const QString &url);    // 建立连接请求
+    void connectRequested2(const QString &url);   // 建立机器人2连接请求
+    // 取消连接请求（分别用于机器人1和机器人2的取消按钮）
+    void cancelRequested();
+    void cancelRequested2();
 
 private slots:
     void onAddButtonClicked();

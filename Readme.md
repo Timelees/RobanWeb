@@ -178,7 +178,6 @@ rosrun bodyhub cmd_executor.py
 
 **模型动画与显示**
 
-**TODO:优化移动动画**
 
 从机器人端接收/MediumSize/BodyHub/ServoPositions话题伺服电机数据，驱动fbx模型的骨骼显示动画效果
 
@@ -199,3 +198,10 @@ rosrun bodyhub cmd_executor.py
 添加任务按钮，输入任务名称，脚本名称，脚本路径和代码路径，创建对应的任务，并保存到配置文件。同时会在机器人端的exec_scripts文件夹中创建对应的sh脚本。
 
 (**代码路径示例：/home/lemon/robot_ros_application/catkin_ws/src/ros_actions_node/scripts/Say-yeah舞蹈案例.py**)
+
+11.多机通信
+
+![alt text](image.png)
+
+通过MultiRobotManager管理多台机器人的资源，通过连接设置对话框连接robot1和robot2，当robot2连接成功时，主界面右侧会展开一列信息显示robot2的IMU信息，图像信息，以及任务列表。
+

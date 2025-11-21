@@ -143,6 +143,9 @@ public slots:
     // 设置 gait command 数据源，RobotManager 会订阅其 gaitCommandUpdated 信号
     void setGaitCommandMonitor(GaitCommandMonitor *monitor);
 
+    // 设置/更改 ServoPositionsMonitor 的数据源，允许在运行时注入 monitor
+    void setServoPositionsMonitor(ServoPositionsMonitor *monitor);
+
 
 private:
     bool loadModel(const std::string &file);

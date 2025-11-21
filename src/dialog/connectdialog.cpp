@@ -31,8 +31,6 @@ ConnectDialog::ConnectDialog(QWidget *parent) :
     connect(ui->cancelButton, &QPushButton::clicked, this, &ConnectDialog::onCancelButtonClicked);
     connect(ui->addPB, &QPushButton::clicked, this, &ConnectDialog::onAddButtonClicked);
     connect(ui->delPB, &QPushButton::clicked, this, &ConnectDialog::onDeleteButtonClicked);
-    // connect(ui->robot1ToggleButton, &QPushButton::clicked, this, &ConnectDialog::onRobot1ToggleButtonClicked);
-    // connect(ui->robot2ToggleButton, &QPushButton::clicked, this, &ConnectDialog::onRobot2ToggleButtonClicked);
     connect(ui->robot2AddPB, &QPushButton::clicked, this, &ConnectDialog::onRobot2AddButtonClicked);
     connect(ui->robot2DelPB, &QPushButton::clicked, this, &ConnectDialog::onRobot2DeleteButtonClicked);
     connect(ui->robot2ConnectButton, &QPushButton::clicked, this, &ConnectDialog::onRobot2ConnectButtonClicked);
@@ -376,6 +374,8 @@ void ConnectDialog::onConnectButtonClicked()
 // 断开连接按钮cancelButton  槽函数
 void ConnectDialog::onCancelButtonClicked()
 {
+    // emit specific cancel signal for robot1 then reject the dialog
+    emit cancelRequested();
     reject();
 }
 
@@ -411,7 +411,7 @@ void ConnectDialog::onRobot2AddButtonClicked()
     bool ok;
     int portNum = port.toInt(&ok);
     if (host.isEmpty() || !ok || portNum < 0 || portNum > 65535) {
-        qDebug() << "机器人2无效的输入: 主机或端口无效";
+        qDebug() << "【Robot 2】无效的输入: 主机或端口无效";
         return;
     }
 
@@ -433,7 +433,7 @@ void ConnectDialog::onRobot2AddButtonClicked()
 
     saveRobot2ConnectionToDatabase(protocol, host, port);
 
-    qDebug() << "机器人2已添加:" << protocol << host << ":" << port;
+    qDebug() << "【Robot 2】已添加:" << protocol << host << ":" << port;
 }
 
 void ConnectDialog::onRobot2DeleteButtonClicked()
@@ -441,7 +441,7 @@ void ConnectDialog::onRobot2DeleteButtonClicked()
     QList<QTableWidgetItem*> selectedItems = ui->robot2TableWidget->selectedItems();
 
     if (selectedItems.isEmpty()) {
-        qDebug() << "机器人2未选择要删除的行";
+        qDebug() << "【Robot 2】未选择要删除的行";
         return;
     }
 
@@ -463,7 +463,7 @@ void ConnectDialog::onRobot2DeleteButtonClicked()
         deleteRobot2ConnectionFromDatabase(host, port);
 
         ui->robot2TableWidget->removeRow(row);
-        qDebug() << "机器人2已删除选中的行: " << row << " (" << host << ":" << port << ")";
+        qDebug() << "【Robot 2】已删除选中的行: " << row << " (" << host << ":" << port << ")";
     }
 }
 
@@ -476,16 +476,19 @@ void ConnectDialog::onRobot2ConnectButtonClicked()
             QString port = ui->robot2TableWidget->item(row, 2)->text();
             QString protocol = "ws://";
             QString url = protocol + host + ":" + port;
-            qDebug() << "请求连接机器人2:" << url;
-            emit connectRequested(url);
+            qDebug() << "请求连接【Robot 2】:" << url;
+            // 发射专门的机器人2连接请求信号，保持原有 connectRequested 不变
+            emit connectRequested2(url);
             accept();
             return;
         }
     }
-    qDebug() << "机器人2未选择任何连接";
+    qDebug() << "【Robot 2】未选择任何连接";
 }
 
 void ConnectDialog::onRobot2CancelButtonClicked()
 {
+    // emit specific cancel signal for robot2 then reject the dialog
+    emit cancelRequested2();
     reject();
 }

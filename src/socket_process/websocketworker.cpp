@@ -36,7 +36,7 @@ void WebSocketWorker::init()
         connect(m_webSocket, &QWebSocket::connected, this, &WebSocketWorker::onConnected);
         connect(m_webSocket, &QWebSocket::disconnected, this, &WebSocketWorker::onDisconnected);
         connect(m_webSocket, &QWebSocket::textMessageReceived, this, &WebSocketWorker::onTextMessageReceived);
-        connect(m_webSocket, QOverload<QAbstractSocket::SocketError>::of(&QWebSocket::error), this, &WebSocketWorker::onError);
+        connect(m_webSocket, &QWebSocket::errorOccurred, this, &WebSocketWorker::onError);
     }
 
     if (!m_reconnectTimer) {

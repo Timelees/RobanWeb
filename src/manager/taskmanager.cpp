@@ -1,4 +1,4 @@
-#include "task_manager/taskmanager.h"
+#include "manager/taskmanager.h"
 
 TaskManager::TaskManager(QListWidget* taskListWidget, 
                          QPushButton* addTaskButton,

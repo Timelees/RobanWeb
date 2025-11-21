@@ -21,7 +21,7 @@
 #include "ros_process/imu.h"
 #include "ros_process/cameraImage.h"
 #include "model_display/modelDisplay.h"
-#include "task_manager/taskmanager.h"
+#include "manager/taskmanager.h"
 #include "model_display/robotManager.h"
 #include "model_display/sceneManager.h"
 #include "ros_process/servoPositions.h"
@@ -31,6 +31,7 @@
 #include "dialog/robotControlDialog.h"
 #include "util/load_param.hpp"
 #include "ros_process/gaitCommand.h"
+#include "manager/multiRobotManager.h"
 
 
 class robanweb : public QMainWindow {
@@ -53,12 +54,19 @@ private slots:
     void onTaskStopped(const QString& scriptPath);  // 任务停止 槽函数
     void onAddTask(Task* task);           // 添加任务 槽函数
 
-    // webSocket 相关槽函数
-    void onWebSocketConnected();            // 连接webSocket
-    void onWebSocketDisconnected();
-    void onWebSocketError(const QString &error);
-    void establishWebSocketConnection(const QString &url);
-    void tryReconnect();
+    // // webSocket 相关槽函数
+    // void onWebSocketConnected();            // 连接webSocket
+    // void onWebSocketDisconnected();
+    // void onWebSocketError(const QString &error);
+    // 新：泛用的机器人事件槽，接收来自 MultiRobotManager 的 robotId
+    void onRobotConnected(const QString &robotId);
+    void onRobotDisconnected(const QString &robotId);
+    void onRobotError(const QString &robotId, const QString &error);
+    // void establishWebSocketConnection(const QString &url);
+    // void onWebSocket2Connected();
+    // void onWebSocket2Disconnected();
+    // void onWebSocket2Error(const QString &error);
+    // void tryReconnect();
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -68,45 +76,63 @@ private:
     void updateStatusLabel(const QString &status);  // 更新连接显示标签
     void bindSlots();                               // 绑定槽函数
     void init();
-    void startSubscriptions();                     // 启动话题订阅
+    // helpers for unified connect/reconnect handling
+    void startConnectFor(const QString &robotId, const QString &url);
+    void doReconnectFor(const QString &robotId);
+
 
 private:
     Ui_robanweb* ui;
     WebSocketWorker *webSocketWorker;
     QThread *webSocketThread;       // webSocket 线程
-    QThread *imageThread;           // 图像处理线程
-    QThread *servoThread;          // 伺服处理线程
-    QThread *poseThread;          // 位置处理线程
-    QThread *gaitCommandThread;   // 步态命令处理线程
+    WebSocketWorker *webSocketWorker2; // 第二台机器人 worker
+    QThread *webSocketThread2;          // 第二台机器人线程
+    // per-robot websocket worker threads are created as needed
+    QThread *imageThread;           // legacy placeholder (unused when MultiRobotManager used)
     
     QThread *sceneManagerThread;         // 场景处理线程
     QThread *robotManagerThread;   // 机器人管理线程
 
 
     QTimer *reconnectTimer;
+    QTimer *reconnectTimer2;
     QString wsHost;
     QString wsPort;
+    QString wsHost2;
+    QString wsPort2;
 
     
     bool isReconnecting;
     int reconnectAttempts;
+    bool isReconnecting2;
+    int reconnectAttempts2;
     static const int MAX_RECONNECT_ATTEMPTS = 10;
-    QLabel *connect_label;                      // 连接状态标签
+    QLabel *connect_label1;                      // robot1连接状态标签
+    QLabel *connect_label2;                      // robot2连接状态标签
     QProgressBar *batteryProgressBar;           // 电量进度条
     BatteryMonitor *batteryMonitor = nullptr;   // 电量获取对象
-    ImuMonitor *imuMonitor = nullptr;           // IMU获取对象
-    ServoPositionsMonitor *servoPositionsMonitor = nullptr; // 伺服位置获取对象
-    PoseMonitor *poseMonitor = nullptr;         // 位置获取对象
-    GaitCommandMonitor *gaitCommandMonitor = nullptr;         // 行走步态命令对象
-
-    CameraImageMonitor *cameraImageMonitor = nullptr;
     QTimer *imagePullTimer = nullptr;           // 定时器，用于从相机监视器中获取最新帧
 
     ModelDisplay *modelDisplay = nullptr;        // 3D模型显示窗口
     RobotManager *robotManager = nullptr;        // 机器人管理器
     SceneManager *sceneManager = nullptr;        // 场景管理器
 
+    // monitors (will be provided by MultiRobotManager instances)
+    ImuMonitor *imuMonitor = nullptr;
+    CameraImageMonitor *cameraImageMonitor = nullptr;
+    ServoPositionsMonitor *servoPositionsMonitor = nullptr;
+    PoseMonitor *poseMonitor = nullptr;
+    GaitCommandMonitor *gaitCommandMonitor = nullptr;
+
+    // legacy per-monitor threads (kept as placeholders; manager may own these)
+    QThread *servoThread = nullptr;
+    QThread *poseThread = nullptr;
+    QThread *gaitCommandThread = nullptr;
+
     TaskManager *taskManager = nullptr;        // 任务管理器
+    // per-robot managers (each manages worker + monitors for that robot)
+    MultiRobotManager *multiRobot_mgr1 = nullptr;
+    MultiRobotManager *multiRobot_mgr2 = nullptr;
 
     slamDialog *m_slamDialog = nullptr;        // SLAM对话框
 };
