@@ -201,7 +201,7 @@ rosrun bodyhub cmd_executor.py
 
 11.多机通信
 
-![alt text](image.png)
+![alt text](image/mutilRobot.png)
 
 通过MultiRobotManager管理多台机器人的资源，通过连接设置对话框连接robot1和robot2，当robot2连接成功时，主界面右侧会展开一列信息显示robot2的IMU信息，图像信息，以及任务列表。
 
