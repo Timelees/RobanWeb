@@ -2,9 +2,6 @@
 #include <QFileInfo>
 #include <QDateTime>
 
-
-
-
 robanweb::robanweb(QWidget* parent)
     : QMainWindow(parent)
     , ui(new Ui_robanweb)
@@ -28,6 +25,13 @@ robanweb::robanweb(QWidget* parent)
 
 robanweb::~robanweb()
 {
+
+    if (m_slamDialog) {
+
+        delete m_slamDialog;
+        m_slamDialog = nullptr;
+    }
+
     // 在析构中，确保线程已停止并清理
     if (webSocketThread) {
         QMetaObject::invokeMethod(webSocketWorker, "closeConnection", Qt::QueuedConnection);
@@ -76,10 +80,7 @@ robanweb::~robanweb()
         taskManager = nullptr;
     }
     
-    if (m_slamDialog) {
-        delete m_slamDialog;
-        m_slamDialog = nullptr;
-    }
+
 
     delete reconnectTimer;
     // delete imagePullTimer;
@@ -614,6 +615,17 @@ void robanweb::closeEvent(QCloseEvent *event)
 {
     isReconnecting = false;
     reconnectTimer->stop();
+    // Ensure SLAM is stopped on the robot before tearing down the websocket worker
+    if (m_slamDialog) {
+        // If slamDialog lives in the GUI thread (same thread), call directly to avoid
+        // BlockingQueuedConnection deadlock. If it's in a different thread, use
+        // BlockingQueuedConnection so the call completes before we tear down the worker.
+        if (m_slamDialog->thread() == QThread::currentThread()) {
+            m_slamDialog->stopSLAM();
+        } else {
+            QMetaObject::invokeMethod(m_slamDialog, "stopSLAM", Qt::BlockingQueuedConnection);
+        }
+    }
     if (webSocketWorker) {
         QMetaObject::invokeMethod(webSocketWorker, "closeConnection", Qt::QueuedConnection);
         webSocketThread->quit();

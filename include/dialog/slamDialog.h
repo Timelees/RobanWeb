@@ -12,6 +12,7 @@
 #include <QDir>
 #include <QThread>
 #include <QTimer>
+#include <QPointer>
 
 
 #include "ros_process/cameraImage.h"
@@ -32,6 +33,10 @@ class slamDialog : public QDialog
 public:
     explicit slamDialog(WebSocketWorker *webSocketWorker, QWidget *parent = nullptr);
     ~slamDialog();
+
+public slots:
+    // Request SLAM stop from outside (safe to call from other objects)
+    void stopSLAM();
 
 protected:
     void closeEvent(QCloseEvent *event) override;
@@ -59,9 +64,10 @@ private:
     void updateLocalizationIcon(bool checked);
 
 
+
 private:
     Ui::slamDialog *ui;
-    WebSocketWorker *m_worker;
+    QPointer<WebSocketWorker> m_worker;
     QThread *featuredImageThread;                       // 特征点图像处理线程
     CameraImageMonitor *featuredImageMonitor;           // 特征点图像监视器
     QTimer *featuredImagePullTimer;                     // 定时器，用于从特征点图像监视器中获取最新帧

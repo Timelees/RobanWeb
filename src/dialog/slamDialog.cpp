@@ -22,9 +22,6 @@ slamDialog::slamDialog(WebSocketWorker *webSocketWorker, QWidget *parent)
 
 slamDialog::~slamDialog()
 {
-
-    qDebug() << "slamDialog析构 - 资源释放";
-    
     // Stop pull timer
     if (featuredImagePullTimer) {
         featuredImagePullTimer->stop();
@@ -328,7 +325,11 @@ void slamDialog::onRunSLAMButtonClicked()
 
         QJsonDocument doc(pub);
         QString jsonString = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
-        QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, jsonString));
+        if (m_worker) {
+            QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, jsonString));
+        } else {
+            qDebug() << "sendText: m_worker is null, cannot send message";
+        }
         qDebug() << "Sent exec command to robot:" << cmd;
     } else {
         qDebug() << "Empty command, ignoring";
@@ -389,7 +390,11 @@ void slamDialog::onRunSLAMButtonClicked()
         adv["type"] = "std_msgs/Bool";
         QJsonDocument docAdv(adv);
         QString advStr = QString::fromUtf8(docAdv.toJson(QJsonDocument::Compact));
-        QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, advStr));
+        if (m_worker) {
+            QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, advStr));
+        } else {
+            qDebug() << "sendText: m_worker is null, cannot send advertise";
+        }
         localizationAdvertised = true;
         qDebug() << "Advertised /SLAM/localizationMode";
     }
@@ -398,7 +403,7 @@ void slamDialog::onRunSLAMButtonClicked()
 
 
 
-// 关闭SLAM建图
+// 关闭SLAM建图按钮槽函数
 void slamDialog::onCloseSLAMButtonClicked()
 {
     // qDebug() << "Close script dialog requested";
@@ -421,12 +426,16 @@ void slamDialog::onCloseSLAMButtonClicked()
     pub["topic"] = "/robot/exec_sh";
     pub["type"] = "std_msgs/String";
     QJsonObject msg;
-    msg["data"] = innerStr; // NOTE: must be a string for std_msgs/String
+    msg["data"] = innerStr; 
     pub["msg"] = msg;
 
     QJsonDocument doc(pub);
     QString jsonString = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
-    QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, jsonString));
+    if (m_worker) {
+        QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, jsonString));
+    } else {
+        qDebug() << "sendText: m_worker is null, cannot send stop command";
+    }
     qDebug() << "Sent stop slam command to robot:" << innerStr;
 
     // 停止特征点图像订阅
@@ -474,9 +483,13 @@ void slamDialog::onCloseSLAMButtonClicked()
         unadv["topic"] = "/SLAM/localizationMode";
         QJsonDocument docUn(unadv);
         QString unStr = QString::fromUtf8(docUn.toJson(QJsonDocument::Compact));
-        QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, unStr));
+        if (m_worker) {
+            QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, unStr));
+        } else {
+            qDebug() << "sendText: m_worker is null, cannot send unadvertise";
+        }
         localizationAdvertised = false;
-        qDebug() << "Unadvertised /SLAM/localizationMode";
+        // qDebug() << "Unadvertised /SLAM/localizationMode";
     }
 
 }
@@ -506,7 +519,11 @@ void slamDialog::onRunControlButtonClicked()
 
         QJsonDocument doc(pub);
         QString jsonString = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
-        QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, jsonString));
+        if (m_worker) {
+            QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, jsonString));
+        } else {
+            qDebug() << "sendText: m_worker is null, cannot send control command";
+        }
         qDebug() << "Sent exec command to robot:" << cmd;
     }else{
         qDebug() << "Empty command, ignoring";
@@ -539,7 +556,11 @@ void slamDialog::onCancelControlButtonClicked()
     QJsonDocument jsonDoc(pub);
     QString jsonString = QString::fromUtf8(jsonDoc.toJson(QJsonDocument::Compact));
 
-    QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, jsonString));
+    if (m_worker) {
+        QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, jsonString));
+    } else {
+        qDebug() << "sendText: m_worker is null, cannot send cancel control";
+    }
     qDebug() << "Sent stop control command to robot:" << innerStr;
 }
 
@@ -572,7 +593,6 @@ void slamDialog::onControlButtonClicked()
         key_cmd = QStringLiteral("e");
     }else{
         qDebug() << "Unknown control source";
-        return;
     }
     // 构建要发送的单字符控制命令（字符串）并通过 rosbridge 发布到 /robot/slam_cmd
     QString cmdStr = key_cmd; // single-letter command
@@ -586,11 +606,102 @@ void slamDialog::onControlButtonClicked()
 
     QJsonDocument doc(pub);
     QString jsonString = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
-    QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, jsonString));
+    if (m_worker) {
+        QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, jsonString));
+    } else {
+        qDebug() << "sendText: m_worker is null, cannot send remote SLAM control command";
+    }
     qDebug() << "Sent remote SLAM control command:" << cmdStr;
 
 }
 
+// 退出程序时关闭机器人端已经启动的slam
+void slamDialog::stopSLAM()
+{
+    // Build the inner payload as JSON string: {"action":"stop","which":"slam"}
+    QJsonObject inner;
+    inner["action"] = "stop";
+    inner["which"] = "slam";
+    QJsonDocument innerDoc(inner);
+    QString innerStr = QString::fromUtf8(innerDoc.toJson(QJsonDocument::Compact));
+
+    // rosbridge publish message where msg.data is a string containing the JSON
+    if (m_worker) {
+        QJsonObject pub;
+        pub["op"] = "publish";
+        pub["topic"] = "/robot/exec_sh";
+        pub["type"] = "std_msgs/String";
+        QJsonObject msg;
+        msg["data"] = innerStr; // NOTE: must be a string for std_msgs/String
+        pub["msg"] = msg;
+
+        QJsonDocument doc(pub);
+        QString jsonString = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+        QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, jsonString));
+        qDebug() << "Sent stop slam command to robot:" << innerStr;
+    } else {
+        qDebug() << "stopSLAM: m_worker is null, cannot send stop command to robot";
+    }
+
+    // 停止特征点图像订阅
+    if (featuredImagePullTimer) {
+        featuredImagePullTimer->stop();
+    }
+    if (featuredImageMonitor) {
+        QMetaObject::invokeMethod(featuredImageMonitor, "stop", Qt::QueuedConnection);
+    }
+
+    // 图像显示关闭
+    if (ui && ui->featurePoint_Display) {
+        ui->featurePoint_Display->clear();
+    }
+
+    // Disconnect worker -> slamMapMonitor to stop receiving further messages immediately
+    if (m_worker && slamMapMonitor) {
+        QObject::disconnect(m_worker, nullptr, slamMapMonitor, nullptr);
+    }
+
+    // Ask slamMapMonitor to stop (unsubscribe)
+    if (slamMapMonitor) {
+        QMetaObject::invokeMethod(slamMapMonitor, "stop", Qt::QueuedConnection);
+    }
+
+    // 清空点云和关键帧可视化
+    if (pcd) {
+        QMetaObject::invokeMethod(pcd, "clearPointCloud", Qt::QueuedConnection);
+        QMetaObject::invokeMethod(pcd, "clearKeyFrames", Qt::QueuedConnection);
+        QMetaObject::invokeMethod(pcd, "clearCameraPoses", Qt::QueuedConnection);
+        QMetaObject::invokeMethod(pcd, "clearCameraMatrix", Qt::QueuedConnection);
+    }
+
+    // 隐藏定位模式按钮
+    if (ui && ui->groupBox_2) {
+        ui->groupBox_2->setVisible(false);
+        if (ui->localization_checkBox) {
+            ui->localization_checkBox->setChecked(false);   // 定位模式关闭
+        }
+        updateLocalizationIcon(false);
+    }
+
+    // Unadvertise localization topic if we advertised it earlier
+    if (localizationAdvertised && m_worker) {
+        QJsonObject unadv;
+        unadv["op"] = "unadvertise";
+        unadv["topic"] = "/SLAM/localizationMode";
+        QJsonDocument docUn(unadv);
+        QString unStr = QString::fromUtf8(docUn.toJson(QJsonDocument::Compact));
+        if (m_worker) {
+            QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, unStr));
+        } else {
+            qDebug() << "sendText: m_worker is null, cannot send unadvertise";
+        }
+        localizationAdvertised = false;
+        qDebug() << "Unadvertised /SLAM/localizationMode";
+    }
+    return;
+}
+       
+   
 // 当 localization_checkBox 状态变化时，通过 rosbridge 发布 /SLAM/localizationMode (std_msgs/Bool)
 void slamDialog::onLocalizationModeToggled(bool checked)
 {
@@ -612,8 +723,12 @@ void slamDialog::onLocalizationModeToggled(bool checked)
 
     QJsonDocument doc(pub);
     QString jsonString = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
-    QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, jsonString));
-    qDebug() << "Published /SLAM/localizationMode:" << checked;
+    if (m_worker) {
+        QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, jsonString));
+    } else {
+        qDebug() << "sendText: m_worker is null, cannot publish localizationMode";
+    }
+    // qDebug() << "Published /SLAM/localizationMode:" << checked;
 }
 
 void slamDialog::closeEvent(QCloseEvent *event)
