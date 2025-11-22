@@ -110,6 +110,8 @@ private:
 
     ModelDisplay *modelDisplay = nullptr;        // 3D模型显示窗口
     RobotManager *robotManager = nullptr;        // 机器人管理器
+    RobotManager *robotManager2 = nullptr;       // 机器人2管理器
+
     SceneManager *sceneManager = nullptr;        // 场景管理器
 
     // monitors (will be provided by MultiRobotManager instances)

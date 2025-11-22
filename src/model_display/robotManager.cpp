@@ -1,7 +1,11 @@
 #include "model_display/robotManager.h"
 #include "util/load_csv.hpp"
 #include <QDateTime>
+#include <QCoreApplication>
+#include <QDir>
+#include <QStandardPaths>
 #include <cmath>
+#include <QMutexLocker>
 #include "model_display/sceneManager.h"
 #include "ros_process/gaitCommand.h"
 RobotManager::RobotManager(const QString &modelPath, SceneManager *sceneManager, ServoPositionsMonitor *servoPositionsMonitor, QObject *parent)
@@ -20,11 +24,17 @@ void RobotManager::setServoPositionsMonitor(ServoPositionsMonitor *monitor)
     m_servoPositionsMonitor = monitor;
     if (m_servoPositionsMonitor)
     {
-        connect(m_servoPositionsMonitor, &ServoPositionsMonitor::servoPositionsUpdated,
+        bool connected1 = connect(m_servoPositionsMonitor, &ServoPositionsMonitor::servoPositionsUpdated,
                 this, &RobotManager::onServoPositionsUpdated, Qt::QueuedConnection);
-
-        connect(m_servoPositionsMonitor, &ServoPositionsMonitor::legJointAnglesUpdated,
+        bool connected2 = connect(m_servoPositionsMonitor, &ServoPositionsMonitor::legJointAnglesUpdated,
                 this, &RobotManager::onLegJointAnglesUpdated, Qt::QueuedConnection);
+        // qDebug() << "RobotManager: setServoPositionsMonitor - monitor=" << monitor 
+        //          << " servoPositionsUpdated connected=" << connected1
+        //          << " legJointAnglesUpdated connected=" << connected2;
+    }
+    else
+    {
+        qDebug() << "RobotManager: setServoPositionsMonitor - monitor is nullptr!";
     }
 }
 
@@ -46,9 +56,19 @@ void RobotManager::initialize()
     // 将当前模型朝向的 Y 分量作为基础偏置记录下来，后续来自 Scene 的 yaw 将在此基础上叠加
     // m_modelYawOffsetDeg = m_modelRotationDeg.y();
 
-    // 设置关节映射
-    jointConfigPath = resolveConfigPath("boneToJoint.csv");
-    loadBoneJointMapping(jointConfigPath);
+    // 设置关节映射：使用成员函数 resolveConfigAsset() 查找配置文件路径（在类中单独封装以便复用和测试）
+    jointConfigPath = resolveConfigAsset("boneToJoint.csv");
+    if (!jointConfigPath.isEmpty() && QFile::exists(jointConfigPath)) {
+        bool loaded = loadBoneJointMapping(jointConfigPath);
+        if (loaded) {
+            qDebug() << "RobotManager::initialize: successfully loaded bone-joint mapping from" << jointConfigPath
+                     << "entries=" << m_boneToJoint.size() << "bones=" << m_bones.size();
+        } else {
+            qWarning() << "RobotManager::initialize: failed to load bone-joint mapping from" << jointConfigPath;
+        }
+    } else {
+        qWarning() << "RobotManager::initialize: boneToJoint.csv not found or unreadable! Joint animation will not work.";
+    }
 
 
     // 如果有 ServoPositionsMonitor，则连接更新信号（queued connection），使用信号驱动直接应用角度，避免轮询
@@ -74,6 +94,7 @@ void RobotManager::initialize()
     m_servoApplyTimer->setInterval(m_servoApplyIntervalMs);
     connect(m_servoApplyTimer, &QTimer::timeout, this, &RobotManager::applyPendingServoAndGait, Qt::QueuedConnection);
     m_servoApplyTimer->start();
+    qDebug() << "RobotManager::initialize: servoApplyTimer started, interval=" << m_servoApplyIntervalMs << "ms";
 
 
 };
@@ -100,16 +121,106 @@ void RobotManager::setModelRotation(const QVector3D &eulerDeg)
     applyJointAngles(m_currentJointAngles);
 }
 
+// 封装的路径解析函数实现：按更广泛的策略搜索配置文件并返回第一个存在的路径：
+// 1) 环境变量覆盖（ROBANWEB_CONFIG_DIR）
+// 2) 直接提供的路径
+// 3) 应用目录 / 当前目录 及其向上回溯中可能的 config/ 子目录
+// 4) QStandardPaths 的 AppConfigLocation 作为补充
+// 若没有找到，返回第一个候选路径以便运行时调试输出（保持与历史行为兼容）
+QString RobotManager::resolveConfigAsset(const QString &filename) const
+{
+    if (filename.isEmpty()) return QString();
+
+    // 1) environment override
+    QByteArray env = qgetenv("ROBANWEB_CONFIG_DIR");
+    if (!env.isEmpty()) {
+        QString envDir = QString::fromLocal8Bit(env);
+        QString p = QDir::cleanPath(envDir + QDir::separator() + filename);
+        if (QFile::exists(p)) {
+            qDebug() << "RobotManager::resolveConfigAsset: using ROBANWEB_CONFIG_DIR ->" << p;
+            return p;
+        }
+    }
+
+    // 2) if caller passed an existing path, accept it
+    if (QFile::exists(filename)) {
+        return QDir::cleanPath(filename);
+    }
+
+    QString appDir = QCoreApplication::applicationDirPath();
+    QString curDir = QDir::currentPath();
+    QStringList candidates;
+
+    // helper: try to append candidate and avoid duplicates
+    auto pushCandidate = [&candidates](const QString &s){ QString c = QDir::cleanPath(s); if (!c.isEmpty() && !candidates.contains(c)) candidates << c; };
+
+    // common direct candidates
+    pushCandidate(appDir + QDir::separator() + "config" + QDir::separator() + filename);
+    pushCandidate(appDir + QDir::separator() + filename);
+    pushCandidate(curDir + QDir::separator() + "config" + QDir::separator() + filename);
+    pushCandidate(curDir + QDir::separator() + filename);
+
+    // also try a few well-known relative guesses (exe in build/bin etc.)
+    pushCandidate(appDir + QDir::separator() + ".." + QDir::separator() + "config" + QDir::separator() + filename);
+    pushCandidate(appDir + QDir::separator() + ".." + QDir::separator() + ".." + QDir::separator() + "config" + QDir::separator() + filename);
+    pushCandidate(appDir + QDir::separator() + ".." + QDir::separator() + "RobanWeb" + QDir::separator() + "config" + QDir::separator() + filename);
+
+    // 3) walk upwards from appDir and curDir and look for a config/ directory at each level
+    auto walkUpAndCollect = [&](const QString &start){
+        QFileInfo fi(start);
+        QString dir = fi.absolutePath();
+        int levels = 0;
+        while (!dir.isEmpty() && levels < 12) {
+            pushCandidate(dir + QDir::separator() + "config" + QDir::separator() + filename);
+            pushCandidate(dir + QDir::separator() + filename);
+            QFileInfo pdir(dir);
+            QString parent = pdir.dir().absolutePath();
+            if (parent == dir) break; // reached root
+            dir = parent;
+            levels++;
+        }
+    };
+    walkUpAndCollect(appDir);
+    if (curDir != appDir) walkUpAndCollect(curDir);
+
+    // 4) try QStandardPaths AppConfigLocation (useful on some platforms)
+    QString stdCfg = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    if (!stdCfg.isEmpty()) pushCandidate(stdCfg + QDir::separator() + filename);
+
+    // search candidates for existence
+    for (const QString &p : candidates) {
+        if (QFile::exists(p)) {
+            qDebug() << "RobotManager::resolveConfigAsset: found" << filename << "->" << p;
+            return p;
+        }
+    }
+
+    // nothing found: log attempted candidates to help debugging and return a sensible first candidate
+    if (!candidates.isEmpty()) {
+        qWarning() << "RobotManager::resolveConfigAsset: did not find" << filename << "; tried candidates:" << candidates;
+        return candidates.first();
+    }
+
+    qWarning() << "RobotManager::resolveConfigAsset: no candidates generated for" << filename;
+    return QString();
+}
+
 bool RobotManager::loadBoneJointMapping(const QString &csvPath)
 {
+    if (csvPath.isEmpty()) {
+        qWarning() << "RobotManager::loadBoneJointMapping: empty path provided";
+        return false;
+    }
     QFile f(csvPath);
     if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
     {
-        qDebug() << "RobotManager: fail open mapping" << csvPath;
+        qWarning() << "RobotManager::loadBoneJointMapping: fail open mapping" << csvPath;
         return false;
     }
+    m_boneToJoint.clear(); // 清空旧映射
     QTextStream ts(&f);
     QString header = ts.readLine(); // skip possible header
+    int mappingCount = 0;
     while (!ts.atEnd())
     {
         QString line = ts.readLine().trimmed();
@@ -124,16 +235,21 @@ bool RobotManager::loadBoneJointMapping(const QString &csvPath)
             if (p.size() >= 3 && !p[2].trimmed().isEmpty()) // 提取旋转轴
                 axis = p[2].trimmed().at(0).toLatin1();
             m_boneToJoint[bone].push_back({jid, axis});
+            mappingCount++;
         }
     }
-    // qDebug() << "RobotManager: loaded mapping entries" << m_boneToJoint.size();
     // apply mapping to bones if already loaded
+    int appliedCount = 0;
     for (auto &b : m_bones)
     {
         auto it = m_boneToJoint.find(b.name);
-        if (it != m_boneToJoint.end())
+        if (it != m_boneToJoint.end()) {
             b.jointMappings = it->second;
+            appliedCount++;
+        }
     }
+    qDebug() << "RobotManager::loadBoneJointMapping: loaded" << mappingCount << "mappings, applied to" 
+             << appliedCount << "out of" << m_bones.size() << "bones";
     return true;
 }
 
@@ -190,6 +306,8 @@ bool RobotManager::loadActionCsv(const QString &csvPath, int intervalMs, bool lo
 
 void RobotManager::applyJointAngles(const std::map<int, double> &jointAngles)
 {
+    // lock meshes while we update vertex buffers to avoid concurrent read from GL thread
+    QMutexLocker meshLocker(&m_meshesMutex);
     m_currentJointAngles = jointAngles;
 
     // reset local to original
@@ -226,11 +344,15 @@ void RobotManager::applyJointAngles(const std::map<int, double> &jointAngles)
     };
 
     // for each bone, build additive rotation from mapped joint angles
+    int bonesWithMapping = 0;
+    int bonesApplied = 0;
+    static int jointApplyCount = 0;
     for (size_t bi = 0; bi < m_bones.size(); ++bi)
     {
         const BoneInfo &b = m_bones[bi];
         if (b.jointMappings.empty())
             continue;
+        bonesWithMapping++;
         Mat4 Radd = Mat4::identity();
         bool anyApplied = false;
         for (const auto &jm : b.jointMappings)
@@ -254,8 +376,15 @@ void RobotManager::applyJointAngles(const std::map<int, double> &jointAngles)
             Radd = Raxis * Radd; // apply in order
             anyApplied = true;
         }
-        if (anyApplied && b.nodeIndex >= 0)
+        if (anyApplied && b.nodeIndex >= 0) {
             applyRotationToNodeLocal(b.nodeIndex, Radd);
+            bonesApplied++;
+        }
+    }
+    if (++jointApplyCount % 200 == 0) {
+        qDebug() << "RobotManager::applyJointAngles: joints=" << jointAngles.size() 
+                 << " bonesWithMapping=" << bonesWithMapping << " bonesApplied=" << bonesApplied
+                 << " totalBones=" << m_bones.size();
     }
 
     // compute global transforms
@@ -393,6 +522,8 @@ bool RobotManager::loadModel(const std::string &file)
         return false;
     }
     // 清理旧的网格数组，准备加载新模型的数据
+    // protect mesh replacement and population from concurrent GL reads
+    QMutexLocker meshLocker(&m_meshesMutex);
     m_meshes.clear();
 
     QFileInfo modelInfo(QString::fromStdString(file));
@@ -1000,7 +1131,15 @@ void RobotManager::stopPlacePlayback()
 void RobotManager::onServoPositionsUpdated()
 {
     if (!m_servoPositionsMonitor)
+    {
+        qDebug() << "RobotManager::onServoPositionsUpdated: monitor is nullptr!";
         return;
+    }
+    
+    static int servoUpdateCount = 0;
+    if (++servoUpdateCount % 100 == 0) {
+        qDebug() << "RobotManager::onServoPositionsUpdated: called (count=" << servoUpdateCount << ")";
+    }
     
     // 调用融合更新逻辑
     updateFusedServo();
@@ -1032,20 +1171,52 @@ void RobotManager::applyServoAnglesRow(const QVector<double> &row)
             ja[jointId] = val;
         }
     }
+    
+    static int applyCount = 0;
+    static QVector<double> lastRow;
+    bool hasChange = (lastRow.size() != row.size());
+    if (!hasChange) {
+        for (int i = 0; i < row.size() && i < 5; ++i) { // 只检查前5个角度
+            if (qAbs(row[i] - lastRow[i]) > 0.1) {
+                hasChange = true;
+                break;
+            }
+        }
+    }
+    // if (hasChange && ++applyCount % 100 == 0) {
+    //     QString anglesStr;
+    //     for (int i = 0; i < qMin(5, row.size()); ++i) {
+    //         anglesStr += QString::number(row[i], 'f', 1) + " ";
+    //     }
+    //     qDebug() << "RobotManager::applyServoAnglesRow: applying angles (count=" << applyCount 
+    //              << " size=" << row.size() << " first5=" << anglesStr << "...)";
+    // }
+    lastRow = row;
+    
     // 直接应用到模型（会触发 frameAdvanced）
     applyJointAngles(ja);
 }
 
 void RobotManager::onLegJointAnglesUpdated(){
-    if (!m_servoPositionsMonitor) return;
+    if (!m_servoPositionsMonitor) {
+        qDebug() << "RobotManager::onLegJointAnglesUpdated: monitor is nullptr!";
+        return;
+    }
     // 获取最新的腿部关节数据并缓存
     m_cachedLegAngles = m_servoPositionsMonitor->lastLegAngles();
+    static int legUpdateCount = 0;
+    if (++legUpdateCount % 100 == 0) {
+        qDebug() << "RobotManager::onLegJointAnglesUpdated: cached leg angles, size=" << m_cachedLegAngles.size();
+    }
     // 总是触发融合更新，不再依赖行走状态
     updateFusedServo();
 }
 
 void RobotManager::updateFusedServo() {
-    if (!m_servoPositionsMonitor) return;
+    if (!m_servoPositionsMonitor) {
+        qDebug() << "RobotManager::updateFusedServo: monitor is nullptr!";
+        return;
+    }
 
     // 获取最新的全身伺服数据
     QVector<double> servo = m_servoPositionsMonitor->lastAngles();
@@ -1072,15 +1243,37 @@ void RobotManager::updateFusedServo() {
         
         // 使用融合后的数据
         servo = fused;
+        static int fusionCount = 0;
+        if (++fusionCount % 100 == 0) {
+            qDebug() << "RobotManager::updateFusedServo: fused leg angles (count=" << fusionCount 
+                     << " servoSize=" << servo.size() << " legSize=" << m_cachedLegAngles.size() << ")";
+        }
+    } else {
+        static int noLegCount = 0;
+        if (++noLegCount % 100 == 0) {
+            qDebug() << "RobotManager::updateFusedServo: no leg angles cached (count=" << noLegCount 
+                     << " servoSize=" << servo.size() << ")";
+        }
     }
 
-    if (servo.isEmpty()) return;
+    if (servo.isEmpty()) {
+        static int emptyCount = 0;
+        if (++emptyCount % 100 == 0) {  // 每100次打印一次，避免日志过多
+            qDebug() << "RobotManager::updateFusedServo: servo data is empty (count=" << emptyCount << ")";
+        }
+        return;
+    }
 
     {
         QMutexLocker locker(&m_pendingServoMutex);
         // store as timestamped pending frame (replace any older pending)
         m_pendingServo.tsMs = QDateTime::currentMSecsSinceEpoch();
         m_pendingServo.angles = std::move(servo);
+        static int updateCount = 0;
+        if (++updateCount % 100 == 0) {  // 每100次打印一次
+            qDebug() << "RobotManager::updateFusedServo: updated pending servo data (count=" << updateCount 
+                     << " angles=" << m_pendingServo.angles.size() << ")";
+        }
     }
 }
 
@@ -1192,6 +1385,14 @@ void RobotManager::applyPendingServoAndGait()
         m_pendingServo.tsMs = 0;
         m_pendingServo.angles.clear();
     }
+    
+    static int applyCount = 0;
+    // if (!servoAngles.isEmpty()) {
+    //     if (++applyCount % 100 == 0) {
+    //         qDebug() << "RobotManager::applyPendingServoAndGait: applying servo angles (count=" << applyCount 
+    //                  << " size=" << servoAngles.size() << ")";
+    //     }
+    // }
 
     qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
 

@@ -8,6 +8,19 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Ensure reproducible runtime output directories so that when Qt Creator
+# or VSCode run the built executable the binary and its runtime resources
+# live in predictable locations. This avoids "working directory" differences
+# between IDEs being the reason assets/models are not found at runtime.
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+
+# For multi-config generators (Visual Studio etc.) set per-config output dirs too
+foreach(cfg IN ITEMS Debug Release RelWithDebInfo MinSizeRel)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_${cfg} ${CMAKE_BINARY_DIR}/bin)
+endforeach()
+
 
 find_package(Qt6 COMPONENTS Widgets REQUIRED) # Qt COMPONENTS
 find_package(Qt6 COMPONENTS WebSockets REQUIRED)
@@ -137,6 +150,11 @@ endif()
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${_proj_assimp_dll}" $<TARGET_FILE_DIR:${PROJECT_NAME}>
         )
+        # Also copy the DLL into canonical runtime output directory (bin)
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${_proj_assimp_dll}" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+        )
         # Also copy for test_assimp if target exists (guarded later after target creation)
         set(_copy_assimp_dll_for_test TRUE)
     endif()
@@ -149,8 +167,32 @@ endif()
             COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${_project_assets_dir}" "$<TARGET_FILE_DIR:${PROJECT_NAME}>/assets"
         )
+        # Also copy into the configured runtime output directory (e.g. ${CMAKE_BINARY_DIR}/bin)
+        # Some IDEs (Qt Creator) may run the program with a different working directory
+        # so copy assets into the canonical runtime dir as well.
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${_project_assets_dir}" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets"
+        )
     else()
         message(STATUS "No local assets/ directory found at: ${_project_assets_dir}")
+    endif()
+
+    # Copy the config directory next to the executable so runtime can read configuration files
+    set(_project_config_dir "${CMAKE_CURRENT_SOURCE_DIR}/config")
+    if(EXISTS "${_project_config_dir}")
+        message(STATUS "Adding post-build step to copy config to output directory: ${_project_config_dir}")
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${_project_config_dir}" "$<TARGET_FILE_DIR:${PROJECT_NAME}>/config"
+        )
+        # Also copy into the configured runtime output directory (e.g. ${CMAKE_BINARY_DIR}/bin)
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${_project_config_dir}" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/config"
+        )
+    else()
+        message(STATUS "No local config/ directory found at: ${_project_config_dir}")
     endif()
 
     # Link Assimp to the main project if available (ModelDisplay and other code use Assimp)
@@ -165,6 +207,13 @@ endif()
 target_include_directories(${PROJECT_NAME} PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_BINARY_DIR}  # 构建目录，用于找到自动生成的ui_*.h文件
+)
+
+## Ensure this target places its runtime/library outputs in the canonical directories
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}"
 )
 
 if(WIN32)

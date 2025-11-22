@@ -51,10 +51,15 @@ private:
     bool m_pendingUpdate = false; // 收到新数据但尚未通过定时器发布
     bool m_pendingLegUpdate = false; // 收到新腿部数据但尚未通过定时器发布
     QTimer *m_emitTimer = nullptr;
+    // 检测是否收到过全身伺服位置数据
+    bool m_hasReceivedServoData = false;
+    QTimer *m_checkTimer = nullptr; // 用于检测是否收到数据
 
 private slots:
     // 在主线程定期触发或被强制触发以安全地发出 servoPositionsUpdated
     void emitBuffered();
+    // 检查是否收到全身伺服位置数据
+    void checkDataReceived();
 
 signals:
     // 当收到新的伺服位置消息时发出（仅表示已接收，新数据存储在 lastMessage()）

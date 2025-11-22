@@ -88,6 +88,13 @@ void slamDialog::init()
     // 图像处理线程（不设 parent，析构由本类显式管理，以避免父对象自动删除时线程仍在运行）
     featuredImageThread = new QThread();
     m_featureTopic = loadTopicFromConfig("featureImageCompressed_topic");
+    // 如果配置中没有指定 feature topic，则使用内置默认（FeaturePoint 压缩图像话题）
+    if (m_featureTopic.isEmpty()) {
+        m_featureTopic = QStringLiteral("/SLAM/FeaturePoint/Image/compressed");
+        qDebug() << "slamDialog::init: featureImageCompressed_topic not found in config, using default:" << m_featureTopic;
+    } else {
+        qDebug() << "slamDialog::init: featureImageCompressed_topic from config:" << m_featureTopic;
+    }
     featuredImageMonitor = new CameraImageMonitor(m_worker, nullptr, m_featureTopic);
     featuredImageMonitor->moveToThread(featuredImageThread);
     featuredImageThread->start();
@@ -744,9 +751,13 @@ void slamDialog::updateLocalizationIcon(bool checked)
     if (!ui || !ui->localization_checkBox) return;
     QIcon icon;
     if (checked) {
-        icon = QIcon(":/icon/check_yes.png");
+        // resource files are stored under the qrc prefix "/icon" and the files
+        // keep their parent folder name in the resource path, resulting in
+        // ":/icon/icon/check_yes.png" in the generated resources. Use the
+        // full path as embedded in the project's res.qrc auto-generated mapping.
+        icon = QIcon(":/icon/icon/check_yes.png");
     } else {
-        icon = QIcon(":/icon/check_no.png");
+        icon = QIcon(":/icon/icon/check_no.png");
     }
     ui->localization_checkBox->setIcon(icon);
     // 可选：设置图标大小使其在不同平台上显示适当

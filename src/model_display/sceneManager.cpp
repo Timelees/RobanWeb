@@ -48,7 +48,7 @@ void SceneManager::setPoseMonitor(PoseMonitor *poseMonitor)
     }
 }
 
-// 场景映射测试 (成员函数)，从csv解析数据
+// 场景映射测试，从csv解析数据
 QVector<QVector3D> SceneManager::test_sceneCornerMapping(){
     QString poseCsvPath = resolveConfigPath("test_robot_cornerPose.csv");
     // 解析文件
@@ -105,6 +105,7 @@ void SceneManager::loadSceneMappingParameters(){
     // 尝试从 config/SceneMapping.json 恢复已保存的仿射映射参数
     QDir appdir(QCoreApplication::applicationDirPath());
     QString cand = QDir::cleanPath(appdir.filePath(QString("../config/SceneMapping.json")));
+    qDebug() << "加载场景映射参数配置文件:" << cand;
     if (QFile::exists(cand)) {
         QFile f(cand);
         if (f.open(QIODevice::ReadOnly)) {
@@ -585,7 +586,7 @@ bool SceneManager::loadMarkers(const QString &path)
         QString cand  = QDir::cleanPath(appdir.filePath(QString("../config/calib_points.json")));
         p = cand;
     }
-    // qDebug() << "SceneManager::loadMarkers path=" << p;
+    qDebug() << "SceneManager::loadMarkers path=" << p;
     if (!QFile::exists(p))
     {
         qDebug() << "SceneManager::loadMarkers: file does not exist:" << p;

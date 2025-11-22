@@ -86,10 +86,24 @@ void ConnectDialog::setupDatabase(){
     db = QSqlDatabase::addDatabase("QSQLITE");
     QString dbPath = resolveDatabasePath("database/connections.db");
     qDebug() << "数据库路径:" << dbPath; // 调试输出路径
+    // Ensure parent directory exists so SQLite can create the file there
+    QFileInfo fi(dbPath);
+    QDir parentDir = fi.dir();
+    if (!parentDir.exists()) {
+        bool ok = parentDir.mkpath(".");
+        if (!ok) {
+            qWarning() << "ConnectDialog::setupDatabase: failed to create parent dir for" << dbPath << ", falling back to current directory";
+            // fallback to current path
+            dbPath = QDir::cleanPath(QDir::current().filePath(fi.fileName()));
+            fi.setFile(dbPath);
+            parentDir = fi.dir();
+        }
+    }
+
     db.setDatabaseName(dbPath);
 
     if (!db.open()) {
-        qDebug() << "数据库打开失败:" << db.lastError().text();
+        qDebug() << "数据库打开失败:" << db.lastError().text() << " path:" << dbPath;
         return;
     }
 
@@ -512,7 +526,18 @@ QString ConnectDialog::resolveDatabasePath(const QString &relPath){
             return p;
         }
     }
-    // 如果没有找到，返回第一个候选（可用于观察失败路径）
+    // 如果没有找到，尝试使用一个可写的应用数据目录作为候选（QStandardPaths）
+    QString appData = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (!appData.isEmpty()) {
+        QString alt = QDir::cleanPath(appData + QDir::separator() + relPath);
+        candidates.append(alt);
+        if (QFile::exists(alt)) {
+            qDebug() << "Found database in app data:" << alt;
+            return alt;
+        }
+    }
+
+    // 最后，返回第一个候选作为回退（便于调试输出）。调用者应当确保父目录存在或创建它。
     qWarning() << "Data not found in candidate locations, using fallback:" << candidates.first();
     return candidates.first();
 }

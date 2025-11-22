@@ -4,6 +4,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QVector3D>
 
 robanweb::robanweb(QWidget *parent)
     : QMainWindow(parent), ui(new Ui_robanweb), webSocketWorker(nullptr), webSocketThread(nullptr), webSocketWorker2(nullptr), webSocketThread2(nullptr), reconnectTimer(new QTimer(this)), reconnectTimer2(nullptr), isReconnecting(false), isReconnecting2(false), reconnectAttempts(0), reconnectAttempts2(0)
@@ -152,11 +153,20 @@ void robanweb::init()
     QString modelScene = robanweb::resolveAssetPath("assets/scene.obj"); // 默认场景模型路径
 
     sceneManager = new SceneManager(poseMonitor, modelScene, this);           // 场景管理器
-    robotManager = new RobotManager(modelRobot, sceneManager, nullptr, this); // 机器人管理器 (monitors injected by manager)
+    robotManager = new RobotManager(modelRobot, sceneManager, nullptr, this); // 机器人1管理器
+
+    robotManager2 = new RobotManager(modelRobot, sceneManager, nullptr, this); // 机器人2管理器
+    // 将第二台机器人放在场景中的默认偏移位置（可改为从配置读取）
+    QVector3D robot2DefaultPos(3.0f, 0.0f, -4.0f);       // 设置机器人2的默认位置
+    robotManager2->applyLocation(robot2DefaultPos);
     // 将robotManager和sceneManager附加到multiRobot_mgr1，以便注入监视器指针
     if (multiRobot_mgr1)
     {
         multiRobot_mgr1->attachManagers(sceneManager, robotManager);
+    }
+    if(multiRobot_mgr2)
+    {
+        multiRobot_mgr2->attachManagers(sceneManager, robotManager2);
     }
 
     if (ui->modelDisplay)
@@ -167,7 +177,8 @@ void robanweb::init()
         QLayout *parentLayout = parent ? parent->layout() : nullptr;
 
         // 在同一父容器中创建 ModelDisplay，并在父 layout 中替换占位 widget（如果存在）
-        modelDisplay = new ModelDisplay(robotManager, sceneManager, parent ? parent : placeholder);
+    // 将第二台机器人与其场景位置注入 ModelDisplay（以便同时渲染两台机器人）
+    modelDisplay = new ModelDisplay(robotManager, sceneManager, robotManager2, robot2DefaultPos, parent ? parent : placeholder);
         modelDisplay->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 
         if (parentLayout)

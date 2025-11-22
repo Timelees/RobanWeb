@@ -45,7 +45,8 @@ class ModelDisplay: public QOpenGLWidget, protected QOpenGLFunctions
 {
     Q_OBJECT
 public:
-    explicit ModelDisplay(RobotManager *robot, SceneManager *scene, QWidget *parent = nullptr);
+    // 新增参数 robot2: 可选的第二机器人指针；robot2Pos: 第二机器人在场景中的初始位置（scene-space）
+    explicit ModelDisplay(RobotManager *robot, SceneManager *scene, RobotManager *robot2 = nullptr, const QVector3D &robot2Pos = QVector3D(), QWidget *parent = nullptr);
     ~ModelDisplay() override;
 
     void test_showAction();    // 测试显示动作
@@ -83,7 +84,13 @@ public slots:
     void onRefreshPositions();  // 刷新位置函数
     void onResetPositions();    // 位置重置函数(重置到地图中心)
 private:
-    RobotManager *m_robot = nullptr;
+    RobotManager *m_robot = nullptr;    // 机器人1
+    // 可选的第二个机器人，用于在场景中显示多台机器人
+    RobotManager *m_robot2 = nullptr;
+    QVector3D m_robot2Pos = QVector3D(0.0f, 0.0f, 0.0f);
+    QVector3D m_robot2DefaultRotation = QVector3D(0.0f, 0.0f, 0.0f); // 设置机器人2的默认朝向
+
+
     SceneManager *m_scene = nullptr;
     float m_rotX = 20.0f, m_rotY = 30.0f;
     float m_cameraDistance = 11.6f;

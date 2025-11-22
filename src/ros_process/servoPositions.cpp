@@ -33,6 +33,12 @@ ServoPositionsMonitor::ServoPositionsMonitor(WebSocketWorker *worker, QObject *p
     m_emitTimer = new QTimer(this);
     m_emitTimer->setInterval(m_emitIntervalMs);
     connect(m_emitTimer, &QTimer::timeout, this, &ServoPositionsMonitor::emitBuffered);
+    
+    // 创建检测定时器，用于检查是否收到全身伺服位置数据
+    m_checkTimer = new QTimer(this);
+    m_checkTimer->setSingleShot(true);
+    m_checkTimer->setInterval(5000); // 5秒后检查
+    connect(m_checkTimer, &QTimer::timeout, this, &ServoPositionsMonitor::checkDataReceived);
 }
 
 ServoPositionsMonitor::~ServoPositionsMonitor() {}
@@ -50,7 +56,10 @@ QVector<double> ServoPositionsMonitor::lastLegAngles() const {
 }
 
 void ServoPositionsMonitor::start(){
-    if(!m_worker) return;
+    if(!m_worker) {
+        qDebug() << "ServoPositionsMonitor::start: worker is nullptr!";
+        return;
+    }
     // 发送订阅请求给servo positions话题
     QJsonObject subscribeMsg;
     subscribeMsg["op"] = "subscribe";
@@ -58,7 +67,7 @@ void ServoPositionsMonitor::start(){
     subscribeMsg["type"] = servo_positions_topic_type;
     QJsonDocument doc(subscribeMsg);
     QString payload = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
-    // qDebug() << "ServoPositionsMonitor subscribing to topic:" << payload;
+    // qDebug() << "ServoPositionsMonitor::start: subscribing to topic:" << servo_positions_topic_name << "(" << servo_positions_topic_type << ")";
     QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload));
 
 
@@ -79,11 +88,24 @@ void ServoPositionsMonitor::start(){
     subscribeMsg3["type"] = leg_joint_angle_topic_type;
     QJsonDocument doc3(subscribeMsg3);
     QString payload3 = QString::fromUtf8(doc3.toJson(QJsonDocument::Compact));
+    // qDebug() << "ServoPositionsMonitor::start: subscribing to leg joint angle topic:" << leg_joint_angle_topic_name << "(" << leg_joint_angle_topic_type << ")";
     QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload3));
 
     // 启动定时器（如果未启动）以开始在 GUI 线程定期发射更新
-    if (m_emitTimer && !m_emitTimer->isActive())
+    if (m_emitTimer && !m_emitTimer->isActive()) {
         m_emitTimer->start();
+        qDebug() << "ServoPositionsMonitor::start: emitTimer started, interval=" << m_emitIntervalMs << "ms";
+    } else if (!m_emitTimer) {
+        qDebug() << "ServoPositionsMonitor::start: ERROR - emitTimer is nullptr!";
+    } else {
+        qDebug() << "ServoPositionsMonitor::start: emitTimer already active";
+    }
+    
+    // 重置接收标志并启动检测定时器
+    m_hasReceivedServoData = false;
+    if (m_checkTimer) {
+        m_checkTimer->start();
+    }
 
 }
 
@@ -93,15 +115,39 @@ void ServoPositionsMonitor::onMessageReceived(const QString &message){
 
     QJsonObject obj = doc.object();
     QString topic = obj["topic"].toString();
-    // 处理伺服位置消息
-    if(obj["op"].toString() == "publish" && topic == servo_positions_topic_name){
-        QJsonObject msgObj = obj["msg"].toObject();
-        QJsonDocument msgDoc(msgObj);
-        QString msgJson = QString::fromUtf8(msgDoc.toJson(QJsonDocument::Compact));
-        // qDebug() << "Received ServoPositions message: " << msgJson;
+    QString op = obj["op"].toString();
+    
+    // 调试：记录所有收到的消息（每1000条，减少日志量）
+    static int allMsgCount = 0;
+    // if (++allMsgCount % 1000 == 0) {
+    //     qDebug() << "ServoPositionsMonitor::onMessageReceived: received message (count=" << allMsgCount 
+    //              << " op=" << op << " topic=" << topic << ")";
+    // }
+    
+        // 处理伺服位置消息
+        if(op == "publish" && topic == servo_positions_topic_name){
+            QJsonObject msgObj = obj["msg"].toObject();
+            QJsonDocument msgDoc(msgObj);
+            QString msgJson = QString::fromUtf8(msgDoc.toJson(QJsonDocument::Compact));
+            static int msgCount = 0;
+            // if (++msgCount % 100 == 0) {  // 每100条消息打印一次
+            //     qDebug() << "ServoPositionsMonitor::onMessageReceived: received ServoPositions message (count=" << msgCount << ")";
+            // }
 
         // 保存原始消息并解析 angle 数组
         QVector<double> angles;
+        if (!msgObj.contains("angle")) {
+            static int noAngleCount = 0;
+            // if (++noAngleCount % 100 == 0) {
+            //     qDebug() << "ServoPositionsMonitor::onMessageReceived: ServoPositions message has no 'angle' field (count=" << noAngleCount << ")";
+            // }
+        } else if (!msgObj["angle"].isArray()) {
+            static int notArrayCount = 0;
+            // if (++notArrayCount % 100 == 0) {
+            //     qDebug() << "ServoPositionsMonitor::onMessageReceived: ServoPositions message 'angle' is not an array (count=" << notArrayCount << ")";
+            // }
+        }
+        
         if (msgObj.contains("angle") && msgObj["angle"].isArray()) {
             QJsonArray arr = msgObj["angle"].toArray();
             angles.reserve(arr.size());
@@ -122,8 +168,21 @@ void ServoPositionsMonitor::onMessageReceived(const QString &message){
             QVector<double> oldAngles = m_lastAngles;
             m_lastMsg = msgObj;
             m_lastAngles = angles;
+            // 标记为已收到全身伺服位置数据
+            if (!m_hasReceivedServoData && !angles.isEmpty()) {
+                m_hasReceivedServoData = true;
+                if (m_checkTimer && m_checkTimer->isActive()) {
+                    m_checkTimer->stop();
+                }
+                // qDebug() << "ServoPositionsMonitor: received first ServoPositions data, size=" << angles.size();
+            }
             // 标记为有待发布的新数据（由定时器在主线程定期发出）
             m_pendingUpdate = true;
+            static int servoMsgCount = 0;
+            // if (++servoMsgCount % 100 == 0) {
+            //     qDebug() << "ServoPositionsMonitor: received servo angles, size=" << angles.size() 
+            //              << " pendingUpdate=true";
+            // }
             // 计数器仍然保留用于兼容或备用策略
             m_msgCounter++;
             // 如果累计到批次上限，也保持 pending（定时器会处理）
@@ -219,17 +278,41 @@ void ServoPositionsMonitor::emitBuffered()
     // Copy and reset pending flag under mutex, then emit without holding the lock to avoid deadlocks
     bool doEmit = false;
     bool doEmitLeg = false;
+    int servoSize = 0;
+    int legSize = 0;
     m_mutex.lock();
     doEmit = m_pendingUpdate;
     m_pendingUpdate = false;
+    servoSize = m_lastAngles.size();
     doEmitLeg = m_pendingLegUpdate;
     m_pendingLegUpdate = false;
+    legSize = m_lastLegAngles.size();
     m_mutex.unlock();
 
+    static int emitCount = 0;
     if (doEmit) {
         emit servoPositionsUpdated();
+        // if (++emitCount % 100 == 0) {  // 每100次打印一次
+        //     qDebug() << "ServoPositionsMonitor::emitBuffered: emitted servoPositionsUpdated (count=" << emitCount 
+        //              << " servoSize=" << servoSize << ")";
+        // }
     }
     if (doEmitLeg) {
         emit legJointAnglesUpdated();
+        static int legEmitCount = 0;
+        // if (++legEmitCount % 100 == 0) {  // 每100次打印一次，避免日志过多
+        //     qDebug() << "ServoPositionsMonitor::emitBuffered: emitted legJointAnglesUpdated (count=" << legEmitCount 
+        //              << " legSize=" << legSize << ")";
+        // }
+    }
+}
+
+void ServoPositionsMonitor::checkDataReceived()
+{
+    if (!m_hasReceivedServoData) {
+        // qWarning() << "ServoPositionsMonitor: WARNING - No ServoPositions data received from topic"
+        //            << servo_positions_topic_name << "after 5 seconds."
+        //            << "The robot may not be publishing this topic, or BodyHub node may not be running."
+        //            << "The system will continue using leg joint angles only.";
     }
 }

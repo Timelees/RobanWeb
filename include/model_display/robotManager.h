@@ -152,12 +152,15 @@ private:
     void advancePlaceFrame();
     void computeBounds();
     void initialize();
+    // Resolve config asset path (searches application dir, parent/config, current dir, etc.)
+    QString resolveConfigAsset(const QString &filename) const;
 
 
 private:
     QString m_modelPath;
     QString jointConfigPath;
     std::vector<SimpleMesh> m_meshes;
+    QMutex m_meshesMutex;
     bool loadSucceeded = false;
     std::vector<std::vector<std::vector<std::pair<int, float>>>> m_meshesInfluences; // 每个 mesh 的每个顶点的骨骼影响
     std::vector<std::vector<float>> m_originalMeshVertices;     // 保存了未变形（原始）的顶点数组
@@ -241,6 +244,11 @@ private:
 
 public:
     void setGaitAxisMapping(GaitAxisMapping m) { m_gaitAxisMapping = m; }
+
+    // Expose mutex for guarding access to meshes when rendering/updating from different threads.
+    // ModelDisplay will lock this mutex while reading mesh vertex buffers. RobotManager locks
+    // it when modifying mesh vertex data (applyJointAngles / loadModel).
+    QMutex &meshMutex() { return m_meshesMutex; }
 
 
     // --- 行走动画融合相关 ---

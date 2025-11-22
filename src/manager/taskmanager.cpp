@@ -50,7 +50,7 @@ void TaskManager::loadTasksFromConfig()
     if (!configDir.exists()) {
         configDir.mkpath(".");
     }
-
+    qDebug() << "加载任务配置文件:" << file.fileName();
     if (!file.exists()) {
         // 配置文件不存在，创建默认任务
         Task* defaultTask1 = new Task(tr("Say-yeah舞蹈"), "say_yeah.sh", 

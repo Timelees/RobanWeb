@@ -166,7 +166,10 @@ void MultiRobotManager::attachManagers(SceneManager *sceneMgr, RobotManager *rob
         m_sceneManager->setPoseMonitor(m_poseMonitor);
     }
     if (m_robotManager) {
-        if (m_servoPositionsMonitor) m_robotManager->setServoPositionsMonitor(m_servoPositionsMonitor);
+        if (m_servoPositionsMonitor) {
+            // qDebug() << "MultiRobotManager::attachManagers injecting ServoPositionsMonitor to RobotManager";
+            m_robotManager->setServoPositionsMonitor(m_servoPositionsMonitor);
+        }
         if (m_gaitCommandMonitor) m_robotManager->setGaitCommandMonitor(m_gaitCommandMonitor);
     }
 }

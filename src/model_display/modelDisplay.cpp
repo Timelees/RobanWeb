@@ -1,9 +1,10 @@
 #include "model_display/modelDisplay.h"
 #include "util/load_csv.hpp"
 #include <memory>
+#include <QMutexLocker>
 
-ModelDisplay::ModelDisplay(RobotManager *robot, SceneManager *scene, QWidget *parent)
-    : QOpenGLWidget(parent), m_robot(robot), m_scene(scene)
+ModelDisplay::ModelDisplay(RobotManager *robot, SceneManager *scene, RobotManager *robot2, const QVector3D &robot2Pos, QWidget *parent)
+    : QOpenGLWidget(parent), m_robot(robot), m_scene(scene), m_robot2(robot2), m_robot2Pos(robot2Pos)
 {
     if (parent)
     {
@@ -38,7 +39,18 @@ ModelDisplay::ModelDisplay(RobotManager *robot, SceneManager *scene, QWidget *pa
         }
     }
 
-
+    // 如果存在第二台机器人，建立相同的连接并尝试复制/记录其模型信息以便创建 mesh
+    if (m_robot2)
+    {
+        connect(m_robot2, &RobotManager::frameAdvanced, this, QOverload<>::of(&ModelDisplay::update));
+        connect(m_robot2, &RobotManager::animationStarted, this, &ModelDisplay::onRobotAnimationStarted);
+        if (m_robot2->loaded()) {
+            // 如果第二台机器人已加载，确保其初始位置被应用（以便 meshes 中包含 m_worldTranslation）
+            // applyLocation 需要 scene-space 坐标，m_robot2Pos 默认为 (0,0,0)
+            m_robot2->applyLocation(m_robot2Pos);
+            m_robot2->setModelRotation(m_robot2DefaultRotation);
+        }
+    }
 
     setDisplayWindow(); // 设置窗口界面
 }
@@ -79,13 +91,6 @@ void ModelDisplay::setDisplayWindow()
     btnMap->setMinimumSize(75, 25);
     btnMap->setStyleSheet(buttonStyle);
     
-    // QPushButton *btnPickup = new QPushButton(QString::fromUtf8("取货点标定"), m_topBar);
-    // btnPickup->setMinimumSize(75, 25);
-    // btnPickup->setStyleSheet(buttonStyle);
-    
-    // QPushButton *btnPlace = new QPushButton(QString::fromUtf8("放置点标定"), m_topBar);
-    // btnPlace->setMinimumSize(75, 25);
-    // btnPlace->setStyleSheet(buttonStyle);
     
     QPushButton *btnSave = new QPushButton(QString::fromUtf8("标定保存"), m_topBar);
     btnSave->setMinimumSize(75, 25);
@@ -113,8 +118,6 @@ void ModelDisplay::setDisplayWindow()
 
     // 将按钮加入布局
     hb->addWidget(btnMap);
-    // hb->addWidget(btnPickup);
-    // hb->addWidget(btnPlace);
     hb->addWidget(btnSave);
     hb->addWidget(btnDelete);
     hb->addWidget(btnClearAll);
@@ -165,6 +168,8 @@ void ModelDisplay::initializeGL()
         createMeshes(m_scene->meshes());
     if (m_robot)
         createMeshes(m_robot->meshes());
+    if (m_robot2)
+        createMeshes(m_robot2->meshes());
 }
 
 // 调整视口大小
@@ -238,11 +243,21 @@ void ModelDisplay::paintGL()
     if (m_scene && m_scene->loaded())
         drawMeshes(m_scene->meshes());
 
-    // 绘制机器人网格
-    if (m_robot)
+    // 绘制机器人网格（支持第二台机器人）
+    if (m_robot) {
+        // Guard reading robot meshes with the RobotManager mutex to avoid concurrent
+        // modification from RobotManager (which may run in a non-GUI thread).
+        QMutexLocker locker(&m_robot->meshMutex());
         drawMeshes(m_robot->meshes());
+    }
+
+    if (m_robot2) {
+        QMutexLocker locker2(&m_robot2->meshMutex());
+        drawMeshes(m_robot2->meshes());
+    }
 
     // 如果存在位置点，绘制轨迹线（绿色），使用 GL_LINE_STRIP 连续连接位置点
+    // 绘制轨迹：优先绘制第一台机器人的轨迹，然后绘制第二台机器人的轨迹（若存在）
     if (m_robot)
     {
         SimpleMesh traj = m_robot->buildTrajectoryMesh();
@@ -270,7 +285,38 @@ void ModelDisplay::paintGL()
                 glVertex3f(traj.vertices[3 * vi + 0], traj.vertices[3 * vi + 1], traj.vertices[3 * vi + 2]);
             }
             glEnd();
-            // 恢复状态
+            glDisable(GL_BLEND);
+            glColor3f(1.0f, 1.0f, 1.0f);
+        }
+    }
+
+    if (m_robot2)
+    {
+        SimpleMesh traj2 = m_robot2->buildTrajectoryMesh();
+        if (!traj2.vertices.empty())
+        {
+            glDisable(GL_TEXTURE_2D);
+            glLineWidth(2.0f);
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glBegin(GL_LINE_STRIP);
+            size_t vcount = traj2.vertices.size() / 3;
+            bool hasColor = (traj2.colors.size() / 4) >= vcount;
+            for (size_t vi = 0; vi < vcount; ++vi)
+            {
+                if (hasColor) {
+                    float r = traj2.colors[4 * vi + 0];
+                    float g = traj2.colors[4 * vi + 1];
+                    float b = traj2.colors[4 * vi + 2];
+                    float a = traj2.colors[4 * vi + 3];
+                    glColor4f(r, g, b, a);
+                } else {
+                    // 使用蓝色作为第二台机器人轨迹颜色默认
+                    glColor4f(0.0f, 0.0f, 1.0f, 1.0f);
+                }
+                glVertex3f(traj2.vertices[3 * vi + 0], traj2.vertices[3 * vi + 1], traj2.vertices[3 * vi + 2]);
+            }
+            glEnd();
             glDisable(GL_BLEND);
             glColor3f(1.0f, 1.0f, 1.0f);
         }
