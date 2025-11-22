@@ -9,6 +9,7 @@ import time
 import os
 import shutil
 import signal
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # 配置
@@ -95,8 +96,23 @@ def execute_command(cmd, task=None):
                 pid = proc.pid
                 try:
                     _proc_registry[pid] = proc
-                    # 标记为 control 类型（由 move.sh 启动的本地控制脚本）
-                    _proc_meta[pid] = {'cmd': cmd, 'which': 'control', 'script': first_token}
+                    # Determine which tag: if the command or script path/name indicates SLAM,
+                    # mark as 'slam', otherwise treat as 'control'. This avoids labeling
+                    # SLAM-related scripts as control and accidentally stopping them.
+                    which_tag = 'control'
+                    try:
+                        # Look for common slam indicators in the full command or script name
+                        if re.search(r'\bslam\b', cmd, re.I) or re.search(r'ORB_SLAM', cmd, re.I) or re.search(r'slam_', first_token, re.I) or re.search(r'slam', os.path.basename(first_token), re.I):
+                            which_tag = 'slam'
+                    except Exception:
+                        # If detection fails for any reason, leave as 'control'
+                        pass
+                    meta = {'cmd': cmd, 'which': which_tag, 'script': first_token}
+                    try:
+                        meta['pgid'] = os.getpgid(proc.pid)
+                    except Exception:
+                        meta['pgid'] = None
+                    _proc_meta[pid] = meta
                     # 记录 task <-> pid 映射（可为 None）
                     if task:
                         _pid_to_task[pid] = task
@@ -191,7 +207,12 @@ def execute_command(cmd, task=None):
                 try:
                     _proc_registry[pid] = proc
                     # 如果是通过 wrapper 启动 SLAM，标记为 slam
-                    _proc_meta[pid] = {'cmd': cmd, 'which': 'slam', 'wrapper': script_path}
+                    meta = {'cmd': cmd, 'which': 'slam', 'wrapper': script_path}
+                    try:
+                        meta['pgid'] = os.getpgid(proc.pid)
+                    except Exception:
+                        meta['pgid'] = None
+                    _proc_meta[pid] = meta
                     if task:
                         _pid_to_task[pid] = task
                         _task_to_pids.setdefault(task, []).append(pid)
@@ -219,10 +240,12 @@ def execute_command(cmd, task=None):
             try:
                 _proc_registry[pid] = proc
                 # 如果命令中包含 rosrun 且指向 SLAM，标记为 slam，方便停止
-                if 'rosrun' in cmd and 'slam' in cmd.lower():
-                    _proc_meta[pid] = {'cmd': cmd, 'which': 'slam'}
-                else:
-                    _proc_meta[pid] = {'cmd': cmd, 'which': None}
+                meta = {'cmd': cmd, 'which': 'slam' if ('rosrun' in cmd and 'slam' in cmd.lower()) else None}
+                try:
+                    meta['pgid'] = os.getpgid(proc.pid)
+                except Exception:
+                    meta['pgid'] = None
+                _proc_meta[pid] = meta
                 if task:
                     _pid_to_task[pid] = task
                     _task_to_pids.setdefault(task, []).append(pid)
@@ -558,6 +581,84 @@ def _stop_proc_by_pid(pid):
     except Exception as e:
         return {"pid": pid, "ok": False, "error": str(e)}
 
+
+def _stop_proc_group_by_pid(pid):
+    """Conservative stop: prefer killing the stored process-group (pgid) recorded in _proc_meta.
+    Falls back to _stop_proc_by_pid if pgid is not available.
+    This reduces risk of killing unrelated processes when stopping by "which"."""
+    try:
+        pid = int(pid)
+    except Exception:
+        return {"pid": pid, "ok": False, "error": "invalid pid"}
+
+    meta = _proc_meta.get(pid, {})
+    pgid = meta.get('pgid') if isinstance(meta, dict) else None
+    if pgid:
+        result = {"pid": pid, "pgid": pgid, "ok": False, "killed": False}
+        try:
+            # send SIGINT/TERM/KILL to the pgid only
+            try:
+                os.killpg(pgid, signal.SIGINT)
+            except Exception:
+                pass
+            time.sleep(0.5)
+            try:
+                os.killpg(pgid, signal.SIGTERM)
+            except Exception:
+                pass
+            time.sleep(0.5)
+            try:
+                os.killpg(pgid, signal.SIGKILL)
+            except Exception:
+                pass
+
+            # verify: attempt os.kill(0) to see if any member of pgid still exists is tricky; rely on registry
+            # Clean up any registry entries whose proc belongs to that pgid
+            removed_any = False
+            for rpid, proc in list(_proc_registry.items()):
+                try:
+                    try:
+                        rpg = os.getpgid(rpid)
+                    except Exception:
+                        rpg = None
+                    if rpg == pgid:
+                        try:
+                            proc.kill()
+                        except Exception:
+                            pass
+                        try:
+                            del _proc_registry[rpid]
+                        except Exception:
+                            pass
+                        try:
+                            if rpid in _proc_meta:
+                                del _proc_meta[rpid]
+                        except Exception:
+                            pass
+                        removed_any = True
+                except Exception:
+                    pass
+
+            result['ok'] = True
+            result['killed'] = removed_any or True
+            # Also remove the original pid meta if present
+            try:
+                if pid in _proc_meta:
+                    del _proc_meta[pid]
+            except Exception:
+                pass
+            try:
+                if pid in _proc_registry:
+                    del _proc_registry[pid]
+            except Exception:
+                pass
+            return result
+        except Exception as e:
+            return {"pid": pid, "ok": False, "error": str(e)}
+    else:
+        # fallback to original behavior
+        return _stop_proc_by_pid(pid)
+
 class ExecNode(object):
     def __init__(self):
         rospy.init_node('robot_exec_node')
@@ -681,7 +782,8 @@ class ExecNode(object):
                                     matched = True
                             if matched:
                                 rospy.loginfo("matched proc_meta pid=%s meta=%s", pid, json.dumps(meta, ensure_ascii=False))
-                                r = _stop_proc_by_pid(pid)
+                                # Prefer stopping by stored pgid to avoid killing unrelated processes
+                                r = _stop_proc_group_by_pid(pid)
                                 rospy.loginfo("stop result for pid %s: %s", pid, json.dumps(r, ensure_ascii=False) if isinstance(r, dict) else str(r))
                                 results.append(r)
                         except Exception as e:
@@ -694,7 +796,7 @@ class ExecNode(object):
                         rospy.loginfo("attempting stop by task mapping, task=%s -> pids=%s", task_val, pids)
                         for pid in pids:
                             try:
-                                r = _stop_proc_by_pid(pid)
+                                r = _stop_proc_group_by_pid(pid)
                                 results.append(r)
                             except Exception as e:
                                 results.append({'pid': pid, 'ok': False, 'error': str(e)})

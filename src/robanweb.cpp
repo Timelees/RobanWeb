@@ -164,9 +164,11 @@ void robanweb::init()
     {
         multiRobot_mgr1->attachManagers(sceneManager, robotManager);
     }
-    if(multiRobot_mgr2)
+    // For robot2 we do not inject the SceneManager (only robot1 provides SLAM pose for mapping).
+    // Passing nullptr prevents SceneManager from receiving pose updates from an inactive second robot.
+    if (multiRobot_mgr2)
     {
-        multiRobot_mgr2->attachManagers(sceneManager, robotManager2);
+        multiRobot_mgr2->attachManagers(nullptr, robotManager2);
     }
 
     if (ui->modelDisplay)

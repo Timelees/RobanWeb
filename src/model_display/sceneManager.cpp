@@ -2,6 +2,40 @@
 #include "util/load_csv.hpp"
 #include "ros_process/slamPose.h"
 
+// Thread-aware helpers to query PoseMonitor synchronously when needed.
+// Using BlockingQueuedConnection from the same thread as the receiver will
+// deadlock; therefore choose direct calls when current thread == receiver->thread().
+static bool poseMonitorHasLastPoseSafe(PoseMonitor *pm)
+{
+    if (!pm) return false;
+    if (QThread::currentThread() == pm->thread()) {
+        return pm->hasLastPose();
+    }
+    bool has = false;
+    QMetaObject::invokeMethod(pm, "hasLastPose", Qt::BlockingQueuedConnection, Q_RETURN_ARG(bool, has));
+    return has;
+}
+
+static bool poseMonitorGetLastPoseSafe(PoseMonitor *pm, QVector3D &out)
+{
+    if (!pm) return false;
+    if (QThread::currentThread() == pm->thread()) {
+        if (!pm->hasLastPose()) return false;
+        out = pm->lastPoseValue();
+        return !out.isNull();
+    }
+    bool has = false;
+    bool invokedHas = QMetaObject::invokeMethod(pm, "hasLastPose", Qt::BlockingQueuedConnection, Q_RETURN_ARG(bool, has));
+    if (!invokedHas || !has) return false;
+    QVector3D last;
+    bool invoked = QMetaObject::invokeMethod(pm, "lastPoseValue", Qt::BlockingQueuedConnection, Q_RETURN_ARG(QVector3D, last));
+    if (invoked && !last.isNull()) {
+        out = last;
+        return true;
+    }
+    return false;
+}
+
 SceneManager::SceneManager(PoseMonitor *poseMonitor, const QString &modelPath, QObject *parent)
     : QObject(parent), m_modelPath(modelPath), m_poseMonitor(poseMonitor)
 {
@@ -45,6 +79,9 @@ void SceneManager::setPoseMonitor(PoseMonitor *poseMonitor)
         connect(m_poseMonitor, &PoseMonitor::poseUpdated, this, [this](const QVector3D &p) {
             this->robotPose = p;
         });
+        // request the last-known pose from the monitor (if any) so that attaching
+        // late still yields an immediate current pose update
+        QMetaObject::invokeMethod(m_poseMonitor, "emitLastPose", Qt::QueuedConnection);
     }
 }
 
@@ -103,10 +140,9 @@ QVector<QVector3D> SceneManager::test_sceneCornerMapping(){
 
 void SceneManager::loadSceneMappingParameters(){
     // 尝试从 config/SceneMapping.json 恢复已保存的仿射映射参数
-    QDir appdir(QCoreApplication::applicationDirPath());
-    QString cand = QDir::cleanPath(appdir.filePath(QString("../config/SceneMapping.json")));
+    QString cand = resolveConfigPath("SceneMapping.json");
     qDebug() << "加载场景映射参数配置文件:" << cand;
-    if (QFile::exists(cand)) {
+    if (!cand.isEmpty() && QFile::exists(cand)) {
         QFile f(cand);
         if (f.open(QIODevice::ReadOnly)) {
             QByteArray data = f.readAll();
@@ -569,7 +605,21 @@ int SceneManager::addCalibrationMarker(MarkerType type, const QVector3D &pos, fl
     mk.meshIndex = meshIdx;
     mk.color = color;
     // 获取当前机器人位姿作为捕获时的位姿
+    // Try to use latest stored robotPose first. If it's null and we have a PoseMonitor,
+    // request a last-pose snapshot synchronously if possible.
     mk.robotPoseAtCapture = robotPose;
+    if (mk.robotPoseAtCapture.isNull() && m_poseMonitor) {
+        // Use thread-aware helper to avoid deadlocks when SceneManager and
+        // PoseMonitor happen to live in the same thread. If helper returns true
+        // we got a valid last pose and can use it as capture pose.
+        QVector3D last;
+        if (poseMonitorGetLastPoseSafe(m_poseMonitor, last)) {
+            mk.robotPoseAtCapture = last;
+        }
+    }
+    if (mk.robotPoseAtCapture.isNull()) {
+        qDebug() << "SceneManager::addCalibrationMarker: warning - robotPoseAtCapture is NULL for new marker id=" << mk.id << " pos=" << mk.pos;
+    }
     m_markers.push_back(mk);
     return mk.id;
 }
@@ -580,11 +630,8 @@ bool SceneManager::loadMarkers(const QString &path)
     QString p = path;
     if (p.isEmpty())
     {
-        qDebug() << "SceneManager::loadMarkers: no path provided, using config dir";
-      
-        QDir appdir(QCoreApplication::applicationDirPath());
-        QString cand  = QDir::cleanPath(appdir.filePath(QString("../config/calib_points.json")));
-        p = cand;
+        // qDebug() << "SceneManager::loadMarkers: no path provided, using config dir";
+        p = resolveConfigPath("calib_points.json");
     }
     qDebug() << "SceneManager::loadMarkers path=" << p;
     if (!QFile::exists(p))
@@ -613,7 +660,20 @@ bool SceneManager::loadMarkers(const QString &path)
         double z = o.value("z").toDouble();
         double r = o.value("r").toDouble(0.05);
         QColor c(o.value("colorR").toInt(0), o.value("colorG").toInt(255), o.value("colorB").toInt(0));
-        addCalibrationMarker(static_cast<MarkerType>(t), QVector3D(float(x), float(y), float(z)), float(r), c);
+        int newId = addCalibrationMarker(static_cast<MarkerType>(t), QVector3D(float(x), float(y), float(z)), float(r), c);
+        // restore captured robot pose if present in file (robot_x, robot_y, robot_yaw)
+        if (o.contains("robot_x") && o.contains("robot_y")) {
+            double rx = o.value("robot_x").toDouble();
+            double ry = o.value("robot_y").toDouble();
+            double ryaw = o.value("robot_yaw").toDouble(0.0);
+            // find marker by id and set robotPoseAtCapture
+            for (Marker &m : m_markers) {
+                if (m.id == newId) {
+                    m.robotPoseAtCapture = QVector3D(float(rx), float(ry), float(ryaw));
+                    break;
+                }
+            }
+        }
     }
     return true;
 }
@@ -623,9 +683,7 @@ bool SceneManager::saveMarkers(const QString &path)
     QString p = path;
     if (p.isEmpty())
     {
-       QDir appdir(QCoreApplication::applicationDirPath());
-        QString cand  = QDir::cleanPath(appdir.filePath(QString("../config/calib_points.json")));
-        p = cand;
+       p = resolveConfigPath("calib_points.json");
     }
     qDebug() << "SceneManager::saveMarkers path=" << p;
     QJsonArray arr;
@@ -641,28 +699,20 @@ bool SceneManager::saveMarkers(const QString &path)
         o["colorR"] = m.color.red();
         o["colorG"] = m.color.green();
         o["colorB"] = m.color.blue();
+        // persist the robot pose that was captured when this marker was added
+        if (!m.robotPoseAtCapture.isNull()) {
+            o["robot_x"] = m.robotPoseAtCapture.x();
+            o["robot_y"] = m.robotPoseAtCapture.y();
+            o["robot_yaw"] = m.robotPoseAtCapture.z();
+        }
         arr.append(o);
     }
     QJsonDocument doc(arr);
-    QFile f(p);
-    QDir d = QFileInfo(p).absoluteDir();
-    if (!d.exists())
-    {
-        if (!d.mkpath("."))
-        {
-            qDebug() << "SceneManager::saveMarkers: failed to create dir" << d.absolutePath();
-            return false;
-        }
-    }
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
-    {
-        qDebug() << "SceneManager::saveMarkers: failed to open file for write" << p << "error:" << f.errorString();
-        return false;
-    }
-    qint64 written = f.write(doc.toJson(QJsonDocument::Indented));
-    f.close();
-    qDebug() << "SceneManager::saveMarkers: wrote bytes=" << written << " to " << p;
-    return written > 0;
+    // Use saveJsonToConfig to ensure we write to the same resolved config location
+    QJsonDocument docOut(arr);
+    bool ok = saveJsonToConfig("calib_points.json", docOut);
+    qDebug() << "SceneManager::saveMarkers: saved ->" << ok << " pathUsed=" << resolveConfigPath("calib_points.json");
+    return ok;
 }
 
 bool SceneManager::removeMarkerById(int id)
@@ -749,14 +799,18 @@ void SceneManager::clearAllMarkers()
 
 // 使用场景中的地图标记点计算从场景坐标到机器人坐标的仿射映射
 void SceneManager::SceneMapping(){
-    // 收集地图标记点
+    // 收集地图标记点（仅使用在捕获时带有有效 robotPoseAtCapture 的标记）
     std::vector<Marker> mapMarkers;
     for (const Marker &m : m_markers){
-        if (m.type == Marker_Map)
+        if (m.type == Marker_Map && !m.robotPoseAtCapture.isNull())
             mapMarkers.push_back(m);
     }
     if (mapMarkers.size() < 4){
-        qDebug() << "SceneManager::SceneMapping: need at least 4 map markers (have)" << mapMarkers.size();
+        qDebug() << "SceneManager::SceneMapping: need at least 4 map markers with valid robotPoseAtCapture (have)" << mapMarkers.size();
+        // dump existing markers for debugging and indicate which were excluded due to missing robotPoseAtCapture
+        for (const Marker &m : m_markers) {
+            qDebug() << "  marker id=" << m.id << " type=" << int(m.type) << " pos=" << m.pos << " robotPoseAtCapture=" << m.robotPoseAtCapture << " excluded=" << m.robotPoseAtCapture.isNull();
+        }
         return;
     }
 
@@ -815,6 +869,18 @@ void SceneManager::SceneMapping(){
     double inv[3][3];
     if (!invert3(MtM, inv)){
         qDebug() << "SceneManager::SceneMapping: failed to invert MtM matrix (degenerate points)";
+        qDebug() << "  MtM matrix:";
+        for (int rr=0; rr<3; ++rr) {
+            qDebug() << "   [" << MtM[rr][0] << MtM[rr][1] << MtM[rr][2] << "]";
+        }
+        qDebug() << "  selected markers (sx,sy -> rx,ry):";
+        for (int i=0;i<N;++i) {
+            double sx = sel[i].pos.x();
+            double sy = sel[i].pos.z();
+            double rx = sel[i].robotPoseAtCapture.x();
+            double ry = sel[i].robotPoseAtCapture.y();
+            qDebug() << "   sel["<<i<<"] scene:("<<sx<<","<<sy<<") robot:("<<rx<<","<<ry<<")";
+        }
         return;
     }
 
@@ -907,25 +973,10 @@ void SceneManager::SceneMapping(){
 
     QJsonDocument doc(root);
 
-    // write to config/SceneMapping.json next to application config
-    QString outPath;
-    QDir appdir(QCoreApplication::applicationDirPath());
-    QString cand = QDir::cleanPath(appdir.filePath(QString("../config/SceneMapping.json")));
-    QDir cfgdir = QFileInfo(cand).absoluteDir();
-    if (!cfgdir.exists()){
-        if (!cfgdir.mkpath(".")){
-            qDebug() << "SceneManager::SceneMapping: failed to create config dir" << cfgdir.absolutePath();
-            return;
-        }
-    }
-    QFile f(cand);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)){
-        qDebug() << "SceneManager::SceneMapping: failed to open file for write" << cand << f.errorString();
-        return;
-    }
-    qint64 written = f.write(doc.toJson(QJsonDocument::Indented));
-    f.close();
-    qDebug() << "SceneManager::SceneMapping: wrote" << written << "bytes to" << cand << "grid points=" << arr.size();
+    // write to resolved config path
+    QJsonDocument docOut(root);
+    bool ok = saveJsonToConfig("SceneMapping.json", docOut);
+    qDebug() << "SceneManager::SceneMapping: saved ->" << ok << " pathUsed=" << resolveConfigPath("SceneMapping.json") << " grid points=" << arr.size();
 }
 
 // 通过SceneMapping计算的参数将场景坐标映射到机器人坐标系

@@ -94,7 +94,7 @@ bool WebSocketWorker::isConnected() const
 // 连接成功
 void WebSocketWorker::onConnected()
 {
-    qDebug() << "WebSocketWorker: onConnected on thread" << QThread::currentThread();
+    // qDebug() << "WebSocketWorker: onConnected on thread" << QThread::currentThread();
     m_isReconnecting = false;
     if (m_reconnectTimer) {
         m_reconnectTimer->stop();

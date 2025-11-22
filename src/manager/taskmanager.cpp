@@ -1,4 +1,5 @@
 #include "manager/taskmanager.h"
+#include "util/load_csv.hpp"
 
 TaskManager::TaskManager(QListWidget* taskListWidget, 
                          QPushButton* addTaskButton,
@@ -41,8 +42,7 @@ TaskManager::~TaskManager()
 
 void TaskManager::loadTasksFromConfig()
 {
-    QDir appdir(QCoreApplication::applicationDirPath());
-    QString cand = QDir::cleanPath(appdir.filePath(QString("../config/tasks_config.json")));
+    QString cand = resolveConfigPath("tasks_config.json");
     QFile file(cand);
 
     // 确保config目录存在
@@ -50,7 +50,7 @@ void TaskManager::loadTasksFromConfig()
     if (!configDir.exists()) {
         configDir.mkpath(".");
     }
-    qDebug() << "加载任务配置文件:" << file.fileName();
+    qDebug() << "加载任务配置文件:" << cand;
     if (!file.exists()) {
         // 配置文件不存在，创建默认任务
         Task* defaultTask1 = new Task(tr("Say-yeah舞蹈"), "say_yeah.sh", 
@@ -61,7 +61,7 @@ void TaskManager::loadTasksFromConfig()
         m_tasks.append(defaultTask1);
         m_tasks.append(defaultTask2);
         
-        saveTasksToConfig();
+    saveTasksToConfig();
         updateTaskListUI();
         return;
     }
@@ -101,32 +101,14 @@ void TaskManager::loadTasksFromConfig()
 // 保存Task列表到配置文件
 void TaskManager::saveTasksToConfig()
 {
-    QDir appdir(QCoreApplication::applicationDirPath());
-    QString cand = QDir::cleanPath(appdir.filePath(QString("../config/tasks_config.json")));
-    QFile file(cand);
-
-    // 确保config目录存在
-    QDir configDir = QFileInfo(file).absoluteDir();
-    if (!configDir.exists()) {
-        if (!configDir.mkpath(".")) {
-            qWarning() << "无法创建配置目录:" << configDir.absolutePath();
-            return;
-        }
-    }
-
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        qWarning() << "无法保存任务配置文件:" << file.fileName() << "，错误：" << file.errorString();
-        return;
-    }
-    
+    // build JSON and delegate to saveJsonToConfig so we write to resolved config location
     QJsonArray taskArray;
     for (const Task* task : m_tasks) {
         taskArray.append(task->toJson());
     }
-    
     QJsonDocument doc(taskArray);
-    file.write(doc.toJson(QJsonDocument::Indented));
-    file.close();
+    bool ok = saveJsonToConfig("tasks_config.json", doc);
+    if (!ok) qWarning() << "无法保存任务配置文件 to resolved config path";
 }
 // 添加任务
 void TaskManager::addTask(Task* task)

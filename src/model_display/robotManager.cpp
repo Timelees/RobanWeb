@@ -94,7 +94,7 @@ void RobotManager::initialize()
     m_servoApplyTimer->setInterval(m_servoApplyIntervalMs);
     connect(m_servoApplyTimer, &QTimer::timeout, this, &RobotManager::applyPendingServoAndGait, Qt::QueuedConnection);
     m_servoApplyTimer->start();
-    qDebug() << "RobotManager::initialize: servoApplyTimer started, interval=" << m_servoApplyIntervalMs << "ms";
+    // qDebug() << "RobotManager::initialize: servoApplyTimer started, interval=" << m_servoApplyIntervalMs << "ms";
 
 
 };
@@ -248,8 +248,8 @@ bool RobotManager::loadBoneJointMapping(const QString &csvPath)
             appliedCount++;
         }
     }
-    qDebug() << "RobotManager::loadBoneJointMapping: loaded" << mappingCount << "mappings, applied to" 
-             << appliedCount << "out of" << m_bones.size() << "bones";
+    // qDebug() << "RobotManager::loadBoneJointMapping: loaded" << mappingCount << "mappings, applied to" 
+    //          << appliedCount << "out of" << m_bones.size() << "bones";
     return true;
 }
 
@@ -933,8 +933,8 @@ void RobotManager::computeBounds()
         m_modelCenterZ = cz - 1.2664;
         m_modelScale = scale;
 
-        qDebug() << "computeBounds: model center=(" << m_modelCenterX << "," << m_modelCenterY << "," << m_modelCenterZ << ")"
-                 << " scale=" << m_modelScale;
+        // qDebug() << "computeBounds: model center=(" << m_modelCenterX << "," << m_modelCenterY << "," << m_modelCenterZ << ")"
+        //          << " scale=" << m_modelScale;
 
         if (!m_initialCameraDistanceSet)
         {

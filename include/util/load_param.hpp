@@ -1,56 +1,37 @@
 #pragma once
 #include <QString>
 #include <QDir>
-#include <QFile>    
+#include <QFile>
 #include <QRegularExpression>
-#include <QRegularExpressionMatch>  
+#include <QRegularExpressionMatch>
 #include <QCoreApplication>
+#include "load_csv.hpp"
 
-// 从config/topic_config.yaml加载命令
+// 从config/topic_config.yaml加载命令（使用 resolveConfigPath 来解析位置）
 inline QString loadTopicFromConfig(const QString &key)
 {
-    // config file path relative to application root
-    QDir d(QCoreApplication::applicationDirPath());
-    // try a few likely locations: ../config, ./config
-    QStringList candidates = {
-        d.filePath("config/topic_config.yaml"),
-        d.filePath("../config/topic_config.yaml"),
-        QDir::current().filePath("config/topic_config.yaml")
-    };
-    QString content;
-    for (const QString &path : candidates) {
-        QFile f(path);
-        if (f.exists() && f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            content = QString::fromUtf8(f.readAll());
-            f.close();
-            break;
-        }
-    }
+    QString path = resolveConfigPath("topic_config.yaml");
+    if (path.isEmpty()) return QString();
+    QFile f(path);
+    if (!f.exists() || !f.open(QIODevice::ReadOnly | QIODevice::Text)) return QString();
+    QString content = QString::fromUtf8(f.readAll());
+    f.close();
     if (content.isEmpty()) return QString();
-    // Very small YAML: key: "value"
-    QRegularExpression re(QStringLiteral("^%1:\\s*\"?(.*)\"?$").arg(QRegularExpression::escape(key))); 
+    QRegularExpression re(QStringLiteral("^%1:\\s*\"?(.*)\"?$").arg(QRegularExpression::escape(key)));
     re.setPatternOptions(QRegularExpression::MultilineOption);
     QRegularExpressionMatch m = re.match(content);
     if (m.hasMatch()) {
         QString val = m.captured(1).trimmed();
-        // Normalize/remove surrounding quotes: ASCII " or ' and common Unicode “ ” ‘ ’
+        // Normalize and unescape
         if (val.size() >= 2) {
             QChar first = val.front();
             QChar last = val.back();
-            if ((first == '"' && last == '"') || (first == '\'' && last == '\'')
-                || (first == QChar(0x201C) && last == QChar(0x201D))
-                || (first == QChar(0x2018) && last == QChar(0x2019))) {
+            if ((first == '"' && last == '"') || (first == '\'' && last == '\'')) {
                 val = val.mid(1, val.size() - 2).trimmed();
             }
         }
-        // Strip any stray leading/trailing quote characters that may remain
-        while (!val.isEmpty() && (val.front() == '"' || val.front() == '\'' || val.front() == QChar(0x201C) || val.front() == QChar(0x2018))) {
-            val.remove(0, 1);
-        }
-        while (!val.isEmpty() && (val.back() == '"' || val.back() == '\'' || val.back() == QChar(0x201D) || val.back() == QChar(0x2019))) {
-            val.chop(1);
-        }
-        // Unescape simple sequences (e.g. \" -> ") and double-backslashes
+        while (!val.isEmpty() && (val.front() == '"' || val.front() == '\'')) val.remove(0,1);
+        while (!val.isEmpty() && (val.back() == '"' || val.back() == '\'')) val.chop(1);
         val.replace("\\\"", "\"");
         val.replace("\\\\", "\\");
         return val;
@@ -58,52 +39,30 @@ inline QString loadTopicFromConfig(const QString &key)
     return QString();
 }
 
-
 // 从config/bash_config.yaml加载命令
 inline QString loadCmdFromConfig(const QString &key)
 {
-    // config file path relative to application root
-    QDir d(QCoreApplication::applicationDirPath());
-    // try a few likely locations: ../config, ./config
-    QStringList candidates = {
-        d.filePath("config/bash_config.yaml"),
-        d.filePath("../config/bash_config.yaml"),
-        QDir::current().filePath("config/bash_config.yaml")
-    };
-    QString content;
-    for (const QString &path : candidates) {
-        QFile f(path);
-        if (f.exists() && f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            content = QString::fromUtf8(f.readAll());
-            f.close();
-            break;
-        }
-    }
+    QString path = resolveConfigPath("bash_config.yaml");
+    if (path.isEmpty()) return QString();
+    QFile f(path);
+    if (!f.exists() || !f.open(QIODevice::ReadOnly | QIODevice::Text)) return QString();
+    QString content = QString::fromUtf8(f.readAll());
+    f.close();
     if (content.isEmpty()) return QString();
-    // Very small YAML: key: "value"
-    QRegularExpression re(QStringLiteral("^%1:\\s*\"?(.*)\"?$").arg(QRegularExpression::escape(key))); 
+    QRegularExpression re(QStringLiteral("^%1:\\s*\"?(.*)\"?$").arg(QRegularExpression::escape(key)));
     re.setPatternOptions(QRegularExpression::MultilineOption);
     QRegularExpressionMatch m = re.match(content);
     if (m.hasMatch()) {
         QString val = m.captured(1).trimmed();
-        // Normalize/remove surrounding quotes: ASCII " or ' and common Unicode “ ” ‘ ’
         if (val.size() >= 2) {
             QChar first = val.front();
             QChar last = val.back();
-            if ((first == '"' && last == '"') || (first == '\'' && last == '\'')
-                || (first == QChar(0x201C) && last == QChar(0x201D))
-                || (first == QChar(0x2018) && last == QChar(0x2019))) {
+            if ((first == '"' && last == '"') || (first == '\'' && last == '\'')) {
                 val = val.mid(1, val.size() - 2).trimmed();
             }
         }
-        // Strip any stray leading/trailing quote characters that may remain
-        while (!val.isEmpty() && (val.front() == '"' || val.front() == '\'' || val.front() == QChar(0x201C) || val.front() == QChar(0x2018))) {
-            val.remove(0, 1);
-        }
-        while (!val.isEmpty() && (val.back() == '"' || val.back() == '\'' || val.back() == QChar(0x201D) || val.back() == QChar(0x2019))) {
-            val.chop(1);
-        }
-        // Unescape simple sequences (e.g. \" -> ") and double-backslashes
+        while (!val.isEmpty() && (val.front() == '"' || val.front() == '\'')) val.remove(0,1);
+        while (!val.isEmpty() && (val.back() == '"' || val.back() == '\'')) val.chop(1);
         val.replace("\\\"", "\"");
         val.replace("\\\\", "\\");
         return val;

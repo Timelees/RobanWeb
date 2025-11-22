@@ -91,10 +91,9 @@ void slamDialog::init()
     // 如果配置中没有指定 feature topic，则使用内置默认（FeaturePoint 压缩图像话题）
     if (m_featureTopic.isEmpty()) {
         m_featureTopic = QStringLiteral("/SLAM/FeaturePoint/Image/compressed");
-        qDebug() << "slamDialog::init: featureImageCompressed_topic not found in config, using default:" << m_featureTopic;
-    } else {
-        qDebug() << "slamDialog::init: featureImageCompressed_topic from config:" << m_featureTopic;
-    }
+        // qDebug() << "slamDialog::init: featureImageCompressed_topic not found in config, using default:" << m_featureTopic;
+    } 
+
     featuredImageMonitor = new CameraImageMonitor(m_worker, nullptr, m_featureTopic);
     featuredImageMonitor->moveToThread(featuredImageThread);
     featuredImageThread->start();
@@ -337,7 +336,7 @@ void slamDialog::onRunSLAMButtonClicked()
         } else {
             qDebug() << "sendText: m_worker is null, cannot send message";
         }
-        qDebug() << "Sent exec command to robot:" << cmd;
+        // qDebug() << "Sent exec command to robot:" << cmd;
     } else {
         qDebug() << "Empty command, ignoring";
     }
@@ -403,7 +402,7 @@ void slamDialog::onRunSLAMButtonClicked()
             qDebug() << "sendText: m_worker is null, cannot send advertise";
         }
         localizationAdvertised = true;
-        qDebug() << "Advertised /SLAM/localizationMode";
+        // qDebug() << "Advertised /SLAM/localizationMode";
     }
 
 }
@@ -443,7 +442,7 @@ void slamDialog::onCloseSLAMButtonClicked()
     } else {
         qDebug() << "sendText: m_worker is null, cannot send stop command";
     }
-    qDebug() << "Sent stop slam command to robot:" << innerStr;
+    // qDebug() << "Sent stop slam command to robot:" << innerStr;
 
     // 停止特征点图像订阅
     if(featuredImagePullTimer){
@@ -645,7 +644,7 @@ void slamDialog::stopSLAM()
         QJsonDocument doc(pub);
         QString jsonString = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
         QMetaObject::invokeMethod(m_worker, "sendText", Qt::QueuedConnection, Q_ARG(QString, jsonString));
-        qDebug() << "Sent stop slam command to robot:" << innerStr;
+        // qDebug() << "Sent stop slam command to robot:" << innerStr;
     } else {
         qDebug() << "stopSLAM: m_worker is null, cannot send stop command to robot";
     }
@@ -703,7 +702,7 @@ void slamDialog::stopSLAM()
             qDebug() << "sendText: m_worker is null, cannot send unadvertise";
         }
         localizationAdvertised = false;
-        qDebug() << "Unadvertised /SLAM/localizationMode";
+        // qDebug() << "Unadvertised /SLAM/localizationMode";
     }
     return;
 }

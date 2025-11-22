@@ -278,7 +278,7 @@ void PointCloudDisplay::onCameraMatrixReceived(const QList<double> &mat)
             // normalize rotY into [-360,360] to prevent runaway
             if (rotY > 360.0f) rotY = fmod(rotY, 360.0f);
             initialViewAligned = true;
-            qDebug() << "PointCloudDisplay: auto-aligned initial view (rotY set to)" << rotY;
+            // qDebug() << "PointCloudDisplay: auto-aligned initial view (rotY set to)" << rotY;
         }
     }
 

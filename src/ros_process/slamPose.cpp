@@ -110,9 +110,32 @@ QVector3D PoseMonitor::onMessageReceived(const QString &message){
             // 转为度
             yaw = yaw * 180.0 / M_PI;
             x_y_yaw = QVector3D(float(x), float(y), float(yaw));
+            // qDebug() << "PoseMonitor: received pose x,y,yaw(deg)=(" << x << "," << y << "," << yaw << ")";
+            // remember that we have a valid last pose and make it available
+            m_haveLastPose = true;
             // 发射信号以便 SceneManager 或其他监听器可以接收更新
             emit poseUpdated(x_y_yaw);
     }
 
     return x_y_yaw;
+}
+
+void PoseMonitor::emitLastPose()
+{
+    // Called from other threads via invokeMethod (QueuedConnection). If we have
+    // a last pose, emit poseUpdated so attached receivers (e.g. SceneManager)
+    // immediately receive the latest value.
+    if (m_haveLastPose) {
+        emit poseUpdated(x_y_yaw);
+    }
+}
+
+QVector3D PoseMonitor::lastPoseValue()
+{
+    return x_y_yaw;
+}
+
+bool PoseMonitor::hasLastPose()
+{
+    return m_haveLastPose;
 }

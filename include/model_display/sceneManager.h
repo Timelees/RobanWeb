@@ -120,6 +120,14 @@ public:
     // SceneManager will subscribe to pose updates from the provided monitor.
     void setPoseMonitor(PoseMonitor *poseMonitor);
 
+    // Return whether a last robot pose is available (non-null). Note: a pose of (0,0,0)
+    // is treated as "null/unknown" in this codebase. Use getLastRobotPose() to obtain
+    // the last pose value if available.
+    bool hasLastPose() const { return !robotPose.isNull(); }
+
+    // Get the last robot pose (x,y,yaw). May return a null QVector3D if not available.
+    QVector3D getLastRobotPose() const { return robotPose; }
+
     // // Configuration: adjust display smoothing and throttle at runtime
     // Q_INVOKABLE void setDisplayIntervalMs(int ms) { m_displayIntervalMs = ms; if (m_displayTimer) m_displayTimer->setInterval(ms); }
     // int displayIntervalMs() const { return m_displayIntervalMs; }

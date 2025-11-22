@@ -2,6 +2,7 @@
 #include "util/load_csv.hpp"
 #include <memory>
 #include <QMutexLocker>
+#include <QMessageBox>
 
 ModelDisplay::ModelDisplay(RobotManager *robot, SceneManager *scene, RobotManager *robot2, const QVector3D &robot2Pos, QWidget *parent)
     : QOpenGLWidget(parent), m_robot(robot), m_scene(scene), m_robot2(robot2), m_robot2Pos(robot2Pos)
@@ -725,6 +726,12 @@ void ModelDisplay::onAddMapMarker()
 {
     if (!m_hasPendingPick || !m_scene)
         return;
+    // Ensure we have a valid last robot pose before capturing the marker
+    if (!m_scene->hasLastPose()) {
+        // Inform user that SLAM/pose has not provided a valid pose yet
+        QMessageBox::warning(this, tr("标定失败"), tr("当前尚未接收到有效的机器人位姿，请等待SLAM或检查连接后重试。"));
+        return;
+    }
     m_scene->addCalibrationMarker(SceneManager::Marker_Map, m_pendingPickPos, 0.08f, QColor(0, 200, 0));
     // 确保在 GL 上下文中上传纹理
     makeCurrent();

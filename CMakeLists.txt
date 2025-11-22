@@ -178,22 +178,7 @@ endif()
         message(STATUS "No local assets/ directory found at: ${_project_assets_dir}")
     endif()
 
-    # Copy the config directory next to the executable so runtime can read configuration files
-    set(_project_config_dir "${CMAKE_CURRENT_SOURCE_DIR}/config")
-    if(EXISTS "${_project_config_dir}")
-        message(STATUS "Adding post-build step to copy config to output directory: ${_project_config_dir}")
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${_project_config_dir}" "$<TARGET_FILE_DIR:${PROJECT_NAME}>/config"
-        )
-        # Also copy into the configured runtime output directory (e.g. ${CMAKE_BINARY_DIR}/bin)
-        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${_project_config_dir}" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/config"
-        )
-    else()
-        message(STATUS "No local config/ directory found at: ${_project_config_dir}")
-    endif()
+
 
     # Link Assimp to the main project if available (ModelDisplay and other code use Assimp)
     if (TARGET assimp::assimp)

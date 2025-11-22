@@ -94,7 +94,7 @@ void ServoPositionsMonitor::start(){
     // 启动定时器（如果未启动）以开始在 GUI 线程定期发射更新
     if (m_emitTimer && !m_emitTimer->isActive()) {
         m_emitTimer->start();
-        qDebug() << "ServoPositionsMonitor::start: emitTimer started, interval=" << m_emitIntervalMs << "ms";
+        // qDebug() << "ServoPositionsMonitor::start: emitTimer started, interval=" << m_emitIntervalMs << "ms";
     } else if (!m_emitTimer) {
         qDebug() << "ServoPositionsMonitor::start: ERROR - emitTimer is nullptr!";
     } else {
