@@ -11,6 +11,7 @@
 #include <QLabel>
 #include <QJsonArray>
 #include <QProgressBar>
+#include <QPropertyAnimation>
 // layout helper for replacing placeholder widget
 #include <QLayout>
 #include <QBoxLayout>
@@ -54,19 +55,11 @@ private slots:
     void onTaskStopped(const QString& scriptPath);  // 任务停止 槽函数
     void onAddTask(Task* task);           // 添加任务 槽函数
 
-    // // webSocket 相关槽函数
-    // void onWebSocketConnected();            // 连接webSocket
-    // void onWebSocketDisconnected();
-    // void onWebSocketError(const QString &error);
-    // 新：泛用的机器人事件槽，接收来自 MultiRobotManager 的 robotId
+    // 泛用的机器人事件槽，接收来自 MultiRobotManager 的 robotId
     void onRobotConnected(const QString &robotId);
     void onRobotDisconnected(const QString &robotId);
     void onRobotError(const QString &robotId, const QString &error);
-    // void establishWebSocketConnection(const QString &url);
-    // void onWebSocket2Connected();
-    // void onWebSocket2Disconnected();
-    // void onWebSocket2Error(const QString &error);
-    // void tryReconnect();
+
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -79,6 +72,8 @@ private:
     // helpers for unified connect/reconnect handling
     void startConnectFor(const QString &robotId, const QString &url);
     void doReconnectFor(const QString &robotId);
+    void toggleRobot2Info(bool show);
+    static QString resolveAssetPath(const QString &relPath);
 
 
 private:
@@ -135,4 +130,5 @@ private:
     MultiRobotManager *multiRobot_mgr2 = nullptr;
 
     slamDialog *m_slamDialog = nullptr;        // SLAM对话框
+    QPropertyAnimation *robot2Animation = nullptr;
 };

@@ -84,8 +84,8 @@ void ConnectDialog::setRobot2TableWidget(){
 // 添加数据库
 void ConnectDialog::setupDatabase(){
     db = QSqlDatabase::addDatabase("QSQLITE");
-    QString dbPath = getDatabasePath();
-    // qDebug() << "数据库路径:" << dbPath; // 调试输出路径
+    QString dbPath = resolveDatabasePath("database/connections.db");
+    qDebug() << "数据库路径:" << dbPath; // 调试输出路径
     db.setDatabaseName(dbPath);
 
     if (!db.open()) {
@@ -491,4 +491,28 @@ void ConnectDialog::onRobot2CancelButtonClicked()
     // emit specific cancel signal for robot2 then reject the dialog
     emit cancelRequested2();
     reject();
+}
+
+// 提取相对路径为绝对路径
+QString ConnectDialog::resolveDatabasePath(const QString &relPath){
+    QString appDir = QCoreApplication::applicationDirPath();
+    QString curDir = QDir::currentPath();
+    QStringList candidates;
+    // common locations relative to executable
+    candidates << QDir::cleanPath(appDir + QDir::separator() + relPath);
+    candidates << QDir::cleanPath(appDir + QDir::separator() + ".." + QDir::separator() + relPath);
+    candidates << QDir::cleanPath(appDir + QDir::separator() + ".." + QDir::separator() + ".." + QDir::separator() + relPath);
+    // current working directory options (useful when running from IDE)
+    candidates << QDir::cleanPath(curDir + QDir::separator() + relPath);
+    candidates << QDir::cleanPath(curDir + QDir::separator() + ".." + QDir::separator() + relPath);
+
+    for (const QString &p : candidates) {
+        if (QFile::exists(p)) {
+            qDebug() << "Found database:" << p;
+            return p;
+        }
+    }
+    // 如果没有找到，返回第一个候选（可用于观察失败路径）
+    qWarning() << "Data not found in candidate locations, using fallback:" << candidates.first();
+    return candidates.first();
 }

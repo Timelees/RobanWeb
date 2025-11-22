@@ -701,28 +701,6 @@ bool RobotManager::loadModel(const std::string &file)
         }
     }
 
-    // print bones info for debug: list bones, mapped node index, offset translation,
-    // qDebug() << "--- Bones summary after loadModel ---";
-    // for (size_t bi = 0; bi < m_bones.size(); ++bi) {
-    //     const BoneInfo &b = m_bones[bi];
-    //     // offset translation components
-    //     float ox = b.offset.m[0][3];
-    //     float oy = b.offset.m[1][3];
-    //     float oz = b.offset.m[2][3];
-    //     // count influenced vertices across all meshes
-    //     size_t infCount = 0;
-    //     for (size_t mi = 0; mi < m_meshesInfluences.size(); ++mi) {
-    //         for (size_t vi = 0; vi < m_meshesInfluences[mi].size(); ++vi) {
-    //             const auto &inf = m_meshesInfluences[mi][vi];
-    //             for (const auto &p : inf) if (p.first == (int)bi) { ++infCount; break; }
-    //         }
-    //     }
-    //     qDebug() << "Bone" << (int)bi << "name=" << b.name << " nodeIndex=" << b.nodeIndex
-    //              << " offsetTrans=(" << ox << "," << oy << "," << oz << ")" << " influencedVerts=" << (int)infCount;
-    // }
-    // qDebug() << "--- end bones summary ---";
-
-    // qDebug() << "RobotManager: loaded model meshes=" << m_meshes.size() << " bones=" << m_bones.size();
     return true;
 }
 

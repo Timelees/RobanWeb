@@ -141,6 +141,18 @@ endif()
         set(_copy_assimp_dll_for_test TRUE)
     endif()
 
+    # Copy the assets directory next to the executable so runtime can load models/textures
+    set(_project_assets_dir "${CMAKE_CURRENT_SOURCE_DIR}/assets")
+    if(EXISTS "${_project_assets_dir}")
+        message(STATUS "Adding post-build step to copy assets to output directory: ${_project_assets_dir}")
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${_project_assets_dir}" "$<TARGET_FILE_DIR:${PROJECT_NAME}>/assets"
+        )
+    else()
+        message(STATUS "No local assets/ directory found at: ${_project_assets_dir}")
+    endif()
+
     # Link Assimp to the main project if available (ModelDisplay and other code use Assimp)
     if (TARGET assimp::assimp)
         target_link_libraries(${PROJECT_NAME} PRIVATE assimp::assimp)

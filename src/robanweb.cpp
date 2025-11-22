@@ -1,6 +1,9 @@
 #include "robanweb.h"
 #include <QFileInfo>
 #include <QDateTime>
+#include <QCoreApplication>
+#include <QDir>
+#include <QFile>
 
 robanweb::robanweb(QWidget *parent)
     : QMainWindow(parent), ui(new Ui_robanweb), webSocketWorker(nullptr), webSocketThread(nullptr), webSocketWorker2(nullptr), webSocketThread2(nullptr), reconnectTimer(new QTimer(this)), reconnectTimer2(nullptr), isReconnecting(false), isReconnecting2(false), reconnectAttempts(0), reconnectAttempts2(0)
@@ -8,6 +11,12 @@ robanweb::robanweb(QWidget *parent)
     ui->setupUi(this);
     // 设置状态栏
     settingStatusBar();
+
+    // 初始化 robot2 信息显示动画及初始状态
+    if (ui->groupBox_robotInfor2) {
+        robot2Animation = new QPropertyAnimation(ui->groupBox_robotInfor2, "maximumWidth", this);
+        ui->groupBox_robotInfor2->setVisible(false); // 默认隐藏
+    }
 
     init();
     bindSlots(); // 绑定相关槽函数
@@ -116,7 +125,8 @@ void robanweb::init()
     // Ensure camera target size and FPS are applied via the manager (manager will forward to the camera monitor)
     if (ui->imageRawDisplay && multiRobot_mgr1)
     {
-        ui->imageRawDisplay->setScaledContents(true);
+        ui->imageRawDisplay->setAlignment(Qt::AlignCenter);
+        ui->imageRawDisplay->setScaledContents(false);
         ui->imageRawDisplay->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
         QSize target = ui->imageRawDisplay->size();
         QMetaObject::invokeMethod(multiRobot_mgr1, "setCameraTargetSize", Qt::QueuedConnection, Q_ARG(QSize, target));
@@ -126,7 +136,8 @@ void robanweb::init()
     }
     if (ui->imageRawDisplay_2 && multiRobot_mgr2)
     {
-        ui->imageRawDisplay_2->setScaledContents(true);
+        ui->imageRawDisplay_2->setAlignment(Qt::AlignCenter);
+        ui->imageRawDisplay_2->setScaledContents(false);
         ui->imageRawDisplay_2->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
         QSize target2 = ui->imageRawDisplay_2->size();
         QMetaObject::invokeMethod(multiRobot_mgr2, "setCameraTargetSize", Qt::QueuedConnection, Q_ARG(QSize, target2));
@@ -136,8 +147,9 @@ void robanweb::init()
     }
 
     // 3D模型显示初始化
-    QString modelRobot = QString::fromUtf8("..\\assets\\Roban.fbx"); // 默认机器人模型路径
-    QString modelScene = QString::fromUtf8("..\\assets\\scene.obj"); // 默认场景模型路径
+    // 使用类的静态方法 resolveAssetPath() 来解析资源路径，便于在其它地方重复使用
+    QString modelRobot = robanweb::resolveAssetPath("assets/Roban.fbx"); // 默认机器人模型路径
+    QString modelScene = robanweb::resolveAssetPath("assets/scene.obj"); // 默认场景模型路径
 
     sceneManager = new SceneManager(poseMonitor, modelScene, this);           // 场景管理器
     robotManager = new RobotManager(modelRobot, sceneManager, nullptr, this); // 机器人管理器 (monitors injected by manager)
@@ -260,10 +272,11 @@ void robanweb::bindSlots()
                 {
                 // only update UI if manager reports connected to avoid races where queued image
                 // updates arrive after a disconnect and re-fill cleared UI
-                if (multiRobot_mgr1 && multiRobot_mgr1->isConnected()) {
-                    if (ui->imageRawDisplay) {
-                        ui->imageRawDisplay->setPixmap(QPixmap::fromImage(img));
-                    }
+                if (multiRobot_mgr1 && multiRobot_mgr1->isConnected() && ui && ui->imageRawDisplay) {
+                    QPixmap px = QPixmap::fromImage(img);
+                    QSize lbl = ui->imageRawDisplay->size();
+                    // scale to fit label keeping aspect ratio (allow upscaling so small frames are visible)
+                    ui->imageRawDisplay->setPixmap(px.scaled(lbl, Qt::KeepAspectRatio, Qt::SmoothTransformation));
                 }
                 }, Qt::QueuedConnection);
     }
@@ -271,10 +284,11 @@ void robanweb::bindSlots()
     {
         connect(multiRobot_mgr2, &MultiRobotManager::imageReceived, this, [this](const QImage &img)
                 {
-                if (multiRobot_mgr2 && multiRobot_mgr2->isConnected()) {
-                    if (ui->imageRawDisplay_2) {
-                        ui->imageRawDisplay_2->setPixmap(QPixmap::fromImage(img));
-                    }
+                if (multiRobot_mgr2 && multiRobot_mgr2->isConnected() && ui && ui->imageRawDisplay_2) {
+                    QPixmap px = QPixmap::fromImage(img);
+                    QSize lbl = ui->imageRawDisplay_2->size();
+                    // scale to fit label keeping aspect ratio (allow upscaling so small frames are visible)
+                    ui->imageRawDisplay_2->setPixmap(px.scaled(lbl, Qt::KeepAspectRatio, Qt::SmoothTransformation));
                 }
                 }, Qt::QueuedConnection);
     }
@@ -526,6 +540,7 @@ void robanweb::onConnectSettingButtonClicked()
         }
         // 更新状态标签以反映 robot2 未连接
         updateStatusLabel("未连接");
+        toggleRobot2Info(false);
     });
 
     if (dialog.exec() == QDialog::Accepted)
@@ -688,7 +703,6 @@ void robanweb::onRobotConnected(const QString &robotId)
                 bool needCreate = true;
                 #if 1
                 // 尝试以安全方式检查是否存在 taskManager() 方法
-                // 如果不存在编译会报错，此处假设 MultiRobotManager 提供 taskManager()
                 if (multiRobot_mgr1->taskManager() != nullptr) {
                     needCreate = false;
                 }
@@ -733,6 +747,7 @@ void robanweb::onRobotConnected(const QString &robotId)
                     }
                 }
             }
+        toggleRobot2Info(true);
     }
 
     // 每台机器人由其各自的 MultiRobotManager 管理图像拉取，允许同时显示多台机器人画面。
@@ -804,6 +819,7 @@ void robanweb::onRobotDisconnected(const QString &robotId)
             ui->ang_y_2->clear();
             ui->ang_z_2->clear();
         }
+        toggleRobot2Info(false);
     }
     // 断开连接时同时清理 TaskManager 与 UI 任务列表（仅清空对应机器人的列表）
     if (robotId == QLatin1String("robot1")) {
@@ -937,13 +953,96 @@ void robanweb::closeEvent(QCloseEvent *event)
 
 bool robanweb::eventFilter(QObject *watched, QEvent *event)
 {
-    if (watched == ui->imageRawDisplay && event->type() == QEvent::Resize)
-    {
-        QSize newSize = ui->imageRawDisplay->size();
-        if (multiRobot_mgr1)
-        {
-            QMetaObject::invokeMethod(multiRobot_mgr1, "setCameraTargetSize", Qt::QueuedConnection, Q_ARG(QSize, newSize));
+    if (event->type() == QEvent::Resize) {
+        if (watched == ui->imageRawDisplay) {
+            QSize newSize = ui->imageRawDisplay->size();
+            if (multiRobot_mgr1) {
+                QMetaObject::invokeMethod(multiRobot_mgr1, "setCameraTargetSize", Qt::QueuedConnection, Q_ARG(QSize, newSize));
+            }
+        } else if (watched == ui->imageRawDisplay_2) {
+            QSize newSize = ui->imageRawDisplay_2->size();
+            if (multiRobot_mgr2) {
+                QMetaObject::invokeMethod(multiRobot_mgr2, "setCameraTargetSize", Qt::QueuedConnection, Q_ARG(QSize, newSize));
+            }
         }
     }
     return QMainWindow::eventFilter(watched, event);
+}
+
+void robanweb::toggleRobot2Info(bool show)
+{
+    if (!ui->groupBox_robotInfor2 || !robot2Animation) return;
+
+    if (show) {
+        // 如果已经在显示或动画正在进行（且是显示方向），则忽略
+        if (ui->groupBox_robotInfor2->isVisible() && ui->groupBox_robotInfor2->maximumWidth() > 0 && robot2Animation->state() == QAbstractAnimation::Stopped) {
+             return;
+        }
+        
+        robot2Animation->stop();
+        
+        // 如果当前是隐藏的，先设置最大宽度为0并显示
+        if (!ui->groupBox_robotInfor2->isVisible()) {
+             ui->groupBox_robotInfor2->setMaximumWidth(0);
+             ui->groupBox_robotInfor2->setVisible(true);
+        }
+        
+        int startWidth = ui->groupBox_robotInfor2->width();
+        // 目标宽度：参考 robot1 的宽度，或者给一个默认值
+        int targetWidth = (ui->groupBox_robotInfor1 && ui->groupBox_robotInfor1->isVisible()) ? ui->groupBox_robotInfor1->width() : 350;
+        if (targetWidth < 100) targetWidth = 350;
+
+        robot2Animation->setDuration(500);
+        robot2Animation->setStartValue(startWidth);
+        robot2Animation->setEndValue(targetWidth);
+        robot2Animation->setEasingCurve(QEasingCurve::OutCubic);
+        
+        disconnect(robot2Animation, &QPropertyAnimation::finished, nullptr, nullptr);
+        connect(robot2Animation, &QPropertyAnimation::finished, this, [this](){
+            // 动画结束后恢复最大宽度限制，以便布局自动调整
+            ui->groupBox_robotInfor2->setMaximumWidth(QWIDGETSIZE_MAX);
+        });
+        
+        robot2Animation->start();
+    } else {
+        if (!ui->groupBox_robotInfor2->isVisible()) return;
+
+        robot2Animation->stop();
+        robot2Animation->setDuration(500);
+        robot2Animation->setStartValue(ui->groupBox_robotInfor2->width());
+        robot2Animation->setEndValue(0);
+        robot2Animation->setEasingCurve(QEasingCurve::OutCubic);
+        
+        disconnect(robot2Animation, &QPropertyAnimation::finished, nullptr, nullptr);
+        connect(robot2Animation, &QPropertyAnimation::finished, this, [this](){
+            ui->groupBox_robotInfor2->setVisible(false);
+            ui->groupBox_robotInfor2->setMaximumWidth(QWIDGETSIZE_MAX); 
+        });
+        
+        robot2Animation->start();
+    }
+}
+
+QString robanweb::resolveAssetPath(const QString &relPath)
+{
+    QString appDir = QCoreApplication::applicationDirPath();
+    QString curDir = QDir::currentPath();
+    QStringList candidates;
+    // common locations relative to executable
+    candidates << QDir::cleanPath(appDir + QDir::separator() + relPath);
+    candidates << QDir::cleanPath(appDir + QDir::separator() + ".." + QDir::separator() + relPath);
+    candidates << QDir::cleanPath(appDir + QDir::separator() + ".." + QDir::separator() + ".." + QDir::separator() + relPath);
+    // current working directory options (useful when running from IDE)
+    candidates << QDir::cleanPath(curDir + QDir::separator() + relPath);
+    candidates << QDir::cleanPath(curDir + QDir::separator() + ".." + QDir::separator() + relPath);
+
+    for (const QString &p : candidates) {
+        if (QFile::exists(p)) {
+            qDebug() << "Found asset:" << p;
+            return p;
+        }
+    }
+    // 如果没有找到，返回第一个候选（可用于观察失败路径）
+    qWarning() << "Asset not found in candidate locations, using fallback:" << candidates.first();
+    return candidates.first();
 }

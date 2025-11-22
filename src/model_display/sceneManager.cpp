@@ -580,9 +580,7 @@ bool SceneManager::loadMarkers(const QString &path)
     if (p.isEmpty())
     {
         qDebug() << "SceneManager::loadMarkers: no path provided, using config dir";
-        // QFileInfo fi(m_modelPath);
-        // QString dir = fi.absolutePath();
-        // p = QDir::cleanPath(dir + QDir::separator() + "calib_points.json");
+      
         QDir appdir(QCoreApplication::applicationDirPath());
         QString cand  = QDir::cleanPath(appdir.filePath(QString("../config/calib_points.json")));
         p = cand;

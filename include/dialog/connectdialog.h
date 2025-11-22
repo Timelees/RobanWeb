@@ -47,6 +47,9 @@ private:
     void setTableWidget();  // 设置tableWidget
     void setRobot2TableWidget();
     void updateTableSelection();    // 更新table选项
+
+    static QString resolveDatabasePath(const QString &relPath);
+    
     // 数据库函数
     void setupDatabase();
     void loadConnectionsFromDatabase();
