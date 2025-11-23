@@ -150,7 +150,6 @@ endif()
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${_proj_assimp_dll}" $<TARGET_FILE_DIR:${PROJECT_NAME}>
         )
-        # Also copy the DLL into canonical runtime output directory (bin)
         add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${_proj_assimp_dll}" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
@@ -167,9 +166,6 @@ endif()
             COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${_project_assets_dir}" "$<TARGET_FILE_DIR:${PROJECT_NAME}>/assets"
         )
-        # Also copy into the configured runtime output directory (e.g. ${CMAKE_BINARY_DIR}/bin)
-        # Some IDEs (Qt Creator) may run the program with a different working directory
-        # so copy assets into the canonical runtime dir as well.
         add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${_project_assets_dir}" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/assets"
@@ -178,7 +174,36 @@ endif()
         message(STATUS "No local assets/ directory found at: ${_project_assets_dir}")
     endif()
 
+    # Copy the config directory next to the executable so runtime can read configuration files
+    set(_project_config_dir "${CMAKE_CURRENT_SOURCE_DIR}/config")
+    if(EXISTS "${_project_config_dir}")
+        message(STATUS "Adding post-build step to copy config to output directory: ${_project_config_dir}")
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${_project_config_dir}" "$<TARGET_FILE_DIR:${PROJECT_NAME}>/config"
+        )
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${_project_config_dir}" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/config"
+        )
+    else()
+        message(STATUS "No local config/ directory found at: ${_project_config_dir}")
+    endif()
 
+    set(_project_database_dir "${CMAKE_CURRENT_SOURCE_DIR}/database")
+    if(EXISTS "${_project_database_dir}")
+        message(STATUS "Adding post-build step to copy config to output directory: ${_project_database_dir}")
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${_project_database_dir}" "$<TARGET_FILE_DIR:${PROJECT_NAME}>/database"
+        )
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${_project_database_dir}" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/database"
+        )
+    else()
+        message(STATUS "No local database/ directory found at: ${_project_config_dir}")
+    endif()
 
     # Link Assimp to the main project if available (ModelDisplay and other code use Assimp)
     if (TARGET assimp::assimp)

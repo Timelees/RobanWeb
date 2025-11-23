@@ -14,13 +14,8 @@
     {
         "TaskCodePath": "/home/lemon/robot_ros_application/catkin_ws/src/ros_actions_node/scripts/game/2022/caai_roban_challenge/colleges/scripts/Task_carry_box_test.py",
         "name": "货物搬运测试",
-        "scriptName": "test.sh",
-        "scriptPath": "/home/lemon/exec_scripts/test.sh"
-    },
-    {
-        "TaskCodePath": "/home/lemon/robot_ros_application/catkin_ws/src/ros_actions_node/scripts/game/2022/caai_roban_challenge/colleges/scripts/Task_carry_box_test.py",
-        "name": "test",
-        "scriptName": "test.sh",
-        "scriptPath": "/home/lemon/exec_scripts/test.sh"
+        "scriptName": "Task_carry_test.sh",
+        "scriptPath": "/home/lemon/exec_scripts/Task_carry_test.sh"
     }
+
 ]
