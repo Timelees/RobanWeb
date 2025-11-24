@@ -46,8 +46,13 @@
 
 【7】BodyHubNode.cpp: /home/lemon/robot_ros_application/catkin_ws/src/bodyhub/src/BodyHubNode.cpp
 
-【8】bodyhub_client.py：/home/lemon/robot_ros_application/catkin_ws/src/leju_lib_pkg/src/motion/bodyhub_client.py
+【8】bodyhub_client.py：/home/lemon/robot_ros_application/catkin_ws/src/leju_lib_pkg/src/motion/bodyhub_client.
 
+【9】motionControl.py：/home/lemon/robot_ros_application/catkin_ws/src/leju_lib_pkg/src/motion/motionControl.py
+
+【10】ActExecPackageNode.py：/home/lemon/robot_ros_application/catkin_ws/src/actexecpackage/scripts/ActExecPackageNode.py
+
+【11】bodyhub_action.py：/home/lemon/robot_ros_application/catkin_ws/src/leju_lib_pkg/src/lejufunc/bodyhub_action.py
 
 
 主界面
