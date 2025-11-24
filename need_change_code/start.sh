@@ -25,6 +25,9 @@ amixer -D pulse set Master 90%
 bash ~/robot_ros_application/scripts/run_emqx.sh
 # run ros_bridge
 bash ~/bridge.sh
+# run ar_tag chin and head topic
+bash ~/tag_start.sh
+
 cd /home/lemon/robot_ros_application/scripts
 play -q start.mp3
 python detect_network.py

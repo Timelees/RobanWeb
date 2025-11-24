@@ -32,7 +32,7 @@
 
 将need_change_code文件夹下的文件替换对应路径下的文件：
 
-【1】bridge.sh和start.sh：/home/lemon/（即~/）
+【1】bridge.sh、tag_start.sh和start.sh：/home/lemon/（即~/）
 
 【2】其他.sh文件：~/exec_scripts(需要新建该文件夹)
 
@@ -42,7 +42,7 @@
 
 【5】slam_map.py：~/robot_ros_application/catkin_ws/src/ros_actions_node/scripts/game/2022/caai_roban_challenge/colleges/scripts/slam_map.py
 
-
+【6】Task_carry_artag.conf和Task_carry_by_ARtag.py: /home/lemon/robot_ros_application/catkin_ws/src/ros_actions_node/scripts/stair_convert/
 
 主界面
 

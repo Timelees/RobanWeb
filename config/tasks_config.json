@@ -7,15 +7,15 @@
     },
     {
         "TaskCodePath": "/home/lemon/robot_ros_application/catkin_ws/src/ros_actions_node/scripts/game/2022/caai_roban_challenge/colleges/scripts/Task_carry_box.py",
-        "name": "货物搬运",
+        "name": "货物搬运(SLAM)",
         "scriptName": "Task_carry.sh",
         "scriptPath": "/home/lemon/exec_scripts/Task_carry.sh"
     },
     {
-        "TaskCodePath": "/home/lemon/robot_ros_application/catkin_ws/src/ros_actions_node/scripts/game/2022/caai_roban_challenge/colleges/scripts/Task_carry_box_test.py",
-        "name": "货物搬运测试",
-        "scriptName": "Task_carry_test.sh",
-        "scriptPath": "/home/lemon/exec_scripts/Task_carry_test.sh"
+        "TaskCodePath": "/home/lemon/robot_ros_application/catkin_ws/src/ros_actions_node/scripts/stair_convert/Task_carry_by_ARtag.py",
+        "name": "货物搬运(AR标签)",
+        "scriptName": "Task_carry_tag.sh",
+        "scriptPath": "/home/lemon/exec_scripts/Task_carry_tag.sh"
     }
 
 ]

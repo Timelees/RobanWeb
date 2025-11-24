@@ -57,10 +57,11 @@ void TaskManager::loadTasksFromConfig()
                     "/home/lemon/robot_ros_application/catkin_ws/src/ros_actions_node/scripts/Say-yeah舞蹈案例.py", this);
         Task* defaultTask2 = new Task(tr("货物搬运"), "Task_carry.sh", 
                     "/home/lemon/robot_ros_application/catkin_ws/src/ros_actions_node/scripts/game/2022/caai_roban_challenge/colleges/scripts/Task_carry_box.py", this);
-
+        Task* defaultTask3 = new Task(tr("货物搬运(AR标签)"), "Task_carry_tag.sh", 
+                    "/home/lemon/robot_ros_application/catkin_ws/src/ros_actions_node/scripts/stair_convert/Task_carry_by_ARtag.py", this);
         m_tasks.append(defaultTask1);
         m_tasks.append(defaultTask2);
-        
+        m_tasks.append(defaultTask3);
     saveTasksToConfig();
         updateTaskListUI();
         return;
