@@ -44,6 +44,12 @@
 
 【6】Task_carry_artag.conf和Task_carry_by_ARtag.py: /home/lemon/robot_ros_application/catkin_ws/src/ros_actions_node/scripts/stair_convert/
 
+【7】BodyHubNode.cpp: /home/lemon/robot_ros_application/catkin_ws/src/bodyhub/src/BodyHubNode.cpp
+
+【8】bodyhub_client.py：/home/lemon/robot_ros_application/catkin_ws/src/leju_lib_pkg/src/motion/bodyhub_client.py
+
+
+
 主界面
 
 ![alt text](image/mainWindow.png)

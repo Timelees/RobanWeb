@@ -4,12 +4,24 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QIcon>
 #include <QVector3D>
 
 robanweb::robanweb(QWidget *parent)
     : QMainWindow(parent), ui(new Ui_robanweb), webSocketWorker(nullptr), webSocketThread(nullptr), webSocketWorker2(nullptr), webSocketThread2(nullptr), reconnectTimer(new QTimer(this)), reconnectTimer2(nullptr), isReconnecting(false), isReconnecting2(false), reconnectAttempts(0), reconnectAttempts2(0)
 {
     ui->setupUi(this);
+    // 设置主窗口标题为项目名
+    this->setWindowTitle(QStringLiteral("JD-ROBAN-01"));
+    // 设置主窗口图标（使用工程内的 icon/xiaohui.png）
+    {
+        QString iconPath = resolveAssetPath(QStringLiteral("icon/xiaohui.png"));
+        if (!iconPath.isEmpty() && QFile::exists(iconPath)) {
+            this->setWindowIcon(QIcon(iconPath));
+        } else {
+            qWarning() << "Window icon not found:" << iconPath;
+        }
+    }
     // 设置状态栏
     settingStatusBar();
 

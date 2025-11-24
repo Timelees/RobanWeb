@@ -25,8 +25,7 @@ amixer -D pulse set Master 90%
 bash ~/robot_ros_application/scripts/run_emqx.sh
 # run ros_bridge
 bash ~/bridge.sh
-# run ar_tag chin and head topic
-bash ~/tag_start.sh
+
 
 cd /home/lemon/robot_ros_application/scripts
 play -q start.mp3
@@ -36,6 +35,9 @@ cd servo_scan/ && python3 servo_check.py
 cd ~/robot_ros_application/scripts/
 touch /tmp/launch_ros_flag
 echo "softdev" | sudo -S bash bodyhub.sh &
+
+# run ar_tag chin and head topic
+bash ~/tag_start.sh
 
 while ! rosnode list
 do

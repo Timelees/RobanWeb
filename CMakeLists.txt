@@ -202,7 +202,22 @@ endif()
             "${_project_database_dir}" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/database"
         )
     else()
-        message(STATUS "No local database/ directory found at: ${_project_config_dir}")
+        message(STATUS "No local database/ directory found at: ${_project_database_dir}")
+    endif()
+
+    set(_project_icon_dir "${CMAKE_CURRENT_SOURCE_DIR}/icon")
+    if(EXISTS "${_project_icon_dir}")
+        message(STATUS "Adding post-build step to copy config to output directory: ${_project_icon_dir}")
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${_project_icon_dir}" "$<TARGET_FILE_DIR:${PROJECT_NAME}>/icon"
+        )
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${_project_icon_dir}" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/icon"
+        )
+    else()
+        message(STATUS "No local icon/ directory found at: ${_project_icon_dir}")
     endif()
 
     # Link Assimp to the main project if available (ModelDisplay and other code use Assimp)

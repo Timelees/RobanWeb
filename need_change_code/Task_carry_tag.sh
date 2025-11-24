@@ -1,1 +1,1 @@
-source ~/robot_ros_application/catkin_ws/devel/setup.bash && python /home/lemon/robot_ros_application/catkin_ws/src/ros_actions_node/scripts/stair_convert/Task_carry_by_ARtag.py
+cd ~/robot_ros_application/catkin_ws && rosrun ros_actions_node Task_carry_by_ARtag.py
