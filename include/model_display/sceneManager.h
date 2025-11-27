@@ -198,8 +198,8 @@ private:
     // 在非行走状态下用于记录稳定位置的副本（当 walking 停止时用于立即应用）
     QVector3D m_lastStablePose;
     // 接收slam位置数据作为稳定位置的阈值，避免位置因为slam位置的突变导致模型位置突变
-    float m_acceptPositionThresholdMeters = 0.10f; // default 30 cm
-    float m_acceptYawThresholdDeg = 10.0f;         // default 30 degrees
+    float m_acceptPositionThresholdMeters = 0.10f; // default 10 cm
+    float m_acceptYawThresholdDeg = 10.0f;         // default 10 degrees
     bool m_acceptPoseOnStopEnabled = true;         // enable acceptance check by default
 
     // 场景映射测试代码

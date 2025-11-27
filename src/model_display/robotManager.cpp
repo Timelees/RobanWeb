@@ -38,6 +38,89 @@ void RobotManager::setServoPositionsMonitor(ServoPositionsMonitor *monitor)
     }
 }
 
+void RobotManager::setLocModel(bool v)
+{
+    if (m_locModel == v)
+        return;
+    m_locModel = v;
+    if (m_locModel) {
+        if (!m_locModelTimer) {
+            m_locModelTimer = new QTimer(this);
+            connect(m_locModelTimer, &QTimer::timeout, this, &RobotManager::onLocModelTimerTick, Qt::QueuedConnection);
+        }
+        m_locModelTimer->setInterval(m_locModelIntervalMs);
+        m_locModelTimer->start();
+        qDebug() << "RobotManager: locModel enabled, interval=" << m_locModelIntervalMs << "ms";
+    } else {
+        if (m_locModelTimer) {
+            m_locModelTimer->stop();
+            delete m_locModelTimer;
+            m_locModelTimer = nullptr;
+        }
+        qDebug() << "RobotManager: locModel disabled";
+    }
+}
+
+void RobotManager::setLocModelIntervalMs(int ms)
+{
+    if (ms <= 0) return;
+    m_locModelIntervalMs = ms;
+    if (m_locModelTimer) {
+        m_locModelTimer->setInterval(m_locModelIntervalMs);
+    }
+}
+
+void RobotManager::onLocModelTimerTick()
+{
+    // 定时器回调：尝试读取 SLAM 位姿并刷新位置（若成功，applyLocation 会被调用）
+    if (!m_locModel) return;
+    bool ok = refreshRobotPositionsFromSlamPose();
+    // 仅在无法刷新时打印日志，避免过多日志
+    if (!ok) {
+        // qDebug() << "RobotManager::onLocModelTimerTick: no pose/mapping available";
+    }
+}
+
+bool RobotManager::refreshRobotPositionsFromSlamPose()
+{
+    if (!m_sceneManager) return false;
+    // SceneManager 中保留了最后收到的 robot pose (x,y,yaw)，使用 getLastRobotPose() 获取
+    QVector3D lastPose = m_sceneManager->getLastRobotPose();
+    if (lastPose.isNull()) {
+        return false; // 无有效位姿
+    }
+
+    // 机器人坐标 (x,y)
+    QVector2D rxy(lastPose.x(), lastPose.y());
+    QVector3D scenePt;
+    if (!m_sceneManager->mapRobotToScene(rxy, scenePt)) {
+        // 没有映射参数或映射失败
+        return false;
+    }
+
+    // 应用场景坐标作为模型位置
+    applyLocation(scenePt);
+
+    // 同步将 SLAM 的 yaw 应用到模型的 Y 分量
+    float yawDeg = lastPose.z();
+    QVector3D newEuler = m_modelRotationDeg;
+    newEuler.setY(yawDeg);
+    setModelRotation(newEuler);
+
+    // 更新内部平滑/应用缓存，避免后续 gait/servo 平滑造成跳变
+    m_lastAppliedYawDeg = newEuler.y();
+    m_gaitTargetYawDeg = newEuler.y();
+    if (!m_hasInitializedApplyState) {
+        m_lastAppliedWorldTranslation = m_worldTranslation;
+        m_gaitTargetWorldTranslation = m_worldTranslation;
+        m_hasInitializedApplyState = true;
+    }
+
+    // debug
+    qDebug() << "RobotManager::refreshRobotPositionsFromSlamPose: applied slam x,y=" << rxy << "-> scenePt=" << scenePt << " yaw=" << yawDeg;
+    return true;
+}
+
 void RobotManager::initialize()
 {
     // 初始化整体旋转矩阵与欧拉角（默认无旋转）
@@ -975,14 +1058,47 @@ void RobotManager::applyLocation(const QVector3D &target)
 void RobotManager::refreshRobotPositionsFromScene()
 {
     QVector3D scenePt;
+    // 如果启用了本地定位模式（m_locModel），使用 SLAM 原始位姿定期刷新（由定时器触发）
+    if (m_locModel) {
+        // 在本地定位模式下，优先使用定时器驱动；在这里执行一次即时刷新以响应手动刷新请求
+        if (!refreshRobotPositionsFromSlamPose()) {
+            qDebug() << "RobotManager::refreshRobotPositionsFromScene: locModel enabled but slam pose unavailable or mapping missing";
+        }
+        return;
+    }
+
     if (!m_sceneManager->mapCurrentRobotPoseToScene(scenePt))
     {
         qDebug() << "RobotManager::refreshRobotPositionsFromScene: no valid mapping or robot pose";
         return;
     }
-
     // qDebug() << "RobotManager::refreshRobotPositionsFromScene: mapped robot -> scene:" << scenePt;
     applyLocation(scenePt);
+
+    // 使用 SceneManager 中存储的 robotPose 的 yaw 值同步模型朝向，
+    // 以便模型不仅位置与实机对齐，也在朝向上保持一致。
+    if (m_sceneManager) {
+        QVector3D rp = m_sceneManager->getLastRobotPose();
+        if (!rp.isNull()) {
+            float yawDeg = rp.z();
+            QVector3D newEuler = m_modelRotationDeg;
+            // 把 SLAM/Robot yaw（度）应用到模型的 Y 分量，同时加上模型补偿值
+            newEuler.setY(yawDeg + m_modelYawCompensationDeg);
+            setModelRotation(newEuler);
+
+            // 更新内部缓存以保持后续 gait/平滑逻辑的一致性，避免跳变
+            m_lastAppliedYawDeg = newEuler.y();
+            m_gaitTargetYawDeg = newEuler.y();
+            if (!m_hasInitializedApplyState) {
+                m_lastAppliedWorldTranslation = m_worldTranslation;
+                m_gaitTargetWorldTranslation = m_worldTranslation;
+                m_hasInitializedApplyState = true;
+            }
+
+            qDebug() << "RobotManager::refreshRobotPositionsFromScene: applied robot yaw=" << yawDeg << " -> modelYaw=" << newEuler.y();
+        }
+    }
+
 }
 
 void RobotManager::resetRobotPositions()
@@ -1136,10 +1252,10 @@ void RobotManager::onServoPositionsUpdated()
         return;
     }
     
-    static int servoUpdateCount = 0;
-    if (++servoUpdateCount % 100 == 0) {
-        qDebug() << "RobotManager::onServoPositionsUpdated: called (count=" << servoUpdateCount << ")";
-    }
+    // static int servoUpdateCount = 0;
+    // if (++servoUpdateCount % 100 == 0) {
+    //     qDebug() << "RobotManager::onServoPositionsUpdated: called (count=" << servoUpdateCount << ")";
+    // }
     
     // 调用融合更新逻辑
     updateFusedServo();
@@ -1204,10 +1320,10 @@ void RobotManager::onLegJointAnglesUpdated(){
     }
     // 获取最新的腿部关节数据并缓存
     m_cachedLegAngles = m_servoPositionsMonitor->lastLegAngles();
-    static int legUpdateCount = 0;
-    if (++legUpdateCount % 100 == 0) {
-        qDebug() << "RobotManager::onLegJointAnglesUpdated: cached leg angles, size=" << m_cachedLegAngles.size();
-    }
+    // static int legUpdateCount = 0;
+    // if (++legUpdateCount % 100 == 0) {
+    //     qDebug() << "RobotManager::onLegJointAnglesUpdated: cached leg angles, size=" << m_cachedLegAngles.size();
+    // }
     // 总是触发融合更新，不再依赖行走状态
     updateFusedServo();
 }
@@ -1243,24 +1359,24 @@ void RobotManager::updateFusedServo() {
         
         // 使用融合后的数据
         servo = fused;
-        static int fusionCount = 0;
-        if (++fusionCount % 100 == 0) {
-            qDebug() << "RobotManager::updateFusedServo: fused leg angles (count=" << fusionCount 
-                     << " servoSize=" << servo.size() << " legSize=" << m_cachedLegAngles.size() << ")";
-        }
+        // static int fusionCount = 0;
+        // if (++fusionCount % 100 == 0) {
+        //     qDebug() << "RobotManager::updateFusedServo: fused leg angles (count=" << fusionCount 
+        //              << " servoSize=" << servo.size() << " legSize=" << m_cachedLegAngles.size() << ")";
+        // }
     } else {
-        static int noLegCount = 0;
-        if (++noLegCount % 100 == 0) {
-            qDebug() << "RobotManager::updateFusedServo: no leg angles cached (count=" << noLegCount 
-                     << " servoSize=" << servo.size() << ")";
-        }
+        // static int noLegCount = 0;
+        // if (++noLegCount % 100 == 0) {
+        //     qDebug() << "RobotManager::updateFusedServo: no leg angles cached (count=" << noLegCount 
+        //              << " servoSize=" << servo.size() << ")";
+        // }
     }
 
     if (servo.isEmpty()) {
-        static int emptyCount = 0;
-        if (++emptyCount % 100 == 0) {  // 每100次打印一次，避免日志过多
-            qDebug() << "RobotManager::updateFusedServo: servo data is empty (count=" << emptyCount << ")";
-        }
+        // static int emptyCount = 0;
+        // if (++emptyCount % 100 == 0) {  // 每100次打印一次，避免日志过多
+        //     qDebug() << "RobotManager::updateFusedServo: servo data is empty (count=" << emptyCount << ")";
+        // }
         return;
     }
 
@@ -1269,11 +1385,11 @@ void RobotManager::updateFusedServo() {
         // store as timestamped pending frame (replace any older pending)
         m_pendingServo.tsMs = QDateTime::currentMSecsSinceEpoch();
         m_pendingServo.angles = std::move(servo);
-        static int updateCount = 0;
-        if (++updateCount % 100 == 0) {  // 每100次打印一次
-            qDebug() << "RobotManager::updateFusedServo: updated pending servo data (count=" << updateCount 
-                     << " angles=" << m_pendingServo.angles.size() << ")";
-        }
+        // static int updateCount = 0;
+        // if (++updateCount % 100 == 0) {  // 每100次打印一次
+        //     qDebug() << "RobotManager::updateFusedServo: updated pending servo data (count=" << updateCount 
+        //              << " angles=" << m_pendingServo.angles.size() << ")";
+        // }
     }
 }
 
@@ -1361,8 +1477,10 @@ void RobotManager::onGaitCommandUpdated()
             m_gaitTargetYawDeg += float(immediateGdelta);
             m_lastAppliedYawDeg = m_gaitTargetYawDeg;
             QVector3D newEuler = m_modelRotationDeg;
-            // apply user-configurable compensation between real yaw and model yaw
-            newEuler.setY(m_lastAppliedYawDeg + m_modelYawCompensationDeg);
+            // 仅在 gait 的 delta 非零时才应用用户配置的补偿角，避免纯直走时引入偏移
+            const double YAW_EPS = 1e-6;
+            float appliedCompensation = (std::fabs(immediateGdelta) > YAW_EPS) ? m_modelYawCompensationDeg : 0.0f;
+            newEuler.setY(m_lastAppliedYawDeg + appliedCompensation);
             setModelRotation(newEuler);
             // update last apply timestamp to avoid a large dt
             m_lastApplyMs = QDateTime::currentMSecsSinceEpoch();
@@ -1385,14 +1503,6 @@ void RobotManager::applyPendingServoAndGait()
         m_pendingServo.tsMs = 0;
         m_pendingServo.angles.clear();
     }
-    
-    static int applyCount = 0;
-    // if (!servoAngles.isEmpty()) {
-    //     if (++applyCount % 100 == 0) {
-    //         qDebug() << "RobotManager::applyPendingServoAndGait: applying servo angles (count=" << applyCount 
-    //                  << " size=" << servoAngles.size() << ")";
-    //     }
-    // }
 
     qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
 
@@ -1553,14 +1663,17 @@ void RobotManager::applyPendingServoAndGait()
         }
 
         // apply rotation & translation
-    QVector3D newEuler = m_modelRotationDeg;
-    // 仅在确实存在 yaw 变化（目标 yaw 与上次应用 yaw 不同）或处于 yaw-boost/立即应用的窗口时
-    // 才把补偿角加入到模型 yaw 中。这样可以避免在纯平移时引入补偿导致的误旋转。
-    const float YAW_COMPENSATION_THRESHOLD = 1e-3f; // degrees
-    bool hasYawChange = (std::fabs(m_gaitTargetYawDeg - m_lastAppliedYawDeg) > YAW_COMPENSATION_THRESHOLD) || applyImmediateYaw;
-    float finalYaw = lerpedYaw + (hasYawChange ? m_modelYawCompensationDeg : 0.0f);
-    newEuler.setY(finalYaw);
-    setModelRotation(newEuler);
+        QVector3D newEuler = m_modelRotationDeg;
+        // 仅在确实存在 yaw 变化（目标 yaw 与上次应用 yaw 不同）或处于 yaw-boost/立即应用的窗口时
+        // 才考虑加入补偿角；此外，只有当本次 gaitCommand 的 delta 不为 0 时才实际加入补偿，
+        // 否则不使用补偿以避免在纯直走时模型朝向被偏移。
+        const float YAW_COMPENSATION_THRESHOLD = 8.0f; // degrees
+        bool hasYawChange = (std::fabs(m_gaitTargetYawDeg - m_lastAppliedYawDeg) > YAW_COMPENSATION_THRESHOLD) || applyImmediateYaw;
+        const double YAW_EPS = 1e-6;
+        float comp = (std::fabs(gdelta) > YAW_EPS && hasYawChange) ? m_modelYawCompensationDeg : 0.0f;
+        float finalYaw = lerpedYaw + comp;
+        newEuler.setY(finalYaw);
+        setModelRotation(newEuler);
 
         QVector3D applyTarget = lerped + QVector3D(m_modelCenterX, m_modelCenterY, m_modelCenterZ);
         applyLocation(applyTarget);

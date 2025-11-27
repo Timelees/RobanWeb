@@ -317,6 +317,27 @@ private:
     // whether last-applied caches were initialized from current state
     bool m_hasInitializedApplyState = false;
 
+    // --- 定位模式 ---
+    bool m_locModel = false;                // false: 根据gaitCommand结合当前位置计算刷新； true: 使用 SLAM 所得位姿周期性刷新
+    int m_locModelIntervalMs = 200;         // 本地定位模式的刷新周期（毫秒），可通过 setLocModelIntervalMs 调整
+    QTimer *m_locModelTimer = nullptr;      // 定时器（仅在 m_locModel 为 true 时创建并运行）
+
+public:
+    // 启用/禁用本地定位模式（m_locModel）。启用时会按照 m_locModelIntervalMs 周期读取 SLAM 位姿并刷新位置。
+    void setLocModel(bool v);
+    bool locModel() const { return m_locModel; }
+    // 设置/获取本地定位模式的定时器间隔（毫秒）。若定时器已运行会即时生效。
+    void setLocModelIntervalMs(int ms);
+    int locModelIntervalMs() const { return m_locModelIntervalMs; }
+
+private slots:
+    // 定时器回调：在本地定位模式下周期性读取 SLAM 位姿并更新模型位置
+    void onLocModelTimerTick();
+
+private:
+    // 内部：从 SceneManager 获取最近的 SLAM 位姿并把机器人坐标 (x,y) 映射为场景坐标后应用位置
+    // 返回 true 表示成功应用位置
+    bool refreshRobotPositionsFromSlamPose();
 private slots:
     void applyPendingServoAndGait();
 };

@@ -396,6 +396,7 @@ void robanweb::onTaskExecuted(const QString &scriptPath)
         pub["msg"] = msg;
         QJsonDocument doc(pub);
         QString payload = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
+        qDebug() << "onTaskExecuted Payload:" << payload;
         // 通过 worker 发送发布消息
         QMetaObject::invokeMethod(webSocketWorker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload));
 
@@ -476,7 +477,7 @@ void robanweb::onTaskStopped(const QString &scriptPath)
         pub["msg"] = msg;
         QJsonDocument doc(pub);
         QString payload = QString::fromUtf8(doc.toJson(QJsonDocument::Compact));
-
+        qDebug() << "onTaskStopped Payload:" << payload;
         // 通过 worker 发送发布消息
         QMetaObject::invokeMethod(webSocketWorker, "sendText", Qt::QueuedConnection, Q_ARG(QString, payload));
         qDebug() << "Sent stop task command to robot:" << payload;

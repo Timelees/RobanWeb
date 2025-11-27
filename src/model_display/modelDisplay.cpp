@@ -117,6 +117,9 @@ void ModelDisplay::setDisplayWindow()
     btnPostionReset->setMinimumSize(75, 25);
     btnPostionReset->setStyleSheet(buttonStyle);
 
+
+
+
     // 将按钮加入布局
     hb->addWidget(btnMap);
     hb->addWidget(btnSave);

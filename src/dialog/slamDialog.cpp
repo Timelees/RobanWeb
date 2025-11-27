@@ -164,7 +164,6 @@ void slamDialog::init()
         // 设置初始图标为未选中
         updateLocalizationIcon(false);
     }
-
 }
 
 void slamDialog::bindSlots(){
@@ -204,10 +203,8 @@ void slamDialog::bindSlots(){
         ui->featurePoint_Display->setPixmap(scaled);
     }, Qt::QueuedConnection);
 
-
     // 连接webSocket信号到SLAM地图监视器槽函数
     connect(m_worker, &WebSocketWorker::messageReceived, slamMapMonitor, &SlamMapMonitor::onMessageReceived, Qt::QueuedConnection);
-
 
     // 控制按钮槽函数
     // Ensure buttons do not auto-repeat when held down (send only once per click)
